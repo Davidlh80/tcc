@@ -1,22 +1,38 @@
 name: Collect Metrics
 
 on:
-  workflow_dispatch:
   pull_request:
-    types: [opened, closed]
+    types:
+      - opened
+      - synchronize
+      - reopened
+      - closed
+
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: read
 
 jobs:
-  metrics:
+  collect-metrics:
+    name: Collect PR Metrics
     runs-on: ubuntu-latest
+
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
         with:
-          python-version: "3.x"
-      - name: Run metrics collector when available
+          python-version: "3.12"
+
+      - name: Run metrics collector
+        shell: bash
         run: |
           if [ -f scripts/collect_pr_metrics.py ]; then
             python scripts/collect_pr_metrics.py
           else
-            echo "Coletor de métricas ainda não implementado."
+            echo "Script de métricas ainda não implementado."
           fi

@@ -5,29 +5,73 @@ on:
     paths:
       - "terraform/**"
       - ".github/workflows/terraform-validate.yml"
+
   push:
-    branches: [main]
+    branches:
+      - main
     paths:
       - "terraform/**"
+      - ".github/workflows/terraform-validate.yml"
+
+  workflow_dispatch:
+
+permissions:
+  contents: read
 
 jobs:
-  validate:
+  terraform-validate:
+    name: Terraform Validate
     runs-on: ubuntu-latest
+
     steps:
-      - uses: actions/checkout@v4
-      - uses: hashicorp/setup-terraform@v3
-      - name: Format check
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.9.8
+
+      - name: Check Terraform formatting
         run: terraform fmt -check -recursive terraform
-      - name: Validate templates
+
+      - name: Find Terraform templates
+        id: find_templates
         shell: bash
         run: |
           set -euo pipefail
-          mapfile -t templates < <(find terraform -type f -name '*.tf' -printf '%h\n' | sort -u)
-          if [ "${#templates[@]}" -eq 0 ]; then
-            echo "Nenhum template Terraform encontrado; validação será executada após a inclusão dos artefatos."
-            exit 0
+
+          find terraform -type f -name "*.tf" -printf "%h\n" | sort -u > terraform_dirs.txt
+
+          echo "Templates encontrados:"
+          cat terraform_dirs.txt || true
+
+          if [ ! -s terraform_dirs.txt ]; then
+            echo "has_templates=false" >> "$GITHUB_OUTPUT"
+            echo "Nenhum arquivo .tf encontrado."
+          else
+            echo "has_templates=true" >> "$GITHUB_OUTPUT"
           fi
-          for template in "${templates[@]}"; do
-            terraform -chdir="$template" init -backend=false -input=false
-            terraform -chdir="$template" validate
-          done
+
+      - name: Validate Terraform templates
+        if: steps.find_templates.outputs.has_templates == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          while IFS= read -r dir; do
+            echo "Validando template em: $dir"
+
+            terraform -chdir="$dir" init -backend=false -input=false
+            terraform -chdir="$dir" validate
+
+            echo "Template validado com sucesso: $dir"
+          done < terraform_dirs.txt
+
+      - name: Upload Terraform directories list
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: terraform-validation-inputs
+          path: terraform_dirs.txt
+          if-no-files-found: ignore
