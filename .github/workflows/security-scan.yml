@@ -4,14 +4,15 @@ on:
   pull_request:
     paths:
       - "terraform/**"
-      - ".github/workflows/security-scan.yml"
+      - ".github/workflows/**"
 
   push:
     branches:
       - main
+      - "feature/**"
     paths:
       - "terraform/**"
-      - ".github/workflows/security-scan.yml"
+      - ".github/workflows/**"
 
   workflow_dispatch:
 
