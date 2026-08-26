@@ -1,0 +1,33 @@
+name: Terraform Validate
+
+on:
+  pull_request:
+    paths:
+      - "terraform/**"
+      - ".github/workflows/terraform-validate.yml"
+  push:
+    branches: [main]
+    paths:
+      - "terraform/**"
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+      - name: Format check
+        run: terraform fmt -check -recursive terraform
+      - name: Validate templates
+        shell: bash
+        run: |
+          set -euo pipefail
+          mapfile -t templates < <(find terraform -type f -name '*.tf' -printf '%h\n' | sort -u)
+          if [ "${#templates[@]}" -eq 0 ]; then
+            echo "Nenhum template Terraform encontrado; validação será executada após a inclusão dos artefatos."
+            exit 0
+          fi
+          for template in "${templates[@]}"; do
+            terraform -chdir="$template" init -backend=false -input=false
+            terraform -chdir="$template" validate
+          done
