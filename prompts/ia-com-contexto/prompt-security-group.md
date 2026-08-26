@@ -1,5 +1,45 @@
-# Prompt Security Group - IA com contexto
+# Prompt Security Group — IA sem contexto
 
-Crie um template Terraform para um AWS Security Group, considerando `contexto/contexto-organizacional.md`.
+Crie um template Terraform para provisionar um Security Group na AWS.
 
-Inclua `main.tf`, `variables.tf`, `outputs.tf`, `versions.tf` e `README.md`. Permita configurar VPC, portas e CIDRs, declare regras explícitas de entrada e saída, restrinja origens, evite `0.0.0.0/0` sem justificativa, aplique padrões de nomenclatura e tags e declare ID, ARN e nome como outputs.
+O template deve conter os seguintes arquivos:
+
+- `main.tf`
+- `variables.tf`
+- `outputs.tf`
+- `versions.tf`
+- `README.md`
+
+## Requisitos obrigatórios
+
+O template deve:
+
+- criar um Security Group;
+- permitir configuração do ID da VPC;
+- permitir configuração de regras de entrada;
+- permitir configuração de regras de saída;
+- evitar exposição pública desnecessária;
+- utilizar variáveis para valores configuráveis;
+- declarar outputs relevantes;
+- evitar valores sensíveis fixos;
+- ser compatível com `terraform fmt`, `terraform init -backend=false` e `terraform validate`.
+
+## Variáveis esperadas
+
+O template deve possuir variáveis para:
+
+- nome do Security Group;
+- descrição;
+- ID da VPC;
+- ambiente;
+- regras de entrada;
+- regras de saída;
+- tags adicionais, quando aplicável.
+
+## Outputs esperados
+
+O template deve retornar:
+
+- ID do Security Group;
+- ARN do Security Group;
+- nome do Security Group.
