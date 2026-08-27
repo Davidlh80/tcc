@@ -46,32 +46,32 @@ locals {
           }
         }
       }
-    ] : concat([
-      {
-        Sid       = "DenyIncorrectEncryptionForKMS"
-        Effect    = "Deny"
-        Principal = "*"
-        Action    = "s3:PutObject"
-        Resource  = "${aws_s3_bucket.this.arn}/*"
-        Condition = {
-          StringNotEquals = {
-            "s3:x-amz-server-side-encryption" = "aws:kms"
+      ] : concat([
+        {
+          Sid       = "DenyIncorrectEncryptionForKMS"
+          Effect    = "Deny"
+          Principal = "*"
+          Action    = "s3:PutObject"
+          Resource  = "${aws_s3_bucket.this.arn}/*"
+          Condition = {
+            StringNotEquals = {
+              "s3:x-amz-server-side-encryption" = "aws:kms"
+            }
           }
         }
-      }
-    ], var.kms_key_id != null ? [
-      {
-        Sid       = "DenyIncorrectKMSKey"
-        Effect    = "Deny"
-        Principal = "*"
-        Action    = "s3:PutObject"
-        Resource  = "${aws_s3_bucket.this.arn}/*"
-        Condition = {
-          StringNotEquals = {
-            "s3:x-amz-server-side-encryption-aws-kms-key-id" = var.kms_key_id
+        ], var.kms_key_id != null ? [
+        {
+          Sid       = "DenyIncorrectKMSKey"
+          Effect    = "Deny"
+          Principal = "*"
+          Action    = "s3:PutObject"
+          Resource  = "${aws_s3_bucket.this.arn}/*"
+          Condition = {
+            StringNotEquals = {
+              "s3:x-amz-server-side-encryption-aws-kms-key-id" = var.kms_key_id
+            }
           }
         }
-      }
     ] : [])
   ) : []
 

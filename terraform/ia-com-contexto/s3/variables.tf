@@ -46,7 +46,7 @@ variable "bucket_name" {
   default     = null
 
   validation {
-    condition = var.bucket_name == null ? true : can(regex("^[a-z0-9][a-z0-9-]{1,61}[a-z0-9]$", var.bucket_name))
+    condition     = var.bucket_name == null ? true : can(regex("^[a-z0-9][a-z0-9-]{1,61}[a-z0-9]$", var.bucket_name))
     error_message = "O nome do bucket deve ser minúsculo, entre 3 e 63 caracteres, iniciar e terminar com letra/número e conter apenas letras, números e hífens."
   }
 }
