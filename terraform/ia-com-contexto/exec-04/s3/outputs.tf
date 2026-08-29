@@ -9,6 +9,6 @@ output "bucket_arn" {
 }
 
 output "bucket_id" {
-  description = "ID do bucket S3 (normalmente igual ao nome)."
+  description = "ID do bucket S3 (igual ao nome)."
   value       = aws_s3_bucket.this.id
 }

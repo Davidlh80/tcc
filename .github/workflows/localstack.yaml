@@ -1,0 +1,216 @@
+name: LocalStack Pilot Test
+
+on:
+  workflow_dispatch:
+    inputs:
+      scenario:
+        description: Cenario que sera testado
+        required: true
+        default: ia-com-contexto
+        type: choice
+        options:
+          - ia-com-contexto
+          - ia-sem-contexto
+      start_execution:
+        description: Primeira execucao do lote
+        required: true
+        default: "1"
+        type: string
+      execution_count:
+        description: Quantidade de execucoes (maximo 5 no piloto)
+        required: true
+        default: "5"
+        type: string
+
+  push:
+    branches:
+      - "**"
+    paths:
+      - "terraform/**"
+      - ".github/workflows/localstack-test.yml"
+
+permissions:
+  contents: read
+
+env:
+  AWS_ACCESS_KEY_ID: test
+  AWS_SECRET_ACCESS_KEY: test
+  AWS_DEFAULT_REGION: us-east-1
+  AWS_REGION: us-east-1
+  AWS_ENDPOINT_URL: http://localhost:4566
+  TF_IN_AUTOMATION: "true"
+
+jobs:
+  localstack-pilot:
+    if: github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '#teste')
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    services:
+      localstack:
+        image: localstack/localstack:3.8
+        env:
+          SERVICES: s3
+          DEBUG: 0
+        ports:
+          - 4566:4566
+        options: >-
+          --health-cmd "curl -f http://localhost:4566/_localstack/health || exit 1"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 20
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.9.8
+          terraform_wrapper: false
+
+      - name: Install terraform-local
+        run: python -m pip install --disable-pip-version-check terraform-local==0.24.1
+
+      - name: Select up to five S3 templates
+        id: templates
+        shell: bash
+        env:
+          INPUT_SCENARIO: ${{ inputs.scenario }}
+          INPUT_START: ${{ inputs.start_execution }}
+          INPUT_COUNT: ${{ inputs.execution_count }}
+        run: |
+          set -euo pipefail
+
+          : > localstack-directories.txt
+
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            scenario="${INPUT_SCENARIO}"
+            start="${INPUT_START}"
+            count="${INPUT_COUNT}"
+
+            if ! [[ "$start" =~ ^[0-9]+$ ]] || ! [[ "$count" =~ ^[1-5]$ ]]; then
+              echo "start_execution deve ser numerico e execution_count deve estar entre 1 e 5."
+              exit 1
+            fi
+
+            for ((offset = 0; offset < count; offset++)); do
+              printf -v execution "exec-%02d" "$((start + offset))"
+              directory="terraform/$scenario/$execution/s3"
+              if find "$directory" -maxdepth 1 -type f -name '*.tf' -print -quit 2>/dev/null | grep -q .; then
+                echo "$directory" >> localstack-directories.txt
+              else
+                echo "Ignorado (sem arquivos Terraform): $directory"
+              fi
+            done
+          else
+            before="${{ github.event.before }}"
+            if [[ "$before" =~ ^0+$ ]]; then
+              before="${{ github.sha }}^"
+            fi
+
+            git diff --name-only "$before" "${{ github.sha }}" -- 'terraform/ia-*/exec-*/s3/*.tf' \
+              | xargs -r -n1 dirname \
+              | sort -u \
+              | head -n 5 > localstack-directories.txt
+          fi
+
+          echo "Diretorios selecionados:"
+          cat localstack-directories.txt
+
+          if [ ! -s localstack-directories.txt ]; then
+            echo "Nenhum template S3 foi encontrado para o piloto."
+            exit 1
+          fi
+
+      - name: Execute LocalStack pilot
+        id: localstack
+        shell: bash
+        run: |
+          set -uo pipefail
+
+          mkdir -p resultados/localstack
+          report="resultados/localstack/pilot-results.csv"
+          echo 'directory,init,plan,apply,verify,destroy,result' > "$report"
+          failures=0
+
+          while IFS= read -r directory; do
+            echo "::group::Testando $directory"
+
+            init=failed
+            plan=skipped
+            apply=skipped
+            verify=skipped
+            destroy=skipped
+
+            rm -rf "$directory/.terraform" "$directory/.terraform.lock.hcl" "$directory/terraform.tfstate" "$directory/terraform.tfstate.backup"
+
+            export TF_VAR_aws_region=us-east-1
+            export TF_VAR_environment=dev
+            export TF_VAR_system=tcc
+            export TF_VAR_purpose=pilot
+            export TF_VAR_bucket_name="tcc-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-$(basename "$(dirname "$directory")")"
+            export TF_VAR_enable_versioning=true
+            export TF_VAR_versioning_enabled=true
+            export TF_VAR_force_destroy=true
+            export TF_VAR_tags='{"Project":"tcc","CostCenter":"experimental"}'
+            export TF_VAR_additional_tags='{"Project":"tcc","CostCenter":"experimental"}'
+
+            if tflocal -chdir="$directory" init -backend=false -input=false -no-color; then
+              init=passed
+              if tflocal -chdir="$directory" plan -input=false -no-color -out=tfplan; then
+                plan=passed
+                if tflocal -chdir="$directory" apply -input=false -no-color -auto-approve tfplan; then
+                  apply=passed
+                  bucket_name=$(tflocal -chdir="$directory" output -raw bucket_name 2>/dev/null || true)
+                  if [ -n "$bucket_name" ] && aws --endpoint-url="$AWS_ENDPOINT_URL" s3api head-bucket --bucket "$bucket_name"; then
+                    verify=passed
+                  else
+                    verify=failed
+                  fi
+                else
+                  apply=failed
+                fi
+              else
+                plan=failed
+              fi
+            fi
+
+            if tflocal -chdir="$directory" destroy -input=false -no-color -auto-approve; then
+              destroy=passed
+            else
+              destroy=failed
+            fi
+
+            if [ "$init" = passed ] && [ "$plan" = passed ] && [ "$apply" = passed ] && [ "$verify" = passed ] && [ "$destroy" = passed ]; then
+              result=passed
+            else
+              result=failed
+              failures=$((failures + 1))
+            fi
+
+            echo "$directory,$init,$plan,$apply,$verify,$destroy,$result" >> "$report"
+            echo "::endgroup::"
+          done < localstack-directories.txt
+
+          cat "$report"
+          echo "failures=$failures" >> "$GITHUB_OUTPUT"
+
+      - name: Upload LocalStack pilot report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: localstack-pilot-results
+          path: |
+            resultados/localstack/pilot-results.csv
+            localstack-directories.txt
+          if-no-files-found: warn
+
+      - name: Fail when a template did not pass
+        if: always() && steps.localstack.outputs.failures != '0'
+        run: |
+          echo "${{ steps.localstack.outputs.failures }} template(s) falharam no piloto LocalStack."
+          exit 1
