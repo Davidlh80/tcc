@@ -54,3 +54,4 @@ Templates gerados por Inteligência Artificial utilizando os mesmos requisitos t
 ## Estado atual
 
 Este repositório está em fase inicial de estruturação. Os templates Terraform ainda serão adicionados às pastas correspondentes aos três cenários avaliados.
+
