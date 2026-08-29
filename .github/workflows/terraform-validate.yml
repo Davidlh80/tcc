@@ -42,9 +42,6 @@ jobs:
         with:
           terraform_version: 1.9.8
 
-      - name: Check Terraform formatting
-        run: terraform fmt -check -recursive terraform
-
       - name: Find Terraform templates
         id: find_templates
         shell: bash
@@ -64,24 +61,90 @@ jobs:
           fi
 
       - name: Validate Terraform templates
+        id: validate_templates
         if: steps.find_templates.outputs.has_templates == 'true'
         shell: bash
         run: |
-          set -euo pipefail
+          set -uo pipefail
+
+          results_dir="resultados/terraform"
+          logs_dir="$results_dir/logs"
+          report="$results_dir/validation-results.csv"
+          mkdir -p "$logs_dir"
+
+          echo 'directory,fmt,init,validate,result' > "$report"
+          failures=0
 
           while IFS= read -r dir; do
-            echo "Validando template em: $dir"
+            echo "::group::Validando template em: $dir"
 
-            terraform -chdir="$dir" init -backend=false -input=false
-            terraform -chdir="$dir" validate
+            safe_name=$(echo "$dir" | tr '/\\' '__')
+            fmt_log="$logs_dir/${safe_name}-fmt.log"
+            init_log="$logs_dir/${safe_name}-init.log"
+            validate_log="$logs_dir/${safe_name}-validate.log"
 
-            echo "Template validado com sucesso: $dir"
+            fmt_result=failed
+            init_result=failed
+            validate_result=skipped
+
+            if terraform fmt -check "$dir" >"$fmt_log" 2>&1; then
+              fmt_result=passed
+            fi
+            cat "$fmt_log"
+
+            if terraform -chdir="$dir" init -backend=false -input=false -no-color >"$init_log" 2>&1; then
+              init_result=passed
+              if terraform -chdir="$dir" validate -no-color >"$validate_log" 2>&1; then
+                validate_result=passed
+              else
+                validate_result=failed
+              fi
+            fi
+
+            cat "$init_log"
+            if [ -f "$validate_log" ]; then
+              cat "$validate_log"
+            fi
+
+            if [ "$fmt_result" = passed ] && [ "$init_result" = passed ] && [ "$validate_result" = passed ]; then
+              result=passed
+            else
+              result=failed
+              failures=$((failures + 1))
+            fi
+
+            echo "$dir,$fmt_result,$init_result,$validate_result,$result" >> "$report"
+            echo "Resultado: fmt=$fmt_result init=$init_result validate=$validate_result"
+            echo "::endgroup::"
           done < terraform_dirs.txt
 
-      - name: Upload Terraform directories list
+          cat "$report"
+          echo "failure_count=$failures" >> "$GITHUB_OUTPUT"
+
+          {
+            echo "## Resultado da validação Terraform"
+            echo
+            echo "Templates avaliados: $(wc -l < terraform_dirs.txt)"
+            echo "Templates com falha: $failures"
+            echo
+            echo '```csv'
+            cat "$report"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload Terraform validation results
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: terraform-validation-inputs
-          path: terraform_dirs.txt
-          if-no-files-found: ignore
+          name: terraform-validation-results
+          path: |
+            terraform_dirs.txt
+            resultados/terraform/validation-results.csv
+            resultados/terraform/logs/
+          if-no-files-found: warn
+
+      - name: Report validation failures
+        if: always() && steps.validate_templates.outputs.failure_count != '' && steps.validate_templates.outputs.failure_count != '0'
+        run: |
+          echo "${{ steps.validate_templates.outputs.failure_count }} template(s) apresentaram falha. Consulte o artefato terraform-validation-results."
+          exit 1
