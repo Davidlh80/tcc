@@ -2,16 +2,26 @@ name: Terraform Validate
 
 on:
   pull_request:
+    branches:
+      - main
+      - "feature/**"
+      - "manual/**"
+      - "ia-sem-contexto/**"
+      - "ia-com-contexto/**"
     paths:
       - "terraform/**"
-      - ".github/workflows/terraform-validate.yml"
+      - ".github/workflows/**"
 
   push:
     branches:
       - main
+      - "feature/**"
+      - "manual/**"
+      - "ia-sem-contexto/**"
+      - "ia-com-contexto/**"
     paths:
       - "terraform/**"
-      - ".github/workflows/terraform-validate.yml"
+      - ".github/workflows/**"
 
   workflow_dispatch:
 

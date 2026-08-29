@@ -7,32 +7,59 @@ on:
       - synchronize
       - reopened
       - closed
+    paths:
+      - "terraform/**"
+      - "scripts/**"
+      - ".github/workflows/metrics.yml"
+
+  push:
+    branches:
+      - main
+      - "feature/**"
+      - "manual/**"
+      - "ia-sem-contexto/**"
+      - "ia-com-contexto/**"
+    paths:
+      - "terraform/**"
+      - "scripts/**"
+      - ".github/workflows/metrics.yml"
 
   workflow_dispatch:
 
 permissions:
   contents: read
   pull-requests: read
+  actions: read
 
 jobs:
   collect-metrics:
-    name: Collect PR Metrics
+    name: Collect Experiment Metrics
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Setup Python
-        uses: actions/setup-python@v5
+      - name: Setup Go
+        uses: actions/setup-go@v5
         with:
-          python-version: "3.12"
+          go-version-file: go.mod
+          cache: true
 
-      - name: Run metrics collector
-        shell: bash
-        run: |
-          if [ -f scripts/collect_pr_metrics.py ]; then
-            python scripts/collect_pr_metrics.py
-          else
-            echo "Script de métricas ainda não implementado."
-          fi
+      - name: Collect metrics
+        run: go run ./scripts/collect-metrics
+
+      - name: Generate metrics summary
+        run: go run ./scripts/generate-summary
+
+      - name: Upload metrics reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: experiment-metrics
+          path: |
+            resultados/metrics/run-metrics.json
+            resultados/metrics/run-metrics.csv
+            resultados/metrics/template-inventory.csv
+            resultados/metrics/template-summary.csv
+          if-no-files-found: warn
