@@ -42,7 +42,7 @@ env:
 
 jobs:
   localstack-pilot:
-    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && contains(toJson(github.event.commits), '#teste'))
+    if: github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '#teste')
     runs-on: ubuntu-latest
     timeout-minutes: 30
 
