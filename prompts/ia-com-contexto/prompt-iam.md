@@ -1,6 +1,12 @@
-# Prompt S3 — IA sem contexto
+﻿# Prompt IAM — IA com contexto organizacional (execução independente)
 
-Crie um template Terraform para provisionar um bucket Amazon S3.
+Esta é uma execução independente do experimento. Ignore qualquer geração anterior e trate este prompt como a única fonte de requisitos para esta execução.
+
+Não mantenha contexto entre execuções. Cada execução deve ser autônoma, repetível e baseada apenas no que está descrito neste prompt e no contexto organizacional informado para esta execução.
+
+Crie um template Terraform para provisionar uma política IAM na AWS.
+
+Além dos requisitos técnicos abaixo, o template deve seguir o contexto organizacional fornecido separadamente pelo experimento.
 
 O template deve conter os seguintes arquivos:
 
@@ -14,10 +20,14 @@ O template deve conter os seguintes arquivos:
 
 O template deve:
 
-- criar um bucket S3;
-- bloquear acesso público ao bucket;
-- habilitar criptografia server-side;
-- permitir configuração de versionamento por variável;
+- criar uma IAM Policy;
+- seguir o princípio do menor privilégio;
+- evitar permissões administrativas;
+- evitar wildcard amplo quando possível;
+- permitir configuração das ações IAM por variável;
+- permitir configuração dos recursos permitidos por variável;
+- seguir o padrão de nomenclatura definido no contexto organizacional;
+- aplicar tags quando o recurso suportar;
 - utilizar variáveis para valores configuráveis;
 - declarar outputs relevantes;
 - evitar valores sensíveis fixos;
@@ -27,15 +37,21 @@ O template deve:
 
 O template deve possuir variáveis para:
 
-- nome do bucket;
+- nome ou finalidade da policy;
 - ambiente;
-- habilitação de versionamento;
-- tags adicionais, quando aplicável.
+- sistema ou aplicação;
+- descrição da policy;
+- ações permitidas;
+- recursos permitidos.
 
 ## Outputs esperados
 
 O template deve retornar:
 
-- nome do bucket;
-- ARN do bucket;
-- ID do bucket.
+- nome da policy;
+- ARN da policy;
+- ID da policy.
+
+## Observação
+
+O template deve priorizar segurança, padronização e aderência ao contexto organizacional. Ele deve ser gerado de forma isolada, sem reaproveitar resultados de execuções anteriores.

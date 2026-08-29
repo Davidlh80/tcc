@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/openai/openai-go/v3"
 	"github.com/openai/openai-go/v3/responses"
@@ -22,17 +23,70 @@ var expectedFiles = []string{
 
 func main() {
 	scenario := flag.String("scenario", "ia-com-contexto", "Cenario: ia-com-contexto ou ia-sem-contexto")
-	resource := flag.String("resource", "s3", "Recurso: s3, iam ou security-group")
+	resource := flag.String("resource", "", "Recurso: s3, iam, security-group ou vazio para os tres")
 	model := flag.String("model", "gpt-5", "Modelo OpenAI usado na geracao")
+	executionID := flag.String("execution-id", "", "Execucao especifica no formato exec-01")
+	executionCount := flag.Int("execution-count", 30, "Numero de execucoes independentes a gerar")
+	startExecution := flag.Int("start-execution", 1, "Primeira execucao a gerar")
 	flag.Parse()
 
-	if err := generateBlueprint(*scenario, *resource, *model); err != nil {
+	resources := parseResources(*resource)
+
+	if *executionID != "" {
+		if err := generateBlueprint(*scenario, resources[0], *model, *executionID); err != nil {
+			fmt.Fprintf(os.Stderr, "erro: %v\n", err)
+			os.Exit(1)
+		}
+		return
+	}
+
+	if *executionCount <= 0 {
+		fmt.Fprintf(os.Stderr, "erro: execution-count deve ser maior que zero\n")
+		os.Exit(1)
+	}
+
+	if err := generateScenarioExecutions(*scenario, resources, *model, *startExecution, *executionCount); err != nil {
 		fmt.Fprintf(os.Stderr, "erro: %v\n", err)
 		os.Exit(1)
 	}
 }
 
-func generateBlueprint(scenario, resource, model string) error {
+func parseResources(raw string) []string {
+	if strings.TrimSpace(raw) == "" {
+		return []string{"s3", "iam", "security-group"}
+	}
+
+	parts := strings.Split(raw, ",")
+	resources := make([]string, 0, len(parts))
+	for _, part := range parts {
+		resource := strings.TrimSpace(part)
+		if resource == "" {
+			continue
+		}
+		resources = append(resources, resource)
+	}
+
+	if len(resources) == 0 {
+		return []string{"s3", "iam", "security-group"}
+	}
+
+	return resources
+}
+
+func generateScenarioExecutions(scenario string, resources []string, model string, startExecution, executionCount int) error {
+	for i := 0; i < executionCount; i++ {
+		executionID := fmt.Sprintf("exec-%02d", startExecution+i)
+		for _, resource := range resources {
+			if err := generateBlueprint(scenario, resource, model, executionID); err != nil {
+				return fmt.Errorf("execucao %s recurso %s: %w", executionID, resource, err)
+			}
+		}
+	}
+
+	return nil
+}
+
+func generateBlueprint(scenario, resource, model, executionID string) error {
 	if scenario != "ia-com-contexto" && scenario != "ia-sem-contexto" {
 		return fmt.Errorf("cenario invalido: %s", scenario)
 	}
@@ -46,6 +100,10 @@ func generateBlueprint(scenario, resource, model string) error {
 		return err
 	}
 
+	if executionID == "" {
+		executionID = "exec-01"
+	}
+
 	promptPath := filepath.Join(projectRoot, "prompts", scenario, fmt.Sprintf("prompt-%s.md", resource))
 	fmt.Printf("Prompt utilizado: %s\n", promptPath)
 
@@ -55,9 +113,10 @@ func generateBlueprint(scenario, resource, model string) error {
 	}
 
 	var contextBlock string
+	var contextPath string
 
 	if scenario == "ia-com-contexto" {
-		contextPath := filepath.Join(projectRoot, "contexto", "contexto-organizacional.md")
+		contextPath = filepath.Join(projectRoot, "contexto", "contexto-organizacional.md")
 		fmt.Printf("Contexto utilizado: %s\n", contextPath)
 
 		contextText, err := readTextFile(contextPath)
@@ -70,22 +129,12 @@ func generateBlueprint(scenario, resource, model string) error {
 
 	finalPrompt := buildPrompt(basePrompt, contextBlock)
 
-	client := openai.NewClient()
-	ctx := context.Background()
-
-	response, err := client.Responses.New(ctx, responses.ResponseNewParams{
-		Model: openai.ChatModel(model),
-		Input: responses.ResponseNewParamsInputUnion{
-			OfString: openai.String(finalPrompt),
-		},
-	})
+	generated, err := callOpenAI(model, finalPrompt)
 	if err != nil {
-		return fmt.Errorf("falha ao chamar API da OpenAI: %w", err)
+		return err
 	}
 
-	generated := response.OutputText()
-
-	outputDir := filepath.Join(projectRoot, "terraform", scenario, resource)
+	outputDir := filepath.Join(projectRoot, "terraform", scenario, executionID, resource)
 
 	if err := os.MkdirAll(outputDir, 0755); err != nil {
 		return fmt.Errorf("falha ao criar diretorio de saida: %w", err)
@@ -108,9 +157,66 @@ func generateBlueprint(scenario, resource, model string) error {
 		fmt.Printf("Arquivo gerado: %s\n", outputPath)
 	}
 
+	metadataPath := filepath.Join(outputDir, "metadata.yml")
+	metadata := buildMetadata(scenario, executionID, resource, model, promptPath, contextPath, projectRoot)
+	if err := os.WriteFile(metadataPath, []byte(metadata), 0644); err != nil {
+		return fmt.Errorf("falha ao escrever %s: %w", metadataPath, err)
+	}
+	fmt.Printf("Metadata gerado: %s\n", metadataPath)
+
 	fmt.Printf("Blueprint gerada em: %s\n", outputDir)
 
 	return nil
+}
+
+func callOpenAI(model, finalPrompt string) (string, error) {
+	client := openai.NewClient()
+	ctx := context.Background()
+
+	response, err := client.Responses.New(ctx, responses.ResponseNewParams{
+		Model: openai.ChatModel(model),
+		Input: responses.ResponseNewParamsInputUnion{
+			OfString: openai.String(finalPrompt),
+		},
+	})
+	if err != nil {
+		return "", fmt.Errorf("falha ao chamar API da OpenAI: %w", err)
+	}
+
+	return response.OutputText(), nil
+}
+
+func buildMetadata(scenario, executionID, resource, model, promptPath, contextPath, projectRoot string) string {
+	promptRel, err := filepath.Rel(projectRoot, promptPath)
+	if err != nil {
+		promptRel = promptPath
+	}
+
+	contextRel := ""
+	if contextPath != "" {
+		if rel, err := filepath.Rel(projectRoot, contextPath); err == nil {
+			contextRel = rel
+		}
+	}
+
+	metadata := fmt.Sprintf("scenario: %s\nexecution_id: %s\nresource: %s\nmodel: %q\nprompt_file: %q\n",
+		scenario,
+		executionID,
+		resource,
+		model,
+		filepath.ToSlash(promptRel),
+	)
+
+	if contextRel != "" {
+		metadata += fmt.Sprintf("context_file: %q\n", filepath.ToSlash(contextRel))
+	}
+
+	metadata += fmt.Sprintf("generated_at: %q\ngeneration_tool: %q\n",
+		time.Now().Format(time.RFC3339),
+		"scripts/generate-blueprint",
+	)
+
+	return metadata
 }
 
 func findProjectRoot() (string, error) {

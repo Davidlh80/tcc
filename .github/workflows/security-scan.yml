@@ -2,6 +2,12 @@ name: Security Scan
 
 on:
   pull_request:
+    branches:
+      - main
+      - "feature/**"
+      - "manual/**"
+      - "ia-sem-contexto/**"
+      - "ia-com-contexto/**"
     paths:
       - "terraform/**"
       - ".github/workflows/**"
@@ -10,6 +16,9 @@ on:
     branches:
       - main
       - "feature/**"
+      - "manual/**"
+      - "ia-sem-contexto/**"
+      - "ia-com-contexto/**"
     paths:
       - "terraform/**"
       - ".github/workflows/**"

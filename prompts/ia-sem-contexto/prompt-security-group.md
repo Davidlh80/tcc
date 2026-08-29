@@ -1,8 +1,10 @@
-# Prompt Security Group — IA com contexto organizacional
+﻿# Prompt Security Group — IA sem contexto (execução independente)
+
+Esta é uma execução independente do experimento. Ignore qualquer geração anterior e trate este prompt como a única fonte de requisitos para esta execução.
+
+Não mantenha contexto entre execuções. Cada execução deve ser autônoma, repetível e baseada apenas no que está descrito neste prompt.
 
 Crie um template Terraform para provisionar um Security Group na AWS.
-
-Além dos requisitos técnicos abaixo, o template deve seguir o contexto organizacional fornecido separadamente pelo experimento.
 
 O template deve conter os seguintes arquivos:
 
@@ -21,9 +23,6 @@ O template deve:
 - permitir configuração de regras de entrada;
 - permitir configuração de regras de saída;
 - evitar exposição pública desnecessária;
-- incluir descrição clara nas regras;
-- seguir o padrão de nomenclatura definido no contexto organizacional;
-- aplicar tags obrigatórias conforme o contexto organizacional;
 - utilizar variáveis para valores configuráveis;
 - declarar outputs relevantes;
 - evitar valores sensíveis fixos;
@@ -33,11 +32,10 @@ O template deve:
 
 O template deve possuir variáveis para:
 
-- nome ou finalidade do Security Group;
+- nome do Security Group;
 - descrição;
 - ID da VPC;
 - ambiente;
-- sistema ou aplicação;
 - regras de entrada;
 - regras de saída;
 - tags adicionais, quando aplicável.
@@ -52,4 +50,4 @@ O template deve retornar:
 
 ## Observação
 
-O template deve priorizar segurança, padronização e aderência ao contexto organizacional.
+O template deve ser gerado de forma isolada, sem reaproveitar resultados de execuções anteriores.
