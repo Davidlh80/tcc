@@ -53,7 +53,7 @@ locals {
       StringNotEquals = {
         "s3:x-amz-server-side-encryption" = "AES256"
       }
-    } : {
+      } : {
       StringNotEquals = merge(
         {
           "s3:x-amz-server-side-encryption" = "aws:kms"
@@ -66,7 +66,7 @@ locals {
   }
 
   bucket_policy_document = {
-    Version   = "2012-10-17"
+    Version = "2012-10-17"
     Statement = [
       local.deny_insecure_transport_statement,
       local.deny_incorrect_encryption_statement
