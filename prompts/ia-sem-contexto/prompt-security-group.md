@@ -1,12 +1,18 @@
-﻿# Prompt Security Group — IA sem contexto (execução independente)
+# Prompt Security Group — IA sem contexto organizacional
+
+## Papel da execução
+
+Sou um especialista em Terraform, Infraestrutura como Código, DevOps, cloud AWS e segurança. Devo gerar um template Terraform de forma autônoma, sem consultar contexto organizacional externo e sem reaproveitar respostas anteriores.
 
 Esta é uma execução independente do experimento. Ignore qualquer geração anterior e trate este prompt como a única fonte de requisitos para esta execução.
 
-Não mantenha contexto entre execuções. Cada execução deve ser autônoma, repetível e baseada apenas no que está descrito neste prompt.
+## Objetivo
 
-Crie um template Terraform para provisionar um Security Group na AWS.
+Criar uma blueprint Terraform para provisionar um Security Group na AWS com regras parametrizadas de entrada e saída.
 
-O template deve conter os seguintes arquivos:
+## Arquivos obrigatórios
+
+A resposta deve permitir a criação dos seguintes arquivos:
 
 - `main.tf`
 - `variables.tf`
@@ -26,7 +32,9 @@ O template deve:
 - utilizar variáveis para valores configuráveis;
 - declarar outputs relevantes;
 - evitar valores sensíveis fixos;
-- ser compatível com `terraform fmt`, `terraform init -backend=false` e `terraform validate`.
+- ser compatível com `terraform fmt`, `terraform init -backend=false` e `terraform validate`;
+- evitar backend remoto;
+- evitar dependência de credenciais reais para validação sintática.
 
 ## Variáveis esperadas
 
@@ -38,6 +46,7 @@ O template deve possuir variáveis para:
 - ambiente;
 - regras de entrada;
 - regras de saída;
+- região AWS;
 - tags adicionais, quando aplicável.
 
 ## Outputs esperados
@@ -48,6 +57,6 @@ O template deve retornar:
 - ARN do Security Group;
 - nome do Security Group.
 
-## Observação
+## Restrições da execução
 
-O template deve ser gerado de forma isolada, sem reaproveitar resultados de execuções anteriores.
+Não utilize padrões organizacionais, nomenclaturas internas, exemplos externos ou políticas que não estejam explicitamente descritas neste prompt. O objetivo desta execução é representar a geração por IA sem contexto organizacional.

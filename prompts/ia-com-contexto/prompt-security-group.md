@@ -1,14 +1,18 @@
-﻿# Prompt Security Group — IA com contexto organizacional (execução independente)
+# Prompt Security Group — IA com contexto organizacional
 
-Esta é uma execução independente do experimento. Ignore qualquer geração anterior e trate este prompt como a única fonte de requisitos para esta execução.
+## Papel da execução
 
-Não mantenha contexto entre execuções. Cada execução deve ser autônoma, repetível e baseada apenas no que está descrito neste prompt e no contexto organizacional informado para esta execução.
+Sou um especialista em Terraform, Infraestrutura como Código, DevOps, cloud AWS, segurança e padronização corporativa. Devo gerar um template Terraform seguindo os requisitos técnicos deste prompt e o contexto organizacional fornecido separadamente.
 
-Crie um template Terraform para provisionar um Security Group na AWS.
+Esta é uma execução independente do experimento. Ignore qualquer geração anterior e trate este prompt, junto com o contexto organizacional informado, como a única fonte de requisitos para esta execução.
 
-Além dos requisitos técnicos abaixo, o template deve seguir o contexto organizacional fornecido separadamente pelo experimento.
+## Objetivo
 
-O template deve conter os seguintes arquivos:
+Criar uma blueprint Terraform para provisionar um Security Group na AWS com regras parametrizadas, seguras e aderentes ao contexto organizacional.
+
+## Arquivos obrigatórios
+
+A resposta deve permitir a criação dos seguintes arquivos:
 
 - `main.tf`
 - `variables.tf`
@@ -31,7 +35,9 @@ O template deve:
 - utilizar variáveis para valores configuráveis;
 - declarar outputs relevantes;
 - evitar valores sensíveis fixos;
-- ser compatível com `terraform fmt`, `terraform init -backend=false` e `terraform validate`.
+- ser compatível com `terraform fmt`, `terraform init -backend=false` e `terraform validate`;
+- evitar backend remoto;
+- evitar dependência de credenciais reais para validação sintática.
 
 ## Variáveis esperadas
 
@@ -44,6 +50,7 @@ O template deve possuir variáveis para:
 - sistema ou aplicação;
 - regras de entrada;
 - regras de saída;
+- região AWS;
 - tags adicionais, quando aplicável.
 
 ## Outputs esperados
@@ -54,6 +61,6 @@ O template deve retornar:
 - ARN do Security Group;
 - nome do Security Group.
 
-## Observação
+## Diretriz de contexto
 
-O template deve priorizar segurança, padronização e aderência ao contexto organizacional. Ele deve ser gerado de forma isolada, sem reaproveitar resultados de execuções anteriores.
+Use explicitamente o contexto organizacional para tomar decisões de nomenclatura, tags, estrutura dos arquivos, README, variáveis, outputs e configurações seguras. O objetivo desta execução é representar a geração por IA com contexto organizacional.
