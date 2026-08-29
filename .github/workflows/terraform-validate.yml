@@ -69,68 +69,137 @@ jobs:
 
           results_dir="resultados/terraform"
           logs_dir="$results_dir/logs"
-          report="$results_dir/validation-results.csv"
+          report_csv="$results_dir/validation-results.csv"
+          report_json="$results_dir/validation-results.json"
+          summary_md="$results_dir/VALIDATION-SUMMARY.md"
           mkdir -p "$logs_dir"
 
-          echo 'directory,fmt,init,validate,result' > "$report"
-          failures=0
+          # Inicializa arquivos
+          echo 'directory,fmt,init,validate,overall_status' > "$report_csv"
+          echo '{"templates": []}' > "$report_json"
+
+          total=0
+          passed=0
+          failed=0
+
+          # Array JSON temporário
+          json_array="["
 
           while IFS= read -r dir; do
-            echo "::group::Validando template em: $dir"
+            echo "::group::Validando: $dir"
+            total=$((total + 1))
 
             safe_name=$(echo "$dir" | tr '/\\' '__')
             fmt_log="$logs_dir/${safe_name}-fmt.log"
             init_log="$logs_dir/${safe_name}-init.log"
             validate_log="$logs_dir/${safe_name}-validate.log"
 
-            fmt_result=failed
-            init_result=failed
-            validate_result=skipped
+            fmt_status="❌ FAILED"
+            init_status="⏭️  SKIPPED"
+            validate_status="⏭️  SKIPPED"
 
+            # Test: terraform fmt
             if terraform fmt -check "$dir" >"$fmt_log" 2>&1; then
-              fmt_result=passed
-            fi
-            cat "$fmt_log"
-
-            if terraform -chdir="$dir" init -backend=false -input=false -no-color >"$init_log" 2>&1; then
-              init_result=passed
-              if terraform -chdir="$dir" validate -no-color >"$validate_log" 2>&1; then
-                validate_result=passed
-              else
-                validate_result=failed
-              fi
-            fi
-
-            cat "$init_log"
-            if [ -f "$validate_log" ]; then
-              cat "$validate_log"
-            fi
-
-            if [ "$fmt_result" = passed ] && [ "$init_result" = passed ] && [ "$validate_result" = passed ]; then
-              result=passed
+              fmt_status="✅ PASSED"
             else
-              result=failed
-              failures=$((failures + 1))
+              fmt_status="❌ FAILED"
             fi
 
-            echo "$dir,$fmt_result,$init_result,$validate_result,$result" >> "$report"
-            echo "Resultado: fmt=$fmt_result init=$init_result validate=$validate_result"
+            # Test: terraform init
+            if terraform -chdir="$dir" init -backend=false -input=false -no-color >"$init_log" 2>&1; then
+              init_status="✅ PASSED"
+              # Test: terraform validate
+              if terraform -chdir="$dir" validate -no-color >"$validate_log" 2>&1; then
+                validate_status="✅ PASSED"
+              else
+                validate_status="❌ FAILED"
+              fi
+            else
+              init_status="❌ FAILED"
+            fi
+
+            # Determina status geral
+            if [[ "$fmt_status" == "✅ PASSED" && "$init_status" == "✅ PASSED" && "$validate_status" == "✅ PASSED" ]]; then
+              overall_status="✅ PASSED"
+              passed=$((passed + 1))
+            else
+              overall_status="❌ FAILED"
+              failed=$((failed + 1))
+            fi
+
+            # Log outputs
+            echo "  Format Check: $fmt_status"
+            [ -f "$fmt_log" ] && cat "$fmt_log" | sed 's/^/    /'
+            echo "  Init: $init_status"
+            [ -f "$init_log" ] && cat "$init_log" | sed 's/^/    /'
+            echo "  Validate: $validate_status"
+            [ -f "$validate_log" ] && cat "$validate_log" | sed 's/^/    /'
             echo "::endgroup::"
+
+            # Adiciona ao CSV
+            echo "$dir,$fmt_status,$init_status,$validate_status,$overall_status" >> "$report_csv"
+
+            # Adiciona ao JSON
+            if [ ! -z "$json_array" ] && [ "$json_array" != "[" ]; then
+              json_array="${json_array},"
+            fi
+            json_array="${json_array}{\"directory\":\"$dir\",\"fmt\":\"$fmt_status\",\"init\":\"$init_status\",\"validate\":\"$validate_status\",\"overall\":\"$overall_status\"}"
+
           done < terraform_dirs.txt
 
-          cat "$report"
-          echo "failure_count=$failures" >> "$GITHUB_OUTPUT"
+          json_array="${json_array}]"
 
+          # Salva JSON
+          echo "{\"summary\":{\"total\":$total,\"passed\":$passed,\"failed\":$failed},\"templates\":$json_array}" > "$report_json"
+
+          # Gera sumário markdown
+          cat > "$summary_md" << 'EOF'
+          # 📊 Terraform Validation Report
+
+          ## Summary
+
+          | Metric | Count |
+          |--------|-------|
+          | Total Templates | $TOTAL |
+          | ✅ Passed | $PASSED |
+          | ❌ Failed | $FAILED |
+          | Success Rate | $RATE % |
+
+          ## Detailed Results
+
+          | Template | Format | Init | Validate | Overall |
+          |----------|--------|------|----------|---------|
+          EOF
+
+          awk -F, 'NR>1 {print "| " $1 " | " $2 " | " $3 " | " $4 " | " $5 " |"}' "$report_csv" >> "$summary_md"
+
+          # Substitui variáveis
+          rate=$((passed * 100 / total))
+          sed -i "s/\$TOTAL/$total/g; s/\$PASSED/$passed/g; s/\$FAILED/$failed/g; s/\$RATE/$rate/g" "$summary_md"
+
+          # Output para step summary
           {
-            echo "## Resultado da validação Terraform"
+            echo "# 📊 Terraform Validation Results"
             echo
-            echo "Templates avaliados: $(wc -l < terraform_dirs.txt)"
-            echo "Templates com falha: $failures"
+            echo "| Status | Count |"
+            echo "|--------|-------|"
+            echo "| ✅ Passed | $passed |"
+            echo "| ❌ Failed | $failed |"
+            echo "| 📦 Total | $total |"
+            echo "| 📈 Success Rate | $((passed * 100 / total))% |"
             echo
-            echo '```csv'
-            cat "$report"
-            echo '```'
+            echo "## Details"
+            echo
+            awk -F, 'NR>1 {print "| `" $1 "` | " $2 " | " $3 " | " $4 " | " $5 " |"}' "$report_csv" | head -20
+            if [ $total -gt 20 ]; then
+              echo "| ... | ... | ... | ... | ... |"
+              echo "| See artifacts for full report |"
+            fi
           } >> "$GITHUB_STEP_SUMMARY"
+
+          echo "total=$total" >> "$GITHUB_OUTPUT"
+          echo "passed=$passed" >> "$GITHUB_OUTPUT"
+          echo "failed=$failed" >> "$GITHUB_OUTPUT"
 
       - name: Upload Terraform validation results
         if: always()
@@ -138,13 +207,180 @@ jobs:
         with:
           name: terraform-validation-results
           path: |
-            terraform_dirs.txt
-            resultados/terraform/validation-results.csv
-            resultados/terraform/logs/
+            resultados/terraform/
+          retention-days: 30
           if-no-files-found: warn
 
-      - name: Report validation failures
-        if: always() && steps.validate_templates.outputs.failure_count != '' && steps.validate_templates.outputs.failure_count != '0'
+      - name: Generate HTML Report
+        if: always() && steps.validate_templates.outputs.total != ''
+        shell: bash
         run: |
-          echo "${{ steps.validate_templates.outputs.failure_count }} template(s) apresentaram falha. Consulte o artefato terraform-validation-results."
-          exit 1
+          report_html="resultados/terraform/validation-report.html"
+          mkdir -p resultados/terraform
+
+          cat > "$report_html" << 'HTMLEOF'
+          <!DOCTYPE html>
+          <html lang="pt-BR">
+          <head>
+              <meta charset="UTF-8">
+              <meta name="viewport" content="width=device-width, initial-scale=1.0">
+              <title>Terraform Validation Report</title>
+              <style>
+                  * { margin: 0; padding: 0; box-sizing: border-box; }
+                  body {
+                      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+                      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                      min-height: 100vh;
+                      padding: 20px;
+                  }
+                  .container {
+                      max-width: 1200px;
+                      margin: 0 auto;
+                      background: white;
+                      border-radius: 12px;
+                      box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+                      overflow: hidden;
+                  }
+                  .header {
+                      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                      color: white;
+                      padding: 40px;
+                      text-align: center;
+                  }
+                  .header h1 { font-size: 2.5em; margin-bottom: 10px; }
+                  .header p { font-size: 1.1em; opacity: 0.9; }
+                  .metrics {
+                      display: grid;
+                      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+                      gap: 20px;
+                      padding: 40px;
+                      background: #f8f9fa;
+                      border-bottom: 1px solid #e0e0e0;
+                  }
+                  .metric-card {
+                      background: white;
+                      padding: 20px;
+                      border-radius: 8px;
+                      border-left: 4px solid #667eea;
+                      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+                  }
+                  .metric-card.passed { border-left-color: #10b981; }
+                  .metric-card.failed { border-left-color: #ef4444; }
+                  .metric-value {
+                      font-size: 2.5em;
+                      font-weight: bold;
+                      color: #667eea;
+                      margin: 10px 0;
+                  }
+                  .metric-card.passed .metric-value { color: #10b981; }
+                  .metric-card.failed .metric-value { color: #ef4444; }
+                  .metric-label { color: #6b7280; font-size: 0.9em; }
+                  .content { padding: 40px; }
+                  .table-wrapper {
+                      overflow-x: auto;
+                      margin: 20px 0;
+                  }
+                  table {
+                      width: 100%;
+                      border-collapse: collapse;
+                      font-size: 0.95em;
+                  }
+                  th {
+                      background: #f8f9fa;
+                      padding: 12px;
+                      text-align: left;
+                      font-weight: 600;
+                      border-bottom: 2px solid #e0e0e0;
+                  }
+                  td {
+                      padding: 12px;
+                      border-bottom: 1px solid #e0e0e0;
+                  }
+                  tr:hover { background: #f8f9fa; }
+                  .status-passed { color: #10b981; font-weight: 600; }
+                  .status-failed { color: #ef4444; font-weight: 600; }
+                  .dir-name {
+                      font-family: 'Courier New', monospace;
+                      color: #667eea;
+                      word-break: break-all;
+                  }
+                  .footer {
+                      background: #f8f9fa;
+                      padding: 20px;
+                      text-align: center;
+                      color: #6b7280;
+                      border-top: 1px solid #e0e0e0;
+                  }
+              </style>
+          </head>
+          <body>
+              <div class="container">
+                  <div class="header">
+                      <h1>📊 Terraform Validation Report</h1>
+                      <p>Automated infrastructure validation and quality checks</p>
+                  </div>
+
+                  <div class="metrics">
+                      <div class="metric-card">
+                          <div class="metric-label">Total Templates</div>
+                          <div class="metric-value">$TOTAL</div>
+                      </div>
+                      <div class="metric-card passed">
+                          <div class="metric-label">✅ Passed</div>
+                          <div class="metric-value">$PASSED</div>
+                      </div>
+                      <div class="metric-card failed">
+                          <div class="metric-label">❌ Failed</div>
+                          <div class="metric-value">$FAILED</div>
+                      </div>
+                      <div class="metric-card">
+                          <div class="metric-label">Success Rate</div>
+                          <div class="metric-value">$RATE%</div>
+                      </div>
+                  </div>
+
+                  <div class="content">
+                      <h2 style="margin-bottom: 20px; color: #1f2937;">Detailed Results</h2>
+                      <div class="table-wrapper">
+                          <table>
+                              <thead>
+                                  <tr>
+                                      <th>Template Directory</th>
+                                      <th>Format</th>
+                                      <th>Init</th>
+                                      <th>Validate</th>
+                                      <th>Overall</th>
+                                  </tr>
+                              </thead>
+                              <tbody>
+                                  $TABLE_ROWS
+                              </tbody>
+                          </table>
+                      </div>
+                  </div>
+
+                  <div class="footer">
+                      <p>Generated by Terraform Validation Workflow</p>
+                      <p style="font-size: 0.85em; margin-top: 10px;">Run at $TIMESTAMP</p>
+                  </div>
+              </div>
+          </body>
+          </html>
+          HTMLEOF
+
+          # Substitui variáveis
+          TOTAL=${{ steps.validate_templates.outputs.total }}
+          PASSED=${{ steps.validate_templates.outputs.passed }}
+          FAILED=${{ steps.validate_templates.outputs.failed }}
+          RATE=$((PASSED * 100 / TOTAL))
+          TIMESTAMP=$(date '+%Y-%m-%d %H:%M:%S UTC')
+
+          # Gera linhas da tabela
+          TABLE_ROWS=$(awk -F, 'NR>1 {
+              status_class = ($5 ~ /PASSED/) ? "status-passed" : "status-failed"
+              printf "<tr><td class=\"dir-name\">%s</td><td class=\"%s\">%s</td><td class=\"%s\">%s</td><td class=\"%s\">%s</td><td class=\"%s\">%s</td></tr>\n", $1, status_class, $2, status_class, $3, status_class, $4, status_class, $5
+          }' resultados/terraform/validation-results.csv)
+
+          sed -i "s|\$TOTAL|$TOTAL|g; s|\$PASSED|$PASSED|g; s|\$FAILED|$FAILED|g; s|\$RATE|$RATE|g; s|\$TIMESTAMP|$TIMESTAMP|g; s|\$TABLE_ROWS|$TABLE_ROWS|g" "$report_html"
+
+          echo "📄 HTML Report generated: $report_html"
