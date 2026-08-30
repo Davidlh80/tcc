@@ -1,0 +1,12 @@
+scenario: ia-com-contexto
+execution_id: exec-02
+resource: s3
+model: "gpt-5"
+prompt_file: "prompts/ia-com-contexto/prompt-s3.md"
+context_file: "contexto/contexto-organizacional.md"
+started_at: "2026-08-29T17:51:32.6793001-03:00"
+finished_at: "2026-08-29T17:52:24.9415303-03:00"
+api_duration_ms: 52253
+total_duration_ms: 52262
+generated_at: "2026-08-29T17:52:24.9415303-03:00"
+generation_tool: "scripts/generate-blueprint"

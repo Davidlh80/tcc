@@ -129,7 +129,10 @@ func generateBlueprint(scenario, resource, model, executionID string) error {
 
 	finalPrompt := buildPrompt(basePrompt, contextBlock)
 
+	totalStartedAt := time.Now()
+	apiStartedAt := time.Now()
 	generated, err := callOpenAI(model, finalPrompt)
+	apiFinishedAt := time.Now()
 	if err != nil {
 		return err
 	}
@@ -158,7 +161,20 @@ func generateBlueprint(scenario, resource, model, executionID string) error {
 	}
 
 	metadataPath := filepath.Join(outputDir, "metadata.yml")
-	metadata := buildMetadata(scenario, executionID, resource, model, promptPath, contextPath, projectRoot)
+	totalFinishedAt := time.Now()
+	metadata := buildMetadata(
+		scenario,
+		executionID,
+		resource,
+		model,
+		promptPath,
+		contextPath,
+		projectRoot,
+		apiStartedAt,
+		apiFinishedAt,
+		totalStartedAt,
+		totalFinishedAt,
+	)
 	if err := os.WriteFile(metadataPath, []byte(metadata), 0644); err != nil {
 		return fmt.Errorf("falha ao escrever %s: %w", metadataPath, err)
 	}
@@ -186,7 +202,10 @@ func callOpenAI(model, finalPrompt string) (string, error) {
 	return response.OutputText(), nil
 }
 
-func buildMetadata(scenario, executionID, resource, model, promptPath, contextPath, projectRoot string) string {
+func buildMetadata(
+	scenario, executionID, resource, model, promptPath, contextPath, projectRoot string,
+	apiStartedAt, apiFinishedAt, totalStartedAt, totalFinishedAt time.Time,
+) string {
 	promptRel, err := filepath.Rel(projectRoot, promptPath)
 	if err != nil {
 		promptRel = promptPath
@@ -211,8 +230,12 @@ func buildMetadata(scenario, executionID, resource, model, promptPath, contextPa
 		metadata += fmt.Sprintf("context_file: %q\n", filepath.ToSlash(contextRel))
 	}
 
-	metadata += fmt.Sprintf("generated_at: %q\ngeneration_tool: %q\n",
-		time.Now().Format(time.RFC3339),
+	metadata += fmt.Sprintf("started_at: %q\nfinished_at: %q\napi_duration_ms: %d\ntotal_duration_ms: %d\ngenerated_at: %q\ngeneration_tool: %q\n",
+		totalStartedAt.Format(time.RFC3339Nano),
+		totalFinishedAt.Format(time.RFC3339Nano),
+		apiFinishedAt.Sub(apiStartedAt).Milliseconds(),
+		totalFinishedAt.Sub(totalStartedAt).Milliseconds(),
+		totalFinishedAt.Format(time.RFC3339Nano),
 		"scripts/generate-blueprint",
 	)
 
