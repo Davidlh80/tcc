@@ -1,0 +1,11 @@
+scenario: ia-sem-contexto
+execution_id: exec-05
+resource: security-group
+model: "gpt-5"
+prompt_file: "prompts/ia-sem-contexto/prompt-security-group.md"
+started_at: "2026-09-07T17:26:08.4148599-03:00"
+finished_at: "2026-09-07T17:27:03.2996515-03:00"
+api_duration_ms: 54881
+total_duration_ms: 54884
+generated_at: "2026-09-07T17:27:03.2996515-03:00"
+generation_tool: "scripts/generate-blueprint"

@@ -1,0 +1,11 @@
+scenario: ia-sem-contexto
+execution_id: exec-11
+resource: iam
+model: "gpt-5"
+prompt_file: "prompts/ia-sem-contexto/prompt-iam.md"
+started_at: "2026-09-07T17:49:08.687581-03:00"
+finished_at: "2026-09-07T17:51:54.5299813-03:00"
+api_duration_ms: 139755
+total_duration_ms: 165842
+generated_at: "2026-09-07T17:51:54.5299813-03:00"
+generation_tool: "scripts/generate-blueprint"
