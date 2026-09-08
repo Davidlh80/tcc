@@ -74,13 +74,21 @@ func parseResources(raw string) []string {
 }
 
 func generateScenarioExecutions(scenario string, resources []string, model string, startExecution, executionCount int) error {
+	var failures int
+
 	for i := 0; i < executionCount; i++ {
 		executionID := fmt.Sprintf("exec-%02d", startExecution+i)
 		for _, resource := range resources {
 			if err := generateBlueprint(scenario, resource, model, executionID); err != nil {
-				return fmt.Errorf("execucao %s recurso %s: %w", executionID, resource, err)
+				failures++
+				fmt.Fprintf(os.Stderr, "falha registrada em %s/%s/%s: %v\n", scenario, executionID, resource, err)
+				continue
 			}
 		}
+	}
+
+	if failures > 0 {
+		return fmt.Errorf("%d execucao(oes) falharam nesta rodada", failures)
 	}
 
 	return nil

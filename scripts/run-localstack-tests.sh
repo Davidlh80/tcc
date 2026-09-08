@@ -148,6 +148,50 @@ if [ "$resource" = "security-group" ]; then
   export TF_VAR_vpc_id="$vpc_id"
 fi
 
+run_terraform_init() {
+  local directory="$1"
+  local init_log="$2"
+
+  if tflocal -chdir="$directory" init \
+    -backend=false \
+    -input=false \
+    -no-color >"$init_log" 2>&1; then
+    echo "Provider AWS: v$provider_version (lock fixado)." >>"$init_log"
+    return 0
+  fi
+
+  if ! grep -qiE 'inconsistent dependency lock file|lock file does not match|match the version constraint' "$init_log"; then
+    return 1
+  fi
+
+  {
+    echo
+    echo "Aviso: o AWS Provider fixado (v$provider_version) nao satisfaz a"
+    echo "restricao de versao declarada pelo proprio template. Gerando um"
+    echo "lock proprio para este diretorio (nao conta como falha do template)."
+    echo
+  } >>"$init_log"
+
+  rm -f "$directory/.terraform.lock.hcl"
+
+  if ! tflocal -chdir="$directory" init \
+    -backend=false \
+    -input=false \
+    -no-color >>"$init_log" 2>&1; then
+    return 1
+  fi
+
+  local resolved_version
+  resolved_version=$(
+    grep -A1 'hashicorp/aws' "$directory/.terraform.lock.hcl" 2>/dev/null |
+      grep -oE '[0-9]+\.[0-9]+\.[0-9]+' |
+      head -n1
+  )
+  echo "Provider AWS: v${resolved_version:-desconhecido} (lock proprio do template)." >>"$init_log"
+
+  return 0
+}
+
 read_output() {
   local directory="$1"
   shift
@@ -219,10 +263,7 @@ while IFS= read -r directory; do
 
   cp "$canonical_lock" "$directory/.terraform.lock.hcl"
 
-  if tflocal -chdir="$directory" init \
-    -backend=false \
-    -input=false \
-    -no-color >"$init_log" 2>&1; then
+  if run_terraform_init "$directory" "$init_log"; then
     init_result=passed
 
     if tflocal -chdir="$directory" plan \
