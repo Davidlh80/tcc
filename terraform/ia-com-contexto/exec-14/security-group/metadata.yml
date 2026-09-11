@@ -1,0 +1,12 @@
+scenario: ia-com-contexto
+execution_id: exec-14
+resource: security-group
+model: "gpt-5"
+prompt_file: "prompts/ia-com-contexto/prompt-security-group.md"
+context_file: "contexto/contexto-organizacional.md"
+started_at: "2026-09-08T20:22:17.208343-03:00"
+finished_at: "2026-09-08T20:28:27.7128801-03:00"
+api_duration_ms: 370500
+total_duration_ms: 370504
+generated_at: "2026-09-08T20:28:27.7128801-03:00"
+generation_tool: "scripts/generate-blueprint"

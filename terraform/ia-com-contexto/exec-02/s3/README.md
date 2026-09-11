@@ -1,62 +1,45 @@
-# Blueprint Terraform — S3 Bucket seguro
+Visão geral do recurso
+- Este template provisiona um bucket Amazon S3 seguindo o padrão organizacional:
+  - Nome no formato <environment>-<system>-s3-<purpose>;
+  - Bloqueio total de acesso público (quatro flags do Public Access Block);
+  - Criptografia server-side habilitada por padrão com SSE-S3 (AES256), opcionalmente KMS;
+  - Policy que nega qualquer requisição sem aws:SecureTransport (exige HTTPS);
+  - Versionamento configurável via variável, padrão Enabled;
+  - Tags obrigatórias aplicadas a todos os recursos com suporte a tags.
 
-Este template cria um bucket Amazon S3 alinhado ao contexto organizacional, com bloqueio de acesso público, criptografia server-side, opção de versionamento e tags padronizadas.
+Tabela de variáveis (nome, tipo, obrigatória, descrição)
+- environment | string | sim | Ambiente alvo do recurso. Valores permitidos: dev, hml, prd.
+- system | string | sim | Identificador do sistema/aplicação. Apenas [a-z0-9-], sem iniciar/terminar com hífen.
+- purpose | string | sim | Finalidade do recurso (ex.: logs, assets, backups). Apenas [a-z0-9-].
+- region | string | sim | Região AWS (ex.: us-east-1).
+- versioning_status | string | não (padrão: Enabled) | Status do versionamento: Enabled ou Suspended.
+- sse_algorithm | string | não (padrão: AES256) | Algoritmo de SSE: AES256 (SSE-S3) ou aws:kms.
+- kms_key_id | string | condicional | ARN/ID da KMS Key quando sse_algorithm = aws:kms.
+- force_destroy | bool | não (padrão: false) | Se true, permite destruir o bucket mesmo contendo objetos.
+- additional_tags | map(string) | não (padrão: {}) | Tags adicionais mescladas às tags padrão.
 
-Padrão de nomenclatura
-- Formato: <ambiente>-<sistema>-<recurso>-<finalidade>
-- Exemplo: dev-tcc-s3-logs
-- Neste módulo, o nome é construído como: ${var.environment}-${var.system}-s3-${var.purpose}
+Tabela de outputs (nome, descrição)
+- bucket_name | Nome do bucket S3 criado.
+- bucket_arn | ARN do bucket S3 criado.
+- bucket_id | ID do bucket (igual ao nome).
 
-Requisitos atendidos
-- Cria bucket S3 com nome padronizado
-- Bloqueia acesso público (Public Access Block)
-- Criptografia server-side (SSE-S3 AES256) habilitada por padrão
-- Versionamento configurável via variável
-- Tags obrigatórias aplicadas
-- Política para negar tráfego sem TLS (SecureTransport)
-- Sem backend remoto e sem dependência de credenciais para validação sintática
+Exemplo de uso do módulo/recurso
+module "s3_bucket" {
+  source = "./"
 
-Uso
-1) Ajuste variáveis (exemplo tfvars):
-environment     = "dev"
-system          = "tcc"
-purpose         = "logs"
-aws_region      = "us-east-1"
-enable_versioning = true
-additional_tags = {
-  Team = "platform"
+  environment       = "dev"
+  system            = "tcc"
+  purpose           = "logs"
+  region            = "us-east-1"
+
+  # Opcional
+  versioning_status = "Enabled"
+  sse_algorithm     = "AES256"
+  # Se usar KMS:
+  # sse_algorithm = "aws:kms"
+  # kms_key_id     = "arn:aws:kms:us-east-1:111122223333:key/abcd-ef01-2345-6789-abcdef012345"
+
+  additional_tags = {
+    Application = "my-app"
+  }
 }
-
-2) Comandos:
-- terraform init -backend=false
-- terraform validate
-- terraform plan
-- terraform apply
-
-Variáveis
-- aws_region (string): Região AWS. Padrão: us-east-1.
-- environment (string): dev | hml | prd. Obrigatória.
-- system (string): Sistema/aplicação (minúsculas, números, hífen). Obrigatória.
-- purpose (string): Finalidade do bucket (minúsculas, números, hífen). Obrigatória.
-- enable_versioning (bool): Habilita versionamento. Padrão: true.
-- force_destroy (bool): Permite destruir bucket com objetos. Padrão: false. Use com cautela.
-- additional_tags (map(string)): Tags adicionais opcionais.
-
-Tags obrigatórias aplicadas
-- Project = "tcc-iac-ia"
-- Environment = var.environment
-- ManagedBy = "terraform"
-- Owner = "devops"
-- CostCenter = "academic-research"
-- Name = nome do bucket
-- + additional_tags (quando fornecido)
-
-Outputs
-- bucket_name: Nome do bucket.
-- bucket_arn: ARN do bucket.
-- bucket_id: ID do bucket.
-
-Observações
-- Nomes de buckets S3 são globais. Garanta unicidade conforme seu ambiente.
-- Por padrão, este template nega acessos sem TLS e bloqueia acesso público.
-- A criptografia default usa SSE-S3 (AES256). Caso precise de KMS, ajuste a configuração conforme políticas internas.

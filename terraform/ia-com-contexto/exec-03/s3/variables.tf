@@ -1,68 +1,51 @@
 variable "environment" {
-  description = "Ambiente alvo. Valores permitidos: dev, hml, prd."
+  description = "Ambiente do recurso. Valores permitidos: dev, hml, prd."
   type        = string
 
   validation {
     condition     = contains(["dev", "hml", "prd"], var.environment)
-    error_message = "O environment deve ser um dos: dev, hml, prd."
+    error_message = "O valor de environment deve ser um dos: dev, hml, prd."
   }
 }
 
 variable "system" {
-  description = "Identificador do sistema/aplicação (min 3, máx 24; apenas minúsculas, números e hífens; não iniciar/terminar com hífen)."
+  description = "Identificador do sistema (ex.: tcc). Usado na composição do nome do bucket."
   type        = string
 
   validation {
-    condition     = length(var.system) >= 3 && length(var.system) <= 24
-    error_message = "O system deve ter entre 3 e 24 caracteres."
-  }
-
-  validation {
-    condition     = can(regex("^[a-z0-9]([a-z0-9-]*[a-z0-9])?$", var.system))
-    error_message = "O system deve conter apenas [a-z0-9-] e não iniciar/terminar com hífen."
+    condition     = can(regex("^[a-z0-9-]+$", var.system)) && length(var.system) > 0
+    error_message = "system deve conter apenas letras minúsculas, números e hífens."
   }
 }
 
 variable "purpose" {
-  description = "Finalidade do bucket (min 3, máx 24; apenas minúsculas, números e hífens; não iniciar/terminar com hífen)."
+  description = "Finalidade do bucket (ex.: logs, assets, backups)."
   type        = string
 
   validation {
-    condition     = length(var.purpose) >= 3 && length(var.purpose) <= 24
-    error_message = "O purpose deve ter entre 3 e 24 caracteres."
-  }
-
-  validation {
-    condition     = can(regex("^[a-z0-9]([a-z0-9-]*[a-z0-9])?$", var.purpose))
-    error_message = "O purpose deve conter apenas [a-z0-9-] e não iniciar/terminar com hífen."
+    condition     = can(regex("^[a-z0-9-]+$", var.purpose)) && length(var.purpose) > 0
+    error_message = "purpose deve conter apenas letras minúsculas, números e hífens."
   }
 }
 
-variable "enable_versioning" {
-  description = "Habilita versionamento do bucket S3."
-  type        = bool
-  default     = true
-}
-
-variable "aws_region" {
-  description = "Região AWS onde o bucket será criado."
+variable "region" {
+  description = "Região AWS para o provisionamento (ex.: us-east-1)."
   type        = string
-  default     = "us-east-1"
 
   validation {
-    condition     = can(regex("^[a-z]{2}-[a-z]+-\\d$", var.aws_region))
-    error_message = "Região inválida. Exemplo: us-east-1, sa-east-1."
+    condition     = length(var.region) > 0
+    error_message = "region não pode ser vazio."
   }
 }
 
-variable "force_destroy" {
-  description = "Permite destruir o bucket mesmo contendo objetos. Use com cautela."
-  type        = bool
-  default     = false
-}
-
-variable "tags" {
-  description = "Tags adicionais a serem aplicadas ao bucket. As tags obrigatórias já são definidas pelo template."
+variable "additional_tags" {
+  description = "Tags adicionais a serem aplicadas aos recursos. Tags obrigatórias internas sempre prevalecem."
   type        = map(string)
   default     = {}
+}
+
+variable "versioning_enabled" {
+  description = "Habilita o versionamento do bucket S3. Padrão: true (Enabled)."
+  type        = bool
+  default     = true
 }

@@ -1,84 +1,35 @@
-Blueprint Terraform — Bucket Amazon S3 seguro e padronizado
+Visão geral do recurso
+Este template provisiona um bucket Amazon S3 seguindo o padrão organizacional:
+- Nomenclatura: <environment>-<system>-s3-<purpose>
+- Segurança: bloqueio completo de acesso público (quatro flags), criptografia server-side AES256 (SSE-S3) por padrão e bucket policy negando qualquer requisição sem aws:SecureTransport (somente HTTPS).
+- Governança: tags obrigatórias aplicadas e versionamento configurável (Enabled por padrão).
 
-Descrição
-- Cria um bucket S3 seguindo o padrão organizacional de nomenclatura e tags, com bloqueio de acesso público, criptografia server-side por padrão e versionamento opcional.
+Tabela de variáveis (nome, tipo, obrigatória, descrição)
+- environment (string) [obrigatória]: Ambiente alvo (dev, hml, prd).
+- system (string) [obrigatória]: Nome do sistema/aplicação (minúsculo, sem espaços).
+- region (string) [obrigatória]: Região AWS onde os recursos serão provisionados (ex.: us-east-1).
+- additional_tags (map(string)) [opcional]: Tags adicionais a serem mescladas às tags padrão.
+- purpose (string) [obrigatória]: Finalidade do bucket para composição do nome (ex.: logs, app, data).
+- versioning_enabled (bool) [opcional]: Controla o versionamento do bucket (true = Enabled, false = Suspended). Padrão: true.
+- force_destroy (bool) [opcional]: Permite destruir o bucket mesmo contendo objetos. Padrão: false.
 
-Padrão de nomenclatura
-- <ambiente>-<sistema>-<recurso>-<finalidade>(-<sufixo>)
-- Exemplo: dev-tcc-s3-logs
-- Observação: nomes de bucket são globais na AWS. Use name_suffix para garantir unicidade quando necessário.
+Tabela de outputs (nome, descrição)
+- bucket_name: Nome do bucket S3 criado.
+- bucket_arn: ARN do bucket S3.
+- bucket_id: ID do bucket S3 (normalmente igual ao nome).
 
-Requisitos
-- Terraform >= 1.4.0
-- Provider AWS >= 5.40.0
-- Sem backend remoto
-- Sintaxe compatível com terraform fmt, terraform init -backend=false e terraform validate
+Exemplo de uso do módulo/recurso
+module "s3_bucket" {
+  source = "./"
 
-Recursos criados
-- aws_s3_bucket
-- aws_s3_bucket_public_access_block
-- aws_s3_bucket_ownership_controls (BucketOwnerEnforced)
-- aws_s3_bucket_versioning (configurável)
-- aws_s3_bucket_server_side_encryption_configuration (SSE-S3 ou SSE-KMS)
-- aws_s3_bucket_policy (nega tráfego sem TLS e reforça headers de criptografia)
+  environment       = "dev"
+  system            = "tcc"
+  region            = "us-east-1"
+  purpose           = "logs"
+  versioning_enabled = true
+  force_destroy     = false
 
-Segurança e governança
-- Acesso público bloqueado (todas as flags)
-- Criptografia server-side habilitada por padrão:
-  - AES256 por padrão
-  - Optionally aws:kms quando sse_algorithm = "aws:kms" (exige kms_key_arn)
-- Política nega:
-  - Qualquer ação via HTTP (sem TLS)
-  - PutObject sem os headers de criptografia corretos
-- Versionamento configurável (enable_versioning)
-- ACLs desabilitadas via BucketOwnerEnforced
-
-Variáveis principais
-- region (string): Região AWS (ex.: sa-east-1)
-- environment (string): dev, hml ou prd
-- system (string): nome do sistema/aplicação (minúsculo, números e hífens)
-- purpose (string): finalidade do bucket (ex.: logs, assets)
-- name_suffix (string, opcional): sufixo para unicidade global
-- enable_versioning (bool): habilita versionamento (default: true)
-- sse_algorithm (string): AES256 (padrão) ou aws:kms
-- kms_key_arn (string): ARN da KMS Key quando sse_algorithm = aws:kms
-- force_destroy (bool): destrói bucket com objetos (default: false)
-- additional_tags (map(string)): tags extras
-
-Tags obrigatórias aplicadas
-- Project = "tcc-iac-ia"
-- Environment = var.environment
-- ManagedBy = "terraform"
-- Owner = "devops"
-- CostCenter = "academic-research"
-
-Outputs
-- bucket_name
-- bucket_arn
-- bucket_id
-
-Exemplo de uso
-- Arquivos no mesmo diretório.
-- Ajuste variáveis conforme seu ambiente.
-
-Exemplo de terraform.tfvars (ilustrativo)
-- region = "sa-east-1"
-- environment = "dev"
-- system = "tcc"
-- purpose = "logs"
-- name_suffix = "equipe-a"  # opcional para unicidade
-- enable_versioning = true
-- sse_algorithm = "AES256"
-- additional_tags = {
-    DataClass = "confidential"
+  additional_tags = {
+    Squad = "platform"
   }
-
-Comandos
-- terraform init -backend=false
-- terraform validate
-- terraform plan
-- terraform apply
-
-Observações
-- Para usar SSE-KMS, defina sse_algorithm = "aws:kms" e informe kms_key_arn com a chave apropriada e permissões no KMS.
-- Evite definir force_destroy = true em produção, pois permite destruição mesmo com objetos no bucket.
+}
