@@ -1,16 +1,9 @@
-provider "aws" {
-  region = var.aws_region
-}
-
 locals {
   resource_type = "s3"
 
-  purpose_component = var.name_suffix != "" ? "${var.bucket_purpose}-${var.name_suffix}" : var.bucket_purpose
+  bucket_name = "${var.environment}-${var.system}-${local.resource_type}-${var.purpose}"
 
-  # Padrão de nomenclatura: <ambiente>-<sistema>-<recurso>-<finalidade>
-  bucket_name = lower("${var.environment}-${var.system}-${local.resource_type}-${local.purpose_component}")
-
-  base_tags = {
+  mandatory_tags = {
     Project     = "tcc-iac-ia"
     Environment = var.environment
     ManagedBy   = "terraform"
@@ -18,7 +11,12 @@ locals {
     CostCenter  = "academic-research"
   }
 
-  tags = merge(local.base_tags, var.additional_tags)
+  # Mandatory tags override any conflicting additional tags
+  tags = merge(var.additional_tags, local.mandatory_tags)
+}
+
+provider "aws" {
+  region = var.region
 }
 
 resource "aws_s3_bucket" "this" {
@@ -28,73 +26,54 @@ resource "aws_s3_bucket" "this" {
   tags = local.tags
 }
 
-# Enforce bucket owner and disable ACLs (mais seguro)
-resource "aws_s3_bucket_ownership_controls" "this" {
+resource "aws_s3_bucket_public_access_block" "this" {
   bucket = aws_s3_bucket.this.id
 
-  rule {
-    object_ownership = "BucketOwnerEnforced"
-  }
-}
-
-# Bloqueio de acesso público
-resource "aws_s3_bucket_public_access_block" "this" {
-  bucket                  = aws_s3_bucket.this.id
   block_public_acls       = true
   block_public_policy     = true
   ignore_public_acls      = true
   restrict_public_buckets = true
 }
 
-# Versionamento controlado por variável
-resource "aws_s3_bucket_versioning" "this" {
-  bucket = aws_s3_bucket.this.id
-
-  versioning_configuration {
-    status = var.versioning_enabled ? "Enabled" : "Suspended"
-  }
-}
-
-# Criptografia server-side
 resource "aws_s3_bucket_server_side_encryption_configuration" "this" {
   bucket = aws_s3_bucket.this.id
 
   rule {
-    bucket_key_enabled = var.sse_algorithm == "aws:kms" ? var.enable_bucket_key : false
-
     apply_server_side_encryption_by_default {
-      sse_algorithm     = var.sse_algorithm
-      kms_master_key_id = var.sse_algorithm == "aws:kms" ? var.kms_key_arn : null
+      sse_algorithm = var.sse_algorithm
     }
   }
 }
 
-# Política para exigir TLS (nega requisições sem HTTPS)
-data "aws_iam_policy_document" "https_only" {
-  statement {
-    sid     = "DenyInsecureTransport"
-    effect  = "Deny"
-    actions = ["s3:*"]
-
-    principals {
-      type        = "*"
-      identifiers = ["*"]
-    }
-
-    resources = [
-      aws_s3_bucket.this.arn,
-      "${aws_s3_bucket.this.arn}/*"
-    ]
-
-    condition {
-      test     = "Bool"
-      variable = "aws:SecureTransport"
-      values   = ["false"]
-    }
-  }
-}
-
-resource "aws_s3_bucket_policy" "https_only" {
+resource "aws_s3_bucket_versioning" "this" {
   bucket = aws_s3_bucket.this.id
-  policy = data.aws_iam_policy_document.https_only.json
+
+  versioning_configuration {
+    status = var.versioning_status
+  }
+}
+
+resource "aws_s3_bucket_policy" "secure_transport" {
+  bucket = aws_s3_bucket.this.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid       = "DenyInsecureTransport"
+        Effect    = "Deny"
+        Principal = "*"
+        Action    = "s3:*"
+        Resource = [
+          aws_s3_bucket.this.arn,
+          "${aws_s3_bucket.this.arn}/*"
+        ]
+        Condition = {
+          Bool = {
+            "aws:SecureTransport" = "false"
+          }
+        }
+      }
+    ]
+  })
 }

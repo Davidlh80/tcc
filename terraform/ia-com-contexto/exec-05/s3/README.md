@@ -1,49 +1,49 @@
-# Blueprint Terraform — S3 com segurança e governança
+Visão geral do recurso
+- Este template provisiona um bucket Amazon S3 seguindo os padrões organizacionais:
+  - Nome no formato <ambiente>-<sistema>-<recurso>-<finalidade>, onde recurso = s3.
+  - Bloqueio completo de acesso público (quatro flags do Public Access Block).
+  - Criptografia server-side habilitada com SSE-S3 (AES256).
+  - Política que nega qualquer requisição sem aws:SecureTransport (força HTTPS).
+  - Versionamento configurável por variável, com padrão Enabled.
+  - Tags obrigatórias aplicadas e possibilidade de tags adicionais.
 
-Este template cria um bucket Amazon S3 seguindo o contexto organizacional definido, com foco em segurança, padronização e governança.
+Tabela de variáveis (nome, tipo, obrigatória, descrição)
+| Nome               | Tipo         | Obrigatória | Descrição                                                                 |
+|--------------------|--------------|-------------|---------------------------------------------------------------------------|
+| environment        | string       | Sim         | Ambiente do recurso. Valores permitidos: dev, hml, prd.                   |
+| system             | string       | Sim         | Nome do sistema (minúsculo, números e hífens).                            |
+| region             | string       | Sim         | Região AWS (ex.: us-east-1).                                              |
+| purpose            | string       | Sim         | Finalidade do recurso (segmento final do nome do bucket).                 |
+| versioning_enabled | bool         | Não         | Habilita (true) ou suspende (false) o versionamento. Padrão: true.        |
+| force_destroy      | bool         | Não         | Permite destruir o bucket com objetos. Padrão: false.                     |
+| sse_algorithm      | string       | Não         | Algoritmo SSE. Política exige AES256 (SSE-S3). Padrão: AES256.            |
+| additional_tags    | map(string)  | Não         | Tags adicionais. Tags obrigatórias sempre prevalecem.                     |
 
-Padrão de nomenclatura aplicado automaticamente:
-<ambiente>-<sistema>-<recurso>-<finalidade>
-Exemplo: dev-tcc-s3-logs
+Tabela de outputs (nome, descrição)
+| Nome         | Descrição                         |
+|--------------|-----------------------------------|
+| bucket_name  | Nome do bucket S3 criado.         |
+| bucket_arn   | ARN do bucket S3 criado.          |
+| bucket_id    | ID do bucket S3 (igual ao nome).  |
 
-Recursos e configurações:
-- Bucket S3 com nome padronizado e sanitizado para atender às regras do S3
-- Bloqueio de acesso público (todas as opções True)
-- Criptografia server-side padrão (SSE-S3 AES256)
-- Versionamento configurável por variável (habilitado por padrão)
-- Política para negar requisições sem TLS (DenyInsecureTransport)
-- Object Ownership: BucketOwnerEnforced (ACLs desabilitadas)
-- Tags obrigatórias aplicadas conforme contexto e suporte a tags adicionais
+Exemplo de uso do módulo/recurso
+module "s3_bucket" {
+  source = "./"
 
-Variáveis:
-- environment (string) — Ambiente (dev, hml, prd). Obrigatória.
-- system (string) — Sistema/aplicação (minúsculo, números e hífen). Obrigatória.
-- purpose (string) — Finalidade do bucket (minúsculo, números e hífen). Obrigatória.
-- enable_versioning (bool) — Habilita versionamento (default: true).
-- aws_region (string) — Região AWS (ex.: us-east-1). Obrigatória.
-- additional_tags (map(string)) — Tags extras, mescladas às obrigatórias.
+  environment        = "dev"
+  system             = "tcc"
+  region             = "us-east-1"
+  purpose            = "logs"
+  versioning_enabled = true
+  force_destroy      = false
+  sse_algorithm      = "AES256"
 
-Tags obrigatórias aplicadas:
-- Project     = "tcc-iac-ia"
-- Environment = var.environment
-- ManagedBy   = "terraform"
-- Owner       = "devops"
-- CostCenter  = "academic-research"
+  additional_tags = {
+    Application = "observability"
+    Team        = "platform"
+  }
+}
 
-Outputs:
-- bucket_name — Nome do bucket.
-- bucket_arn — ARN do bucket.
-- bucket_id — ID do bucket (igual ao nome).
-
-Como usar:
-1) Ajuste as variáveis (via tfvars ou -var).
-2) Execute:
-   - terraform init -backend=false
-   - terraform validate
-   - terraform plan -var 'environment=dev' -var 'system=tcc' -var 'purpose=logs' -var 'aws_region=us-east-1'
-   - terraform apply
-
-Notas:
-- O nome do bucket é automaticamente derivado de: <environment>-<system>-s3-<purpose>, sanitizado e limitado a 63 caracteres para atender às regras do S3.
-- Evite colisões de nomes globais de S3 ajustando system/purpose quando necessário.
-- Este template não configura backend remoto conforme a diretriz.
+output "example_bucket_name" {
+  value = module.s3_bucket.bucket_name
+}

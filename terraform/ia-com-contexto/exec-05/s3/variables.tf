@@ -1,51 +1,68 @@
 variable "environment" {
-  description = "Ambiente do recurso. Valores permitidos: dev, hml, prd."
+  description = "Ambiente alvo do recurso. Valores permitidos: dev, hml, prd."
   type        = string
 
   validation {
     condition     = contains(["dev", "hml", "prd"], var.environment)
-    error_message = "O ambiente deve ser um dos seguintes: dev, hml, prd."
+    error_message = "O valor de environment deve ser um de: dev, hml, prd."
   }
 }
 
 variable "system" {
-  description = "Nome do sistema ou aplicação (minúsculo, números e hífen)."
+  description = "Nome do sistema (minúsculo, números e hífens)."
   type        = string
 
   validation {
-    condition     = can(regex("^[a-z0-9-]+$", var.system)) && length(var.system) >= 1 && length(var.system) <= 30
-    error_message = "O sistema deve conter apenas [a-z0-9-] e ter entre 1 e 30 caracteres."
+    condition     = can(regex("^[a-z0-9-]+$", var.system)) && length(var.system) > 0
+    error_message = "O valor de system deve conter apenas [a-z0-9-] e não pode ser vazio."
+  }
+}
+
+variable "region" {
+  description = "Região AWS para o provisionamento (ex.: us-east-1)."
+  type        = string
+
+  validation {
+    condition     = length(trim(var.region)) > 0
+    error_message = "A região não pode ser vazia."
   }
 }
 
 variable "purpose" {
-  description = "Finalidade do bucket (minúsculo, números e hífen)."
+  description = "Finalidade do recurso (segmento final do nome do bucket)."
   type        = string
 
   validation {
-    condition     = can(regex("^[a-z0-9-]+$", var.purpose)) && length(var.purpose) >= 1 && length(var.purpose) <= 30
-    error_message = "A finalidade deve conter apenas [a-z0-9-] e ter entre 1 e 30 caracteres."
+    condition     = can(regex("^[a-z0-9-]+$", var.purpose)) && length(var.purpose) > 0
+    error_message = "purpose deve conter apenas [a-z0-9-] e não pode ser vazio."
   }
 }
 
-variable "enable_versioning" {
-  description = "Habilita versionamento do S3 (recomendado: true)."
+variable "versioning_enabled" {
+  description = "Habilita (true) ou suspende (false) o versionamento do bucket. Padrão: Enabled (true)."
   type        = bool
   default     = true
 }
 
-variable "aws_region" {
-  description = "Região AWS onde os recursos serão criados (ex.: us-east-1)."
+variable "force_destroy" {
+  description = "Permite destruir o bucket mesmo se contiver objetos. Padrão: false."
+  type        = bool
+  default     = false
+}
+
+variable "sse_algorithm" {
+  description = "Algoritmo de criptografia server-side. Conforme política, usar AES256 (SSE-S3)."
   type        = string
+  default     = "AES256"
 
   validation {
-    condition     = can(regex("^[a-z]{2}-[a-z]+-\\d$", var.aws_region))
-    error_message = "Informe uma região válida, como us-east-1, us-west-2, sa-east-1."
+    condition     = var.sse_algorithm == "AES256"
+    error_message = "A política interna exige SSE-S3 com AES256."
   }
 }
 
 variable "additional_tags" {
-  description = "Tags adicionais para adicionar ao bucket."
+  description = "Tags adicionais a serem aplicadas aos recursos. As tags obrigatórias da organização prevalecem."
   type        = map(string)
   default     = {}
 }

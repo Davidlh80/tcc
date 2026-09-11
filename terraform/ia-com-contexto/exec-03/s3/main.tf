@@ -1,7 +1,3 @@
-provider "aws" {
-  region = var.aws_region
-}
-
 locals {
   bucket_name = lower(format("%s-%s-s3-%s", var.environment, var.system, var.purpose))
 
@@ -13,25 +9,22 @@ locals {
     CostCenter  = "academic-research"
   }
 
-  common_tags = merge(
-    local.required_tags,
-    var.tags,
-    { Name = local.bucket_name }
-  )
+  tags = merge(var.additional_tags, local.required_tags)
 }
 
 resource "aws_s3_bucket" "this" {
-  bucket        = local.bucket_name
-  force_destroy = var.force_destroy
+  bucket = local.bucket_name
+  tags   = local.tags
 
-  tags = local.common_tags
-}
-
-resource "aws_s3_bucket_ownership_controls" "this" {
-  bucket = aws_s3_bucket.this.id
-
-  rule {
-    object_ownership = "BucketOwnerEnforced"
+  lifecycle {
+    precondition {
+      condition     = length(local.bucket_name) >= 3 && length(local.bucket_name) <= 63
+      error_message = "O nome do bucket deve ter entre 3 e 63 caracteres."
+    }
+    precondition {
+      condition     = can(regex("^[a-z0-9-]+$", local.bucket_name))
+      error_message = "O nome do bucket deve conter apenas letras minúsculas, números e hífens."
+    }
   }
 }
 
@@ -44,14 +37,6 @@ resource "aws_s3_bucket_public_access_block" "this" {
   restrict_public_buckets = true
 }
 
-resource "aws_s3_bucket_versioning" "this" {
-  bucket = aws_s3_bucket.this.id
-
-  versioning_configuration {
-    status = var.enable_versioning ? "Enabled" : "Suspended"
-  }
-}
-
 resource "aws_s3_bucket_server_side_encryption_configuration" "this" {
   bucket = aws_s3_bucket.this.id
 
@@ -62,21 +47,28 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "this" {
   }
 }
 
-data "aws_iam_policy_document" "bucket_policy" {
+resource "aws_s3_bucket_versioning" "this" {
+  bucket = aws_s3_bucket.this.id
+
+  versioning_configuration {
+    status = var.versioning_enabled ? "Enabled" : "Suspended"
+  }
+}
+
+data "aws_iam_policy_document" "deny_insecure_transport" {
   statement {
     sid     = "DenyInsecureTransport"
     effect  = "Deny"
     actions = ["s3:*"]
+    resources = [
+      aws_s3_bucket.this.arn,
+      "${aws_s3_bucket.this.arn}/*"
+    ]
 
     principals {
       type        = "*"
       identifiers = ["*"]
     }
-
-    resources = [
-      aws_s3_bucket.this.arn,
-      "${aws_s3_bucket.this.arn}/*"
-    ]
 
     condition {
       test     = "Bool"
@@ -84,52 +76,9 @@ data "aws_iam_policy_document" "bucket_policy" {
       values   = ["false"]
     }
   }
-
-  statement {
-    sid     = "DenyUnEncryptedObjectUploadsMissingHeader"
-    effect  = "Deny"
-    actions = ["s3:PutObject"]
-
-    principals {
-      type        = "*"
-      identifiers = ["*"]
-    }
-
-    resources = ["${aws_s3_bucket.this.arn}/*"]
-
-    condition {
-      test     = "Null"
-      variable = "s3:x-amz-server-side-encryption"
-      values   = ["true"]
-    }
-  }
-
-  statement {
-    sid     = "DenyUnEncryptedObjectUploadsWrongAlgo"
-    effect  = "Deny"
-    actions = ["s3:PutObject"]
-
-    principals {
-      type        = "*"
-      identifiers = ["*"]
-    }
-
-    resources = ["${aws_s3_bucket.this.arn}/*"]
-
-    condition {
-      test     = "StringNotEquals"
-      variable = "s3:x-amz-server-side-encryption"
-      values   = ["AES256", "aws:kms"]
-    }
-  }
 }
 
 resource "aws_s3_bucket_policy" "this" {
   bucket = aws_s3_bucket.this.id
-  policy = data.aws_iam_policy_document.bucket_policy.json
-
-  depends_on = [
-    aws_s3_bucket_public_access_block.this,
-    aws_s3_bucket_ownership_controls.this
-  ]
+  policy = data.aws_iam_policy_document.deny_insecure_transport.json
 }

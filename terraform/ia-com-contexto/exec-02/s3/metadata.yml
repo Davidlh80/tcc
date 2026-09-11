@@ -4,9 +4,9 @@ resource: s3
 model: "gpt-5"
 prompt_file: "prompts/ia-com-contexto/prompt-s3.md"
 context_file: "contexto/contexto-organizacional.md"
-started_at: "2026-08-29T17:51:32.6793001-03:00"
-finished_at: "2026-08-29T17:52:24.9415303-03:00"
-api_duration_ms: 52253
-total_duration_ms: 52262
-generated_at: "2026-08-29T17:52:24.9415303-03:00"
+started_at: "2026-09-07T23:25:38.3004595-03:00"
+finished_at: "2026-09-07T23:26:49.9929992-03:00"
+api_duration_ms: 71689
+total_duration_ms: 71692
+generated_at: "2026-09-07T23:26:49.9929992-03:00"
 generation_tool: "scripts/generate-blueprint"
