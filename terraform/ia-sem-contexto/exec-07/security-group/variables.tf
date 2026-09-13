@@ -1,120 +1,54 @@
-variable "aws_region" {
-  description = "Regiao AWS onde os recursos serao provisionados."
-  type        = string
-  default     = "us-east-1"
-
-  validation {
-    condition     = length(var.aws_region) > 0
-    error_message = "aws_region nao pode ser vazio."
-  }
-}
-
 variable "vpc_id" {
   description = "ID da VPC onde o Security Group sera criado."
   type        = string
-
-  validation {
-    condition     = can(regex("^vpc-[0-9a-fA-F]{8,}$", var.vpc_id))
-    error_message = "vpc_id deve corresponder ao padrao de IDs de VPC (ex: vpc-xxxxxxxx ou vpc-xxxxxxxxxxxxxxxxx)."
-  }
 }
 
 variable "name" {
-  description = "Nome do Security Group. Se null, sera usado name_prefix."
+  description = "Nome do Security Group."
   type        = string
-  default     = null
-}
-
-variable "name_prefix" {
-  description = "Prefixo para o nome do Security Group quando name for null."
-  type        = string
-  default     = "tf-sg-"
-
-  validation {
-    condition     = length(var.name_prefix) > 0
-    error_message = "name_prefix nao pode ser vazio."
-  }
+  default     = "app-sg"
 }
 
 variable "description" {
   description = "Descricao do Security Group."
   type        = string
-  default     = "Security Group gerenciado por Terraform"
-}
-
-variable "tags" {
-  description = "Tags adicionais a aplicar no Security Group."
-  type        = map(string)
-  default     = {}
+  default     = "Security Group gerenciado via Terraform"
 }
 
 variable "ingress_rules" {
-  description = <<EOT
-Lista de regras de entrada (ingress). Cada item aceita:
-- description: string (opcional)
-- from_port: number
-- to_port: number
-- protocol: string (ex: tcp, udp, icmp, icmpv6, sctp, ou -1 para todos)
-- cidr_blocks: lista de CIDRs IPv4 (opcional)
-- ipv6_cidr_blocks: lista de CIDRs IPv6 (opcional)
-- security_groups: lista de IDs de SGs de origem (opcional)
-Observacao: cada destino informado gera uma regra separada.
-EOT
+  description = "Lista de regras de entrada do Security Group. Nenhuma regra e criada por padrao (postura segura por padrao)."
   type = list(object({
-    description      = optional(string)
-    from_port        = number
-    to_port          = number
-    protocol         = string
-    cidr_blocks      = optional(list(string))
-    ipv6_cidr_blocks = optional(list(string))
-    security_groups  = optional(list(string))
+    description = optional(string, "")
+    from_port   = number
+    to_port     = number
+    protocol    = string
+    cidr_blocks = list(string)
   }))
   default = []
-
-  validation {
-    condition = alltrue([
-      for r in var.ingress_rules :
-      (
-        // portas dentro de faixa razoavel
-        r.from_port >= -1 && r.from_port <= 65535 &&
-        r.to_port >= -1 && r.to_port <= 65535
-      )
-    ])
-    error_message = "from_port e to_port nas regras de ingress devem estar entre -1 e 65535."
-  }
 }
 
 variable "egress_rules" {
-  description = <<EOT
-Lista de regras de saida (egress). Cada item aceita:
-- description: string (opcional)
-- from_port: number
-- to_port: number
-- protocol: string (ex: tcp, udp, icmp, icmpv6, sctp, ou -1 para todos)
-- cidr_blocks: lista de CIDRs IPv4 (opcional)
-- ipv6_cidr_blocks: lista de CIDRs IPv6 (opcional)
-- security_groups: lista de IDs de SGs de destino (opcional)
-Observacao: por padrao, nenhuma saida e permitida (egress = []). Adicione regras aqui para liberar trafego de saida explicitamente.
-EOT
+  description = "Lista de regras de saida do Security Group. Por padrao, permite todo trafego de saida (padrao comum em ambientes AWS)."
   type = list(object({
-    description      = optional(string)
-    from_port        = number
-    to_port          = number
-    protocol         = string
-    cidr_blocks      = optional(list(string))
-    ipv6_cidr_blocks = optional(list(string))
-    security_groups  = optional(list(string))
+    description = optional(string, "")
+    from_port   = number
+    to_port     = number
+    protocol    = string
+    cidr_blocks = list(string)
   }))
-  default = []
+  default = [
+    {
+      description = "Permite todo trafego de saida"
+      from_port   = 0
+      to_port     = 0
+      protocol    = "-1"
+      cidr_blocks = ["0.0.0.0/0"]
+    }
+  ]
+}
 
-  validation {
-    condition = alltrue([
-      for r in var.egress_rules :
-      (
-        r.from_port >= -1 && r.from_port <= 65535 &&
-        r.to_port >= -1 && r.to_port <= 65535
-      )
-    ])
-    error_message = "from_port e to_port nas regras de egress devem estar entre -1 e 65535."
-  }
+variable "tags" {
+  description = "Tags adicionais a serem aplicadas ao Security Group."
+  type        = map(string)
+  default     = {}
 }

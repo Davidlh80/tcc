@@ -1,104 +1,70 @@
-Blueprint Terraform: AWS Security Group
+# Security Group (AWS)
 
-Descrição
-- Cria um Security Group em uma VPC específica.
-- Padrão seguro: sem regras de egress predefinidas (nenhuma saída é permitida até ser explicitamente liberada); sem regras de ingress por padrão.
-- Regras de ingress/egress são definidas via aws_security_group_rule, suportando CIDRs IPv4/IPv6, prefix lists e referência a outros Security Groups.
+Blueprint Terraform para provisionar um Security Group na AWS dentro de uma VPC existente, informada via variavel.
 
-Pré-requisitos
-- Terraform >= 1.3
-- Provider AWS ~> 5.0
-- Uma VPC existente (forneça vpc_id)
-- Credenciais AWS disponíveis no ambiente apenas para aplicar (não necessárias para terraform validate)
+## Recursos criados
 
-Arquivos
-- versions.tf: versões mínimas de Terraform e provider.
-- variables.tf: variáveis configuráveis com validações.
-- main.tf: provider, security group e regras.
-- outputs.tf: saídas úteis.
-- README.md: instruções.
+- `aws_security_group.this`: Security Group com regras de entrada e saida configuraveis dinamicamente.
 
-Variáveis principais
-- region: região AWS (ex.: us-east-1).
-- vpc_id: ID da VPC alvo (ex.: vpc-0123456789abcdef0).
-- name: nome do SG.
-- description: descrição do SG.
-- tags: mapa de tags adicionais.
-- ingress_rules: lista de objetos de regra de entrada.
-- egress_rules: lista de objetos de regra de saída.
+## Uso
 
-Estrutura das regras
-Cada item das listas ingress_rules/egress_rules possui:
-- description (opcional)
-- protocol (ex.: tcp, udp, icmp, -1)
-- from_port (ex.: 22)
-- to_port (ex.: 22)
-- cidr_blocks (lista de CIDRs IPv4)
-- ipv6_cidr_blocks (lista de CIDRs IPv6)
-- prefix_list_ids (lista de prefix lists AWS)
-- peer_security_group_ids (lista de SGs para origem/destino)
-- self (apenas em ingress; booleano)
+```hcl
+module "security_group" {
+  source = "./"
 
-Observações de segurança
-- Por padrão, egress é fechado. Adicione egress_rules conforme necessário.
-- Evite uso de 0.0.0.0/0 e ::/0 em ingress, a menos que seja indispensável e com mitigação adicional.
+  vpc_id      = "vpc-0123456789abcdef0"
+  name        = "app-sg"
+  description = "Security Group da aplicacao"
 
-Exemplo de uso (minimizado)
-terraform init -backend=false
-terraform validate
-terraform plan -var="region=us-east-1" -var="vpc_id=vpc-0123456789abcdef0"
+  ingress_rules = [
+    {
+      description = "Permite HTTPS"
+      from_port   = 443
+      to_port     = 443
+      protocol    = "tcp"
+      cidr_blocks = ["10.0.0.0/16"]
+    }
+  ]
 
-Exemplo de variáveis
-region = "us-east-1"
-vpc_id = "vpc-0123456789abcdef0"
-name   = "app-web-sg"
+  egress_rules = [
+    {
+      description = "Permite todo o trafego de saida"
+      from_port   = 0
+      to_port     = 0
+      protocol    = "-1"
+      cidr_blocks = ["0.0.0.0/0"]
+    }
+  ]
 
-# Libera SSH apenas de um bloco corporativo e HTTP público para teste
-ingress_rules = [
-  {
-    description      = "SSH corporativo"
-    protocol         = "tcp"
-    from_port        = 22
-    to_port          = 22
-    cidr_blocks      = ["203.0.113.0/24"]
-  },
-  {
-    description      = "HTTP público (apenas para teste)"
-    protocol         = "tcp"
-    from_port        = 80
-    to_port          = 80
-    cidr_blocks      = ["0.0.0.0/0"]
-    ipv6_cidr_blocks = ["::/0"]
+  tags = {
+    Environment = "dev"
   }
-]
+}
+```
 
-# Permite saída somente para HTTPS (IPv4 e IPv6)
-egress_rules = [
-  {
-    description      = "HTTPS outbound"
-    protocol         = "tcp"
-    from_port        = 443
-    to_port          = 443
-    cidr_blocks      = ["0.0.0.0/0"]
-    ipv6_cidr_blocks = ["::/0"]
-  }
-]
+## Variaveis
 
-Saídas
-- security_group_id
-- security_group_arn
-- security_group_name
-- security_group_vpc_id
-- ingress_rule_ids
-- egress_rule_ids
+| Nome           | Descricao                                             | Tipo           | Padrao                                    |
+|----------------|--------------------------------------------------------|----------------|--------------------------------------------|
+| aws_region     | Regiao AWS onde os recursos serao criados               | string         | `us-east-1`                                |
+| vpc_id         | ID da VPC onde o Security Group sera criado             | string         | -                                           |
+| name           | Nome do Security Group                                  | string         | `sg-default`                                |
+| description    | Descricao do Security Group                             | string         | `Security Group gerenciado via Terraform`   |
+| ingress_rules  | Lista de regras de entrada                              | list(object)   | `[]`                                        |
+| egress_rules   | Lista de regras de saida                                | list(object)   | Permite todo o trafego de saida             |
+| tags           | Tags adicionais aplicadas ao recurso                     | map(string)    | `{}`                                        |
 
-Comandos úteis
-- terraform init -backend=false
-- terraform fmt
-- terraform validate
-- terraform plan
-- terraform apply
+## Outputs
 
-Notas
-- Não há backend remoto configurado.
-- Os valores sensíveis devem vir via variáveis/ambiente.
+| Nome                 | Descricao                                  |
+|----------------------|---------------------------------------------|
+| security_group_id    | ID do Security Group criado                 |
+| security_group_arn   | ARN do Security Group criado                |
+| security_group_name  | Nome do Security Group criado               |
+| vpc_id               | ID da VPC associada ao Security Group        |
+
+## Observacoes de seguranca
+
+- Nenhuma regra de entrada e criada por padrao; e responsabilidade de quem consome este blueprint definir `ingress_rules` com o menor escopo possivel de portas e CIDRs.
+- Evite usar `0.0.0.0/0` em regras de entrada, exceto quando estritamente necessario (ex.: servicos publicos como HTTP/HTTPS).
+- O `lifecycle.create_before_destroy` esta habilitado para evitar interrupcoes ao substituir o Security Group.

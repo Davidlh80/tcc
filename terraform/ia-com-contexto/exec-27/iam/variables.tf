@@ -1,82 +1,67 @@
 variable "environment" {
-  description = "Ambiente de implantação (dev, hml, prd)."
   type        = string
+  description = "Ambiente de implantacao do recurso."
 
   validation {
     condition     = contains(["dev", "hml", "prd"], var.environment)
-    error_message = "environment deve ser um dos valores: dev, hml, prd."
+    error_message = "O valor de environment deve ser um dos seguintes: dev, hml, prd."
   }
 }
 
 variable "system" {
-  description = "Identificador do sistema/produto (minúsculo, hífens)."
   type        = string
+  description = "Nome do sistema ou aplicacao ao qual o recurso pertence."
 
   validation {
-    condition     = can(regex("^[a-z0-9-]+$", var.system)) && length(var.system) > 0
-    error_message = "system deve conter apenas [a-z0-9-] e não pode ser vazio."
+    condition     = length(var.system) > 0
+    error_message = "O valor de system nao pode ser vazio."
   }
 }
 
 variable "region" {
-  description = "Região AWS para o provider."
   type        = string
-
-  validation {
-    condition     = can(regex("^[a-z]{2}-[a-z]+-\\d$", var.region))
-    error_message = "region deve estar no formato de região AWS, por exemplo: us-east-1, sa-east-1."
-  }
+  description = "Regiao AWS onde o provider sera configurado."
+  default     = "us-east-1"
 }
 
 variable "additional_tags" {
-  description = "Tags adicionais (serão mescladas; tags obrigatórias prevalecem em caso de conflito)."
   type        = map(string)
+  description = "Tags adicionais a serem mescladas com as tags obrigatorias da organizacao."
   default     = {}
 }
 
 variable "policy_name" {
-  description = "Finalidade da policy (usado na composição do nome <environment>-<system>-iam-<policy_name>)."
   type        = string
+  description = "Finalidade da policy, utilizada na composicao do nome padronizado (ex.: readonly, deploy)."
 
   validation {
-    condition     = can(regex("^[a-z0-9-]+$", var.policy_name)) && length(var.policy_name) > 0 && length(var.policy_name) <= 64
-    error_message = "policy_name deve conter apenas [a-z0-9-], não ser vazio e ter até 64 caracteres."
-  }
-}
-
-variable "allowed_actions" {
-  description = "Lista de ações explícitas a serem permitidas (ex.: [\"s3:GetObject\", \"s3:ListBucket\"])."
-  type        = list(string)
-
-  validation {
-    condition     = length(var.allowed_actions) > 0 && length([for a in var.allowed_actions : a if trim(a) == ""]) == 0
-    error_message = "allowed_actions não pode ser vazio e não pode conter strings vazias."
-  }
-}
-
-variable "allowed_resources" {
-  description = "Lista de ARNs de recursos explicitamente permitidos (ex.: [\"arn:aws:s3:::bucket\", \"arn:aws:s3:::bucket/*\"])."
-  type        = list(string)
-
-  validation {
-    condition     = length(var.allowed_resources) > 0 && length([for r in var.allowed_resources : r if trim(r) == ""]) == 0
-    error_message = "allowed_resources não pode ser vazio e não pode conter strings vazias."
+    condition     = length(var.policy_name) > 0
+    error_message = "O valor de policy_name nao pode ser vazio."
   }
 }
 
 variable "policy_description" {
-  description = "Descrição da policy IAM."
   type        = string
-  default     = "IAM policy gerenciada pelo Terraform, seguindo princípio do menor privilégio conforme contexto organizacional."
+  description = "Descricao da IAM Policy."
+  default     = "Managed by Terraform."
 }
 
-variable "policy_path" {
-  description = "Caminho da policy IAM (deve iniciar e terminar com '/')."
-  type        = string
-  default     = "/"
+variable "allowed_actions" {
+  type        = list(string)
+  description = "Lista de acoes IAM permitidas na policy, respeitando o principio do menor privilegio."
 
   validation {
-    condition     = can(regex("^/.*/?$", var.policy_path))
-    error_message = "policy_path deve iniciar com '/' e, preferencialmente, terminar com '/'."
+    condition     = length(var.allowed_actions) > 0
+    error_message = "A lista allowed_actions deve conter ao menos uma acao."
+  }
+}
+
+variable "allowed_resources" {
+  type        = list(string)
+  description = "Lista de ARNs de recursos aos quais as acoes permitidas se aplicam."
+
+  validation {
+    condition     = length(var.allowed_resources) > 0
+    error_message = "A lista allowed_resources deve conter ao menos um recurso."
   }
 }

@@ -1,5 +1,5 @@
 terraform {
-  required_version = ">= 1.3.0"
+  required_version = ">= 1.5.0"
 
   required_providers {
     aws = {
@@ -10,8 +10,5 @@ terraform {
 }
 
 provider "aws" {
-  region                      = var.aws_region
-  skip_credentials_validation = true
-  skip_metadata_api_check     = true
-  skip_requesting_account_id  = true
+  region = var.aws_region
 }

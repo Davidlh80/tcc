@@ -1,82 +1,62 @@
 variable "aws_region" {
-  description = "AWS region to use for the provider."
   type        = string
+  description = "Regiao AWS onde a policy sera provisionada (IAM e global, mas o provider exige uma regiao valida)."
   default     = "us-east-1"
-  validation {
-    condition     = can(regex("^[a-z]{2}-[a-z]+-\\d$", var.aws_region))
-    error_message = "aws_region must match the pattern e.g., us-east-1."
-  }
 }
 
 variable "policy_name" {
-  description = "Name of the IAM policy. Avoid using names starting with 'AWS' which are reserved by AWS."
   type        = string
-  default     = "iam-readonly-policy"
+  description = "Nome da IAM Policy."
+
   validation {
-    condition     = length(var.policy_name) > 0 && length(var.policy_name) <= 128 && !startswith(var.policy_name, "AWS")
-    error_message = "policy_name must be 1-128 characters and must not start with 'AWS'."
+    condition     = can(regex("^[A-Za-z0-9+=,.@_-]{1,128}$", var.policy_name))
+    error_message = "policy_name deve ter entre 1 e 128 caracteres validos para nomes de IAM Policy (letras, numeros e + = , . @ _ -)."
   }
 }
 
 variable "policy_description" {
-  description = "Description for the IAM policy. Do not include sensitive information."
   type        = string
-  default     = "Customer managed IAM policy provisioned by Terraform."
-  validation {
-    condition     = length(var.policy_description) > 0 && length(var.policy_description) <= 1000
-    error_message = "policy_description must be between 1 and 1000 characters."
-  }
+  description = "Descricao da IAM Policy."
+  default     = "Managed by Terraform"
 }
 
-variable "policy_path" {
-  description = "Path for the IAM policy. Must start and end with a forward slash."
+variable "path" {
   type        = string
+  description = "Path da IAM Policy."
   default     = "/"
-  validation {
-    condition     = startswith(var.policy_path, "/") && endswith(var.policy_path, "/")
-    error_message = "policy_path must start and end with '/'. Example: '/' or '/service-role/'."
-  }
 }
 
-variable "actions" {
-  description = "List of IAM actions to allow. Ignored if policy_json is provided."
-  type        = list(string)
-  default     = ["s3:Get*", "s3:List*"]
-  validation {
-    condition     = length(var.actions) > 0 && alltrue([for a in var.actions : length(trim(a)) > 0])
-    error_message = "actions must be a non-empty list of non-empty strings."
-  }
-}
+variable "policy_statements" {
+  type = list(object({
+    sid       = optional(string)
+    effect    = optional(string, "Allow")
+    actions   = list(string)
+    resources = list(string)
+  }))
+  description = "Lista de statements da policy. Actions e resources devem ser explicitos; wildcard '*' isolado nao e permitido para reforcar o principio de menor privilegio."
 
-variable "resources" {
-  description = "List of resource ARNs the actions apply to. Use '*' to allow all. Ignored if policy_json is provided."
-  type        = list(string)
-  default     = ["*"]
   validation {
-    condition = length(var.resources) > 0 && alltrue([
-      for r in var.resources :
-      r == "*" || can(regex("^arn:(aws|aws-us-gov|aws-cn):[a-z0-9-]+:[a-z0-9-]*:[0-9]*:.+$", r))
+    condition     = length(var.policy_statements) > 0
+    error_message = "Pelo menos um statement deve ser definido em policy_statements."
+  }
+
+  validation {
+    condition = alltrue([
+      for s in var.policy_statements : !contains(s.actions, "*")
     ])
-    error_message = "resources must be a non-empty list where each item is '*' or a valid ARN."
+    error_message = "Wildcard '*' em actions nao e permitido. Especifique acoes explicitas (ex: s3:GetObject)."
   }
-}
 
-variable "policy_json" {
-  description = "Optional raw JSON for the IAM policy document. If provided, overrides actions/resources. Must be a valid JSON string."
-  type        = string
-  default     = null
   validation {
-    condition     = var.policy_json == null || can(jsondecode(var.policy_json))
-    error_message = "policy_json must be null or a valid JSON string."
+    condition = alltrue([
+      for s in var.policy_statements : !contains(s.resources, "*")
+    ])
+    error_message = "Wildcard '*' em resources nao e permitido. Especifique ARNs explicitos."
   }
 }
 
 variable "tags" {
-  description = "Map of tags to assign to the IAM policy."
   type        = map(string)
+  description = "Tags aplicadas a IAM Policy."
   default     = {}
-  validation {
-    condition     = alltrue([for k, v in var.tags : length(trim(k)) > 0 && !startswith(lower(k), "aws:")])
-    error_message = "All tag keys must be non-empty and must not start with 'aws:'."
-  }
 }

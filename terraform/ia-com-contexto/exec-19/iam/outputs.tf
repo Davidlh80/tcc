@@ -9,6 +9,6 @@ output "policy_arn" {
 }
 
 output "policy_id" {
-  description = "ID único da IAM Policy criada."
+  description = "ID da IAM Policy criada."
   value       = aws_iam_policy.this.id
 }

@@ -1,37 +1,43 @@
-variable "region" {
-  description = "Região AWS para o provisionamento."
-  type        = string
-
-  validation {
-    condition     = can(regex("[a-z]{2}-[a-z]+-\\d", var.region))
-    error_message = "A região deve estar no formato válido (ex.: us-east-1, sa-east-1)."
-  }
-}
-
 variable "environment" {
-  description = "Ambiente de implantação. Valores permitidos: dev, hml, prd."
+  description = "Ambiente de implantação do recurso. Valores permitidos: dev, hml, prd."
   type        = string
 
   validation {
     condition     = contains(["dev", "hml", "prd"], var.environment)
-    error_message = "Environment inválido. Utilize um dos valores: dev, hml, prd."
+    error_message = "O valor de 'environment' deve ser um dos seguintes: dev, hml, prd."
   }
 }
 
 variable "system" {
-  description = "Identificador do sistema/produto (minúsculo, alfanumérico e hífen)."
+  description = "Identificador do sistema/projeto ao qual o recurso pertence, usado na nomenclatura padronizada."
   type        = string
 
   validation {
-    condition     = can(regex("^[a-z0-9-]+$", var.system)) && length(var.system) > 0
-    error_message = "O system deve conter apenas letras minúsculas, números e hífens."
+    condition     = trimspace(var.system) != ""
+    error_message = "O valor de 'system' não pode ser vazio."
   }
 }
 
+variable "region" {
+  description = "Região AWS onde o recurso será provisionado."
+  type        = string
+  default     = "us-east-1"
+}
+
 variable "additional_tags" {
-  description = "Mapa de tags adicionais a serem aplicadas aos recursos (as tags obrigatórias são sempre aplicadas e prevalecem)."
+  description = "Tags adicionais a serem mescladas às tags obrigatórias do recurso."
   type        = map(string)
   default     = {}
+}
+
+variable "security_group_name" {
+  description = "Finalidade/nome do Security Group, usado na composição do nome padronizado (<ambiente>-<sistema>-sg-<finalidade>)."
+  type        = string
+
+  validation {
+    condition     = can(regex("^[a-z0-9-]+$", var.security_group_name))
+    error_message = "O valor de 'security_group_name' deve conter apenas letras minúsculas, números e hífens."
+  }
 }
 
 variable "vpc_id" {
@@ -39,126 +45,70 @@ variable "vpc_id" {
   type        = string
 
   validation {
-    condition     = can(regex("^vpc-[0-9a-fA-F]+$", var.vpc_id))
-    error_message = "vpc_id deve estar no formato 'vpc-xxxxxxxx'."
-  }
-}
-
-variable "security_group_name" {
-  description = "Finalidade do Security Group (comporá o nome no padrão <env>-<sistema>-sg-<finalidade>). Ex.: web, db, app."
-  type        = string
-
-  validation {
-    condition     = can(regex("^[a-z0-9-]+$", var.security_group_name)) && length(var.security_group_name) > 0
-    error_message = "security_group_name deve conter apenas letras minúsculas, números e hífens."
-  }
-}
-
-variable "security_group_description" {
-  description = "Descrição do Security Group. Se não informada, uma descrição padrão será aplicada."
-  type        = string
-  default     = null
-
-  validation {
-    condition     = var.security_group_description == null || length(trim(var.security_group_description)) > 0
-    error_message = "Se informado, security_group_description não pode ser vazio."
+    condition     = can(regex("^vpc-[a-f0-9]+$", var.vpc_id))
+    error_message = "O valor de 'vpc_id' deve ser um ID de VPC válido (ex.: vpc-0123456789abcdef0)."
   }
 }
 
 variable "ingress_rules" {
-  description = "Lista de regras de entrada (ingress). Cada regra deve possuir descrição e exatamente um tipo de origem."
+  description = "Lista de regras de entrada do Security Group. Cada regra deve conter descrição obrigatória. O CIDR 0.0.0.0/0 só é permitido para a porta 443/tcp."
   type = list(object({
-    description              = string
-    from_port                = number
-    to_port                  = number
-    protocol                 = string
-    cidr_blocks              = optional(list(string), [])
-    ipv6_cidr_blocks         = optional(list(string), [])
-    prefix_list_ids          = optional(list(string), [])
-    source_security_group_id = optional(string)
-    self                     = optional(bool, false)
+    description = string
+    from_port   = number
+    to_port     = number
+    protocol    = string
+    cidr_blocks = list(string)
   }))
   default = []
 
   validation {
     condition = alltrue([
-      for r in var.ingress_rules : length(trim(r.description)) > 0
+      for rule in var.ingress_rules : trimspace(rule.description) != ""
     ])
-    error_message = "Toda regra de ingress deve conter uma descrição não vazia."
+    error_message = "Todas as regras de entrada (ingress_rules) devem conter uma descrição não vazia."
   }
 
   validation {
     condition = alltrue([
-      for r in var.ingress_rules : (
-        (
-          (length(r.cidr_blocks) > 0 ? 1 : 0) +
-          (length(r.ipv6_cidr_blocks) > 0 ? 1 : 0) +
-          (length(r.prefix_list_ids) > 0 ? 1 : 0) +
-          (try(r.self, false) ? 1 : 0) +
-          (try(r.source_security_group_id, null) != null ? 1 : 0)
-        ) == 1
-      )
+      for rule in var.ingress_rules :
+      !contains(rule.cidr_blocks, "0.0.0.0/0") || (rule.protocol == "tcp" && rule.from_port == 443 && rule.to_port == 443)
     ])
-    error_message = "Cada regra de ingress deve especificar exatamente UMA origem entre: cidr_blocks, ipv6_cidr_blocks, prefix_list_ids, self ou source_security_group_id."
-  }
-
-  validation {
-    condition = alltrue([
-      for r in var.ingress_rules :
-      (
-        (contains(try(r.cidr_blocks, []), "0.0.0.0/0") || contains(try(r.ipv6_cidr_blocks, []), "::/0"))
-        ? (lower(r.protocol) == "tcp" && r.from_port == 443 && r.to_port == 443)
-        : true
-      )
-    ])
-    error_message = "Ingress: é proibido 0.0.0.0/0 ou ::/0 em qualquer porta além de tcp/443."
+    error_message = "O CIDR 0.0.0.0/0 só é permitido em regras de entrada para a porta 443/tcp."
   }
 }
 
 variable "egress_rules" {
-  description = "Lista de regras de saída (egress). Egress deve ser explícito; não há liberação irrestrita por padrão."
+  description = "Lista de regras de saída do Security Group. Cada regra deve conter descrição obrigatória. O CIDR 0.0.0.0/0 só é permitido para a porta 443/tcp. Não há liberação irrestrita por padrão."
   type = list(object({
-    description                     = string
-    from_port                       = number
-    to_port                         = number
-    protocol                        = string
-    cidr_blocks                     = optional(list(string), [])
-    ipv6_cidr_blocks                = optional(list(string), [])
-    prefix_list_ids                 = optional(list(string), [])
-    destination_security_group_id   = optional(string)
+    description = string
+    from_port   = number
+    to_port     = number
+    protocol    = string
+    cidr_blocks = list(string)
   }))
-  default = []
+
+  default = [
+    {
+      description = "Saída HTTPS para integrações e atualizações externas"
+      from_port   = 443
+      to_port     = 443
+      protocol    = "tcp"
+      cidr_blocks = ["0.0.0.0/0"]
+    }
+  ]
 
   validation {
     condition = alltrue([
-      for r in var.egress_rules : length(trim(r.description)) > 0
+      for rule in var.egress_rules : trimspace(rule.description) != ""
     ])
-    error_message = "Toda regra de egress deve conter uma descrição não vazia."
+    error_message = "Todas as regras de saída (egress_rules) devem conter uma descrição não vazia."
   }
 
   validation {
     condition = alltrue([
-      for r in var.egress_rules : (
-        (
-          (length(r.cidr_blocks) > 0 ? 1 : 0) +
-          (length(r.ipv6_cidr_blocks) > 0 ? 1 : 0) +
-          (length(r.prefix_list_ids) > 0 ? 1 : 0) +
-          (try(r.destination_security_group_id, null) != null ? 1 : 0)
-        ) == 1
-      )
+      for rule in var.egress_rules :
+      !contains(rule.cidr_blocks, "0.0.0.0/0") || (rule.protocol == "tcp" && rule.from_port == 443 && rule.to_port == 443)
     ])
-    error_message = "Cada regra de egress deve especificar exatamente UM destino entre: cidr_blocks, ipv6_cidr_blocks, prefix_list_ids ou destination_security_group_id."
-  }
-
-  validation {
-    condition = alltrue([
-      for r in var.egress_rules :
-      (
-        (contains(try(r.cidr_blocks, []), "0.0.0.0/0") || contains(try(r.ipv6_cidr_blocks, []), "::/0"))
-        ? (lower(r.protocol) == "tcp" && r.from_port == 443 && r.to_port == 443)
-        : true
-      )
-    ])
-    error_message = "Egress: é proibido 0.0.0.0/0 ou ::/0 em qualquer porta além de tcp/443."
+    error_message = "O CIDR 0.0.0.0/0 só é permitido em regras de saída para a porta 443/tcp."
   }
 }

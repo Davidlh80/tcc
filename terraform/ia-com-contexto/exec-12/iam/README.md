@@ -1,48 +1,53 @@
-Visão geral do recurso
-Este template provisiona uma IAM Policy seguindo o padrão organizacional:
-- Nomenclatura: <environment>-<system>-iam-<policy_name>
-- Princípio do menor privilégio: somente ações e recursos explicitamente informados são permitidos
-- Controle de segurança: é proibida qualquer statement que combine Action "*" com Resource "*"
-- Tags obrigatórias são aplicadas automaticamente, com possibilidade de adicionar tags extras
+# IAM Policy - dev-tcc-iam-<finalidade>
 
-Tabela de variáveis (nome, tipo, obrigatória, descrição)
-- region (string) [obrigatória]: Região AWS onde a policy será gerenciada (ex.: us-east-1).
-- environment (string) [obrigatória]: Ambiente de implantação. Valores permitidos: dev, hml, prd.
-- system (string) [obrigatória]: Identificador do sistema (minúsculas, números e hífens).
-- policy_name (string) [obrigatória]: Finalidade da policy, usada na composição do nome.
-- allowed_actions (list(string)) [obrigatória]: Ações IAM explicitamente permitidas. Ex.: ["s3:GetObject", "s3:ListBucket"]. Não pode combinar "*" com Resource "*".
-- allowed_resources (list(string)) [obrigatória]: Recursos explicitamente permitidos (ARNs específicos ou restritos). Não pode combinar "*" com Action "*".
-- policy_path (string) [opcional]: Caminho da policy. Padrão: "/".
-- description (string) [opcional]: Descrição da policy. Se omitida, uma descrição padrão é gerada.
-- additional_tags (map(string)) [opcional]: Tags adicionais a serem mescladas às tags obrigatórias.
+## 1. Visao geral
 
-Tabela de outputs (nome, descrição)
-- policy_name: Nome da IAM Policy criada.
-- policy_arn: ARN da IAM Policy criada.
-- policy_id: ID interno da IAM Policy criada.
+Este template provisiona uma IAM Policy da AWS seguindo o padrao organizacional de nomenclatura `<ambiente>-<sistema>-<recurso>-<finalidade>` (ex.: `dev-tcc-iam-readonly`).
 
-Exemplo de uso do módulo/recurso
-- Exemplo como módulo local:
-  module "iam_policy" {
-    source = "./"
+A policy e composta por uma unica statement com `Effect: Allow`, restrita exclusivamente as acoes e aos recursos informados via variavel. O template impede, atraves de uma precondicao de ciclo de vida, que a statement combine `Action: "*"` com `Resource: "*"` na mesma regra, e nao anexa nem replica policies gerenciadas administrativas (ex.: `AdministratorAccess`).
 
-    region           = "us-east-1"
-    environment      = "dev"
-    system           = "tcc"
-    policy_name      = "readonly"
-    policy_path      = "/"
-    allowed_actions  = ["s3:GetObject", "s3:ListBucket"]
-    allowed_resources = [
-      "arn:aws:s3:::example-bucket",
-      "arn:aws:s3:::example-bucket/*"
-    ]
+## 2. Variaveis
 
-    additional_tags = {
-      Team = "platform"
+| Nome | Tipo | Obrigatoria | Descricao |
+|------|------|-------------|-----------|
+| `environment` | `string` | Sim | Ambiente de implantacao (`dev`, `hml` ou `prd`). |
+| `system` | `string` | Nao (default `tcc`) | Nome do sistema ou projeto ao qual o recurso pertence. |
+| `region` | `string` | Nao (default `us-east-1`) | Regiao AWS onde os recursos serao provisionados. |
+| `additional_tags` | `map(string)` | Nao (default `{}`) | Tags adicionais mescladas as tags obrigatorias da organizacao. |
+| `policy_name` | `string` | Sim | Finalidade da policy, usada na composicao do nome padronizado (ex.: `readonly`). |
+| `policy_description` | `string` | Nao | Descricao funcional da IAM Policy. |
+| `allowed_actions` | `list(string)` | Sim | Lista de acoes IAM permitidas na statement Allow. |
+| `allowed_resources` | `list(string)` | Sim | Lista de ARNs de recursos aos quais a statement Allow se aplica. |
+
+## 3. Outputs
+
+| Nome | Descricao |
+|------|-----------|
+| `policy_name` | Nome da IAM Policy criada. |
+| `policy_arn` | ARN da IAM Policy criada. |
+| `policy_id` | ID da IAM Policy criada. |
+
+## 4. Exemplo de uso
+
+    module "iam_readonly" {
+      source = "./"
+
+      environment = "dev"
+      system      = "tcc"
+      region      = "us-east-1"
+      policy_name = "readonly"
+
+      allowed_actions = [
+        "s3:GetObject",
+        "s3:ListBucket"
+      ]
+
+      allowed_resources = [
+        "arn:aws:s3:::dev-tcc-s3-logs",
+        "arn:aws:s3:::dev-tcc-s3-logs/*"
+      ]
+
+      additional_tags = {
+        Squad = "plataforma"
+      }
     }
-  }
-
-- Após aplicar:
-  - O nome do recurso seguirá: dev-tcc-iam-readonly
-  - As tags obrigatórias serão aplicadas automaticamente e mescladas com additional_tags
-  - Nenhuma policy gerenciada administrativa será anexada automaticamente

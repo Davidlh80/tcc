@@ -1,11 +1,11 @@
 scenario: ia-sem-contexto
 execution_id: exec-10
 resource: s3
-model: "gpt-5"
+model: "sonnet"
 prompt_file: "prompts/ia-sem-contexto/prompt-s3.md"
-started_at: "2026-09-07T17:41:55.0099505-03:00"
-finished_at: "2026-09-07T17:43:27.5356242-03:00"
-api_duration_ms: 87388
-total_duration_ms: 92525
-generated_at: "2026-09-07T17:43:27.5356242-03:00"
+started_at: "2026-09-13T05:43:51.069473-03:00"
+finished_at: "2026-09-13T05:44:38.850704-03:00"
+api_duration_ms: 47778
+total_duration_ms: 47781
+generated_at: "2026-09-13T05:44:38.850704-03:00"
 generation_tool: "scripts/generate-blueprint"

@@ -1,44 +1,30 @@
 provider "aws" {
-  region = var.region
+  region = var.aws_region
 }
 
-locals {
-  statements = [
-    for s in var.statements : merge(
-      {
-        Effect   = s.effect
-        Action   = sort([for a in s.actions : a])
-        Resource = sort([for r in s.resources : r])
-      },
-      s.sid != null && s.sid != "" ? { Sid = s.sid } : {},
-      (try(length(s.conditions), 0) > 0) ? { Condition = s.conditions } : {}
-    )
-  ]
+data "aws_iam_policy_document" "this" {
+  statement {
+    sid       = var.statement_sid
+    effect    = var.effect
+    actions   = var.actions
+    resources = var.resources
 
-  policy_doc = {
-    Version   = "2012-10-17"
-    Statement = local.statements
+    dynamic "condition" {
+      for_each = var.conditions
+      content {
+        test     = condition.value.test
+        variable = condition.value.variable
+        values   = condition.value.values
+      }
+    }
   }
-
-  tags = merge(
-    {
-      ManagedBy = "Terraform"
-    },
-    var.tags
-  )
 }
 
 resource "aws_iam_policy" "this" {
-  name_prefix = var.policy_name_prefix
-  path        = var.path
-  description = var.description
-  policy      = jsonencode(local.policy_doc)
-  tags        = local.tags
+  name        = var.policy_name
+  path        = var.policy_path
+  description = var.policy_description
+  policy      = data.aws_iam_policy_document.this.json
 
-  lifecycle {
-    precondition {
-      condition   = length(var.statements) > 0
-      description = "Pelo menos um statement deve ser fornecido em var.statements."
-    }
-  }
+  tags = var.tags
 }

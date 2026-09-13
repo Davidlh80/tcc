@@ -3,11 +3,10 @@ provider "aws" {
 }
 
 locals {
-  resource_name = "${var.environment}-${var.system}-sg-${var.security_group_name}"
+  name = "${var.environment}-${var.system}-sg-${var.security_group_name}"
 
-  sg_description = coalesce(var.security_group_description, "Managed by Terraform")
-
-  mandatory_tags = {
+  default_tags = {
+    Name        = local.name
     Project     = "tcc-iac-ia"
     Environment = var.environment
     ManagedBy   = "terraform"
@@ -15,49 +14,37 @@ locals {
     CostCenter  = "academic-research"
   }
 
-  all_tags = merge(local.mandatory_tags, var.additional_tags)
+  tags = merge(local.default_tags, var.additional_tags)
 }
 
 resource "aws_security_group" "this" {
-  name                   = local.resource_name
-  description            = local.sg_description
-  vpc_id                 = var.vpc_id
-  revoke_rules_on_delete = true
-
-  # Remove default allow-all egress when no custom egress rules are provided
-  egress = length(var.egress_rules) == 0 ? [] : null
+  name        = local.name
+  description = var.security_group_description
+  vpc_id      = var.vpc_id
 
   dynamic "ingress" {
     for_each = var.ingress_rules
     content {
-      description      = ingress.value.description
-      from_port        = ingress.value.from_port
-      to_port          = ingress.value.to_port
-      protocol         = ingress.value.protocol
-      cidr_blocks      = try(ingress.value.cidr_blocks, [])
-      ipv6_cidr_blocks = try(ingress.value.ipv6_cidr_blocks, [])
-      prefix_list_ids  = try(ingress.value.prefix_list_ids, [])
-      security_groups  = try(ingress.value.security_groups, [])
-      self             = try(ingress.value.self, false)
+      description = ingress.value.description
+      from_port   = ingress.value.from_port
+      to_port     = ingress.value.to_port
+      protocol    = ingress.value.protocol
+      cidr_blocks = ingress.value.cidr_blocks
     }
   }
 
   dynamic "egress" {
     for_each = var.egress_rules
     content {
-      description      = egress.value.description
-      from_port        = egress.value.from_port
-      to_port          = egress.value.to_port
-      protocol         = egress.value.protocol
-      cidr_blocks      = try(egress.value.cidr_blocks, [])
-      ipv6_cidr_blocks = try(egress.value.ipv6_cidr_blocks, [])
-      prefix_list_ids  = try(egress.value.prefix_list_ids, [])
-      security_groups  = try(egress.value.security_groups, [])
-      self             = try(egress.value.self, false)
+      description = egress.value.description
+      from_port   = egress.value.from_port
+      to_port     = egress.value.to_port
+      protocol    = egress.value.protocol
+      cidr_blocks = egress.value.cidr_blocks
     }
   }
 
-  tags = local.all_tags
+  tags = local.tags
 
   lifecycle {
     create_before_destroy = true

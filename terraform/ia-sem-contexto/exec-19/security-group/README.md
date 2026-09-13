@@ -1,120 +1,61 @@
-Nome
-- Security Group AWS via Terraform
+# Security Group Blueprint
 
-Descricao
-- Blueprint Terraform para criar um Security Group na AWS com regras de entrada e saida declarativas e seguras por padrao (sem regras por default).
+Blueprint Terraform para provisionamento de um Security Group na AWS, dentro de uma VPC existente informada via variavel.
 
-Recursos criados
-- aws_security_group
-- aws_security_group_rule (ingress)
-- aws_security_group_rule (egress)
+## Recursos criados
 
-Requisitos
-- Terraform >= 1.0.0
-- Provider AWS >= 4.0
-- Uma VPC existente (forneca o vpc_id)
-- Credenciais AWS configuradas (variaveis de ambiente, perfil, etc.) para aplicar
+- `aws_security_group.this`
 
-Entradas
-- region (string): Regiao AWS. Default: us-east-1.
-- vpc_id (string): ID da VPC onde o SG sera criado. Obrigatorio.
-- sg_name (string): Nome do Security Group. Default: secure-sg.
-- sg_description (string): Descricao do SG. Default: Security Group managed by Terraform.
-- revoke_rules_on_delete (bool): Revoga regras antes de deletar o SG. Default: true.
-- tags (map(string)): Tags adicionais. Default: {}.
-- ingress_rules (list(object)): Lista de regras de entrada. Cada regra exige exatamente UMA origem entre cidr_blocks, ipv6_cidr_blocks, prefix_list_ids ou source_security_group_id. Se protocol = "-1", defina from_port = 0 e to_port = 0.
-  Campos:
-  - description (string)
-  - protocol (string, ex: tcp, udp, icmp, -1)
-  - from_port (number)
-  - to_port (number)
-  - cidr_blocks (list(string))
-  - ipv6_cidr_blocks (list(string))
-  - prefix_list_ids (list(string))
-  - source_security_group_id (string)
-- egress_rules (list(object)): Lista de regras de saida. Cada regra exige exatamente UM destino entre cidr_blocks, ipv6_cidr_blocks, prefix_list_ids ou destination_security_group_id. Se protocol = "-1", defina from_port = 0 e to_port = 0.
-  Campos:
-  - description (string)
-  - protocol (string, ex: tcp, udp, icmp, -1)
-  - from_port (number)
-  - to_port (number)
-  - cidr_blocks (list(string))
-  - ipv6_cidr_blocks (list(string))
-  - prefix_list_ids (list(string))
-  - destination_security_group_id (string)
+## Uso
 
-Saidas
-- security_group_id
-- security_group_arn
-- security_group_name
-- security_group_vpc_id
-- ingress_rule_ids
-- egress_rule_ids
-- ingress_rules_count
-- egress_rules_count
-- tags
+```
+module "security_group" {
+  source = "./"
 
-Padroes seguros
-- Nenhuma regra de ingress ou egress e criada por padrao. Defina explicitamente as regras necessarias.
-- Atributo revoke_rules_on_delete habilitado por padrao para reduzir residuos de regras.
-
-Exemplo de uso
-module "sg" {
-  source = "./."
-
-  region  = "us-east-1"
-  vpc_id  = "vpc-0123456789abcdef0"
-  sg_name = "app-sg"
-
-  tags = {
-    Environment = "dev"
-    Project     = "example"
-  }
+  vpc_id = "vpc-0123456789abcdef0"
+  name   = "web-security-group"
 
   ingress_rules = [
     {
-      description              = "Allow HTTPS from anywhere (IPv4)"
-      protocol                 = "tcp"
-      from_port                = 443
-      to_port                  = 443
-      cidr_blocks              = ["0.0.0.0/0"]
-      ipv6_cidr_blocks         = []
-      prefix_list_ids          = []
-      source_security_group_id = ""
-    },
-    {
-      description              = "Allow SSH from admin subnet"
-      protocol                 = "tcp"
-      from_port                = 22
-      to_port                  = 22
-      cidr_blocks              = ["10.0.0.0/24"]
-      ipv6_cidr_blocks         = []
-      prefix_list_ids          = []
-      source_security_group_id = ""
+      description = "Allow HTTPS from corporate network"
+      from_port   = 443
+      to_port     = 443
+      protocol    = "tcp"
+      cidr_blocks = ["203.0.113.0/24"]
     }
   ]
 
-  egress_rules = [
-    {
-      description                    = "Allow HTTPS outbound (IPv4)"
-      protocol                       = "tcp"
-      from_port                      = 443
-      to_port                        = 443
-      cidr_blocks                    = ["0.0.0.0/0"]
-      ipv6_cidr_blocks               = []
-      prefix_list_ids                = []
-      destination_security_group_id  = ""
-    }
-  ]
+  tags = {
+    Environment = "dev"
+  }
 }
+```
 
-Operacao
-- terraform init -backend=false
-- terraform validate
-- terraform plan -var="vpc_id=vpc-0123456789abcdef0"
-- terraform apply -var="vpc_id=vpc-0123456789abcdef0"
+## Inputs
 
-Observacoes
-- Para permitir trafego entre dois SGs, use source_security_group_id (ingress) ou destination_security_group_id (egress) apontando para o ID do SG de origem/destino.
-- Para regras que abrangem todos os protocolos, use protocol = "-1" e ports 0/0 conforme validacao.
-- Evite 0.0.0.0/0 e ::/0 em ingress, a menos que absolutamente necessario.
+| Nome          | Descricao                                              | Tipo           | Default                                    |
+|---------------|----------------------------------------------------------|----------------|---------------------------------------------|
+| aws_region    | Regiao AWS onde os recursos serao provisionados         | string         | "us-east-1"                                 |
+| vpc_id        | ID da VPC onde o Security Group sera criado (obrigatorio)| string         | -                                            |
+| name          | Nome do Security Group                                   | string         | "app-security-group"                        |
+| description   | Descricao do Security Group                              | string         | "Managed by Terraform"                      |
+| ingress_rules | Lista de regras de entrada                                | list(object)   | []                                           |
+| egress_rules  | Lista de regras de saida                                  | list(object)   | allow all outbound (0.0.0.0/0)               |
+| tags          | Tags adicionais aplicadas ao Security Group               | map(string)    | {}                                           |
+
+## Outputs
+
+| Nome                     | Descricao                                      |
+|--------------------------|--------------------------------------------------|
+| security_group_id        | ID do Security Group criado                     |
+| security_group_arn       | ARN do Security Group criado                     |
+| security_group_name      | Nome do Security Group criado                    |
+| security_group_vpc_id    | ID da VPC associada ao Security Group             |
+| security_group_owner_id  | ID da conta AWS proprietaria do Security Group    |
+
+## Consideracoes de seguranca
+
+- Nenhuma regra de entrada e criada por padrao (`ingress_rules = []`), evitando exposicao acidental de portas.
+- Ao definir regras de entrada, prefira CIDRs restritos em vez de `0.0.0.0/0`, especialmente para portas administrativas (ex.: 22, 3389).
+- A regra de saida padrao libera todo o trafego de saida; restrinja `egress_rules` conforme a necessidade do workload.
+- Nenhum valor sensivel ou credencial esta fixado no codigo.

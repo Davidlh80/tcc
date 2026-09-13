@@ -1,77 +1,72 @@
-1. Visão geral do recurso
-Este template provisiona um Security Group na AWS em conformidade com as diretrizes organizacionais:
-- Nomeação no padrão <ambiente>-<sistema>-<recurso>-<finalidade>, por exemplo: dev-tcc-sg-web.
-- Tags obrigatórias aplicadas: Project, Environment, ManagedBy, Owner e CostCenter, com suporte a tags adicionais.
-- Regras de segurança:
-  - Proíbe 0.0.0.0/0 (e ::/0) para qualquer porta além de 443/tcp (validação de variáveis).
-  - Exige descrição em todas as regras de entrada e saída.
-  - Egress declarado explicitamente; por padrão não há liberação irrestrita.
-- VPC configurável por variável.
-- Regras de ingress e egress configuráveis por variável.
+# Security Group
 
-2. Tabela de variáveis
-- region (string, obrigatória): Região AWS onde os recursos serão provisionados.
-- environment (string, obrigatória): Ambiente de implantação. Aceita: dev, hml, prd.
-- system (string, obrigatória): Identificador do sistema/produto (ex.: tcc). Somente minúsculas, números e hífen (2-32 chars).
-- additional_tags (map(string), opcional): Tags adicionais a serem aplicadas. Não pode sobrescrever as tags obrigatórias. Default: {}.
-- security_group_name (string, obrigatória): Finalidade do Security Group. Comporá o nome conforme <env>-<system>-sg-<security_group_name>.
-- security_group_description (string, opcional): Descrição do Security Group. Default: "Security Group gerenciado por Terraform".
-- vpc_id (string, obrigatória): ID da VPC onde o SG será criado (formato vpc-xxxxxxxx).
-- ingress_rules (list(object), opcional): Regras de entrada. Cada item exige: description, from_port, to_port, protocol, cidr_blocks, ipv6_cidr_blocks, security_groups, prefix_list_ids. Default: [].
-- egress_rules (list(object), opcional): Regras de saída. Cada item exige: description, from_port, to_port, protocol, cidr_blocks, ipv6_cidr_blocks, security_groups, prefix_list_ids. Default: [].
+## 1. Visao geral
 
-3. Tabela de outputs
-- security_group_name: Nome do Security Group criado.
-- security_group_arn: ARN do Security Group criado.
-- security_group_id: ID do Security Group criado.
+Este modulo Terraform provisiona um Security Group na AWS, com o ID da VPC configuravel por variavel. O recurso segue o padrao organizacional de nomenclatura `<ambiente>-<sistema>-<recurso>-<finalidade>` e aplica, por padrao, as tags obrigatorias da organizacao.
 
-4. Exemplo de uso do módulo/recurso
+Regras de seguranca aplicadas por este modulo:
+
+- o CIDR `0.0.0.0/0` e proibido em qualquer porta diferente de `443/tcp`, tanto em ingress quanto em egress;
+- toda regra de entrada e de saida exige uma descricao nao vazia;
+- as regras de egress sao declaradas explicitamente por variavel; se `egress_rules` nao for informado, nenhuma regra de saida e criada (sem liberacao irrestrita por padrao);
+- as regras de entrada e saida sao totalmente configuraveis por variavel.
+
+## 2. Variaveis
+
+| Nome                  | Tipo                                                                                     | Obrigatoria | Descricao                                                                                       |
+|-----------------------|-------------------------------------------------------------------------------------------|-------------|---------------------------------------------------------------------------------------------------|
+| `environment`         | `string`                                                                                   | Sim         | Ambiente de implantacao (`dev`, `hml` ou `prd`).                                                  |
+| `system`              | `string`                                                                                   | Sim         | Nome do sistema ou aplicacao ao qual o recurso pertence.                                          |
+| `region`              | `string`                                                                                   | Nao         | Regiao AWS onde o recurso sera criado. Padrao: `us-east-1`.                                       |
+| `additional_tags`     | `map(string)`                                                                              | Nao         | Tags adicionais alem das obrigatorias. Padrao: `{}`.                                               |
+| `security_group_name` | `string`                                                                                   | Sim         | Finalidade do Security Group, usada na composicao do nome padronizado.                            |
+| `vpc_id`              | `string`                                                                                   | Sim         | ID da VPC onde o Security Group sera criado.                                                      |
+| `description`         | `string`                                                                                   | Nao         | Descricao do Security Group. Padrao: `"Security Group gerenciado via Terraform."`.                |
+| `ingress_rules`       | `list(object({ description, from_port, to_port, protocol, cidr_blocks }))`                | Nao         | Regras de entrada. `0.0.0.0/0` so e permitido em `443/tcp`. Padrao: `[]`.                          |
+| `egress_rules`        | `list(object({ description, from_port, to_port, protocol, cidr_blocks }))`                | Nao         | Regras de saida. `0.0.0.0/0` so e permitido em `443/tcp`. Padrao: `[]` (sem saida liberada).       |
+
+## 3. Outputs
+
+| Nome                   | Descricao                              |
+|------------------------|------------------------------------------|
+| `security_group_name`  | Nome padronizado do Security Group.       |
+| `security_group_arn`   | ARN do Security Group.                    |
+| `security_group_id`    | ID do Security Group.                     |
+
+## 4. Exemplo de uso
+
+```hcl
 module "sg_web" {
   source = "./"
 
-  region               = "us-east-1"
-  environment          = "dev"
+  environment          = "hml"
   system               = "tcc"
-  additional_tags      = { Application = "webapp" }
+  region               = "us-east-1"
   security_group_name  = "web"
-  security_group_description = "SG para front-end web"
   vpc_id               = "vpc-0123456789abcdef0"
 
-  # Permite HTTPS público e SSH apenas de um bloco corporativo
   ingress_rules = [
     {
-      description      = "HTTPS público"
-      from_port        = 443
-      to_port          = 443
-      protocol         = "tcp"
-      cidr_blocks      = ["0.0.0.0/0"]
-      ipv6_cidr_blocks = ["::/0"]
-      security_groups  = []
-      prefix_list_ids  = []
-    },
-    {
-      description      = "SSH do bloco corporativo"
-      from_port        = 22
-      to_port          = 22
-      protocol         = "tcp"
-      cidr_blocks      = ["203.0.113.0/24"]
-      ipv6_cidr_blocks = []
-      security_groups  = []
-      prefix_list_ids  = []
+      description = "Acesso HTTPS publico"
+      from_port   = 443
+      to_port     = 443
+      protocol    = "tcp"
+      cidr_blocks = ["0.0.0.0/0"]
     }
   ]
 
-  # Egress explícito para HTTPS
   egress_rules = [
     {
-      description      = "Saída HTTPS"
-      from_port        = 443
-      to_port          = 443
-      protocol         = "tcp"
-      cidr_blocks      = ["0.0.0.0/0"]
-      ipv6_cidr_blocks = ["::/0"]
-      security_groups  = []
-      prefix_list_ids  = []
+      description = "Saida HTTPS para atualizacoes de pacotes"
+      from_port   = 443
+      to_port     = 443
+      protocol    = "tcp"
+      cidr_blocks = ["0.0.0.0/0"]
     }
   ]
+
+  additional_tags = {
+    Squad = "plataforma"
+  }
 }
+```

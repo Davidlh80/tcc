@@ -1,98 +1,82 @@
-variable "region" {
-  description = "Regiao AWS onde os recursos serao gerenciados."
-  type        = string
-  nullable    = false
-
-  validation {
-    condition     = length(var.region) > 0
-    error_message = "A variavel region deve ser informada (ex.: us-east-1)."
-  }
-}
-
 variable "environment" {
-  description = "Ambiente do recurso (valores permitidos: dev, hml, prd)."
+  description = "Ambiente de implantacao (dev, hml ou prd)."
   type        = string
-  nullable    = false
 
   validation {
     condition     = contains(["dev", "hml", "prd"], var.environment)
-    error_message = "environment deve ser um dos valores: dev, hml ou prd."
+    error_message = "O valor de environment deve ser um dos seguintes: dev, hml, prd."
   }
 }
 
 variable "system" {
-  description = "Identificador do sistema/produto (ex.: tcc). Use letras minusculas, numeros e hifens."
+  description = "Identificador do sistema/produto, usado na nomenclatura padronizada dos recursos."
   type        = string
-  nullable    = false
 
   validation {
-    condition     = can(regex("^[a-z0-9-]+$", var.system)) && length(var.system) > 0
-    error_message = "system deve conter apenas [a-z0-9-] e nao pode ser vazio."
+    condition     = length(var.system) > 0
+    error_message = "O valor de system nao pode ser vazio."
+  }
+}
+
+variable "region" {
+  description = "Regiao AWS onde os recursos serao provisionados."
+  type        = string
+  default     = "us-east-1"
+
+  validation {
+    condition     = length(var.region) > 0
+    error_message = "O valor de region nao pode ser vazio."
   }
 }
 
 variable "additional_tags" {
-  description = "Tags adicionais a serem aplicadas ao recurso (serao mescladas com as tags obrigatorias)."
+  description = "Tags adicionais a serem mescladas com as tags obrigatorias da organizacao."
   type        = map(string)
   default     = {}
 }
 
 variable "policy_name" {
-  description = "Finalidade/nome curto da policy para compor a nomenclatura padrao (<env>-<system>-iam-<policy_name>)."
+  description = "Finalidade da IAM Policy, utilizada na composicao do nome padronizado (ex.: readonly, deploy)."
   type        = string
-  nullable    = false
 
   validation {
-    condition     = can(regex("^[a-z0-9-]+$", var.policy_name)) && length(var.policy_name) > 0
-    error_message = "policy_name deve conter apenas [a-z0-9-] e nao pode ser vazio."
+    condition     = can(regex("^[a-z0-9]+(-[a-z0-9]+)*$", var.policy_name))
+    error_message = "O valor de policy_name deve conter apenas letras minusculas, numeros e hifens (ex.: readonly, deploy-app)."
+  }
+}
+
+variable "policy_description" {
+  description = "Descricao da IAM Policy."
+  type        = string
+  default     = "Managed by Terraform."
+}
+
+variable "allowed_actions" {
+  description = "Lista de acoes IAM permitidas (Effect Allow). Nao deve conter apenas \"*\" combinado com allowed_resources igual a [\"*\"]."
+  type        = list(string)
+
+  validation {
+    condition     = length(var.allowed_actions) > 0
+    error_message = "allowed_actions deve conter ao menos uma acao."
+  }
+
+  validation {
+    condition     = alltrue([for a in var.allowed_actions : a != ""])
+    error_message = "allowed_actions nao pode conter strings vazias."
   }
 }
 
 variable "allowed_resources" {
-  description = "Lista de ARNs de recursos aos quais as acoes serao permitidas."
+  description = "Lista de ARNs de recursos aos quais as acoes permitidas se aplicam."
   type        = list(string)
-  nullable    = false
 
   validation {
     condition     = length(var.allowed_resources) > 0
-    error_message = "allowed_resources nao pode ser vazio."
-  }
-}
-
-variable "allowed_actions" {
-  description = "Lista de acoes IAM a serem permitidas (principio do menor privilegio)."
-  type        = list(string)
-  nullable    = false
-
-  validation {
-    condition     = length(var.allowed_actions) > 0
-    error_message = "allowed_actions nao pode ser vazio."
+    error_message = "allowed_resources deve conter ao menos um recurso."
   }
 
   validation {
-    condition     = !(contains(var.allowed_actions, "*") && contains(var.allowed_resources, "*"))
-    error_message = "Proibido combinar Action: \"*\" com Resource: \"*\" na mesma statement (política interna de IAM)."
+    condition     = alltrue([for r in var.allowed_resources : r != ""])
+    error_message = "allowed_resources nao pode conter strings vazias."
   }
-}
-
-variable "allowed_conditions" {
-  description = "Lista opcional de condicoes para a statement Allow. Cada condicao deve conter test, variable e values."
-  type = list(object({
-    test     = string
-    variable = string
-    values   = list(string)
-  }))
-  default = []
-}
-
-variable "description" {
-  description = "Descricao da IAM Policy."
-  type        = string
-  default     = "Managed IAM policy with scoped permissions aligned to organizational standards."
-}
-
-variable "path" {
-  description = "Caminho da IAM Policy."
-  type        = string
-  default     = "/"
 }

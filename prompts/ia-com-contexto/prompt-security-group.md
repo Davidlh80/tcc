@@ -1,18 +1,29 @@
 # Prompt Security Group — IA com contexto organizacional
 
-## Papel da execução
+## Papel
 
-Sou um especialista em Terraform, AWS, DevOps, segurança e padronização corporativa. Devo gerar um template Terraform seguindo rigorosamente os requisitos técnicos deste prompt e o contexto organizacional fornecido separadamente.
+Você é um especialista em Terraform, AWS, DevOps e segurança de Infraestrutura como Código, atuando como consultor de uma organização que exige aderência estrita aos próprios padrões internos de IaC.
 
-Esta é uma execução independente do experimento. Ignore qualquer geração anterior e trate este prompt, junto com o contexto organizacional informado, como a única fonte de requisitos válida para esta execução — inclusive quando isso for mais restritivo do que a prática de mercado que você adotaria por padrão.
+## Contexto
 
-## Objetivo
+Execução isolada de um experimento — ignore gerações anteriores. Contexto organizacional anexado logo abaixo, sob o cabeçalho "Contexto organizacional": leia-o e siga-o como fonte normativa (prevalece sobre prática geral de mercado em caso de conflito).
 
-Criar uma blueprint Terraform para provisionar um Security Group em conformidade com a política interna de IaC da organização.
+Recurso desta execução: Security Group.
 
-## Arquivos obrigatórios
+## Ação
 
-A resposta deve permitir a criação dos seguintes arquivos:
+Gere uma blueprint Terraform completa para o Security Group, cobrindo:
+
+- criação do Security Group, com o ID da VPC configurável por variável;
+- proibição de `0.0.0.0/0` em qualquer porta além da 443/tcp;
+- descrição obrigatória em toda regra de entrada e de saída;
+- egress declarado de forma explícita, sem liberação irrestrita por padrão;
+- regras de entrada e saída configuráveis por variável;
+- aplicação do padrão de nomenclatura, das tags obrigatórias, da nomenclatura de variáveis e outputs, e da estrutura de README definidos no contexto organizacional.
+
+## Formato de saída
+
+Retorne exatamente estes cinco arquivos, sem arquivos adicionais:
 
 - `main.tf`
 - `variables.tf`
@@ -20,26 +31,11 @@ A resposta deve permitir a criação dos seguintes arquivos:
 - `versions.tf`
 - `README.md`
 
-## Requisitos obrigatórios
+O `README.md` deve seguir a estrutura de seções definida no contexto organizacional.
 
-O template deve:
+## Restrições e avisos
 
-- criar um Security Group;
-- permitir configuração do ID da VPC por variável;
-- proibir `0.0.0.0/0` em qualquer porta além da 443/tcp;
-- exigir descrição em toda regra de entrada e de saída;
-- declarar egress de forma explícita, sem liberação irrestrita por padrão;
-- permitir configuração de regras de entrada e saída por variável;
-- seguir exatamente o padrão de nomenclatura de recursos definido no contexto organizacional;
-- aplicar as tags obrigatórias do contexto organizacional;
-- nomear variáveis e outputs exatamente conforme a tabela de nomenclatura do contexto organizacional;
-- estruturar o `README.md` conforme as seções definidas no contexto organizacional;
-- utilizar variáveis para todo valor configurável;
-- evitar valores sensíveis fixos no código;
-- ser compatível com `terraform fmt`, `terraform init -backend=false` e `terraform validate`;
-- evitar backend remoto;
-- evitar dependência de credenciais reais para validação sintática.
-
-## Diretriz de contexto
-
-Trate o contexto organizacional como fonte normativa, não apenas estilística: nomenclatura, tags, estrutura de arquivos, seções do README, nomes de variáveis e outputs, e os controles de segurança específicos de Security Group devem seguir exatamente o que está definido nele. Em caso de conflito entre uma prática geral de mercado e uma regra explícita do contexto organizacional, prevalece a regra do contexto organizacional.
+- Use variáveis para todo valor configurável; evite valores sensíveis fixos no código.
+- O código deve ser compatível com `terraform fmt`, `terraform init -backend=false` e `terraform validate`.
+- Não use backend remoto nem dependa de credenciais reais para validação sintática.
+- Retorne somente o conteúdo dos arquivos solicitados, sem explicações fora deles.

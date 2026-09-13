@@ -1,102 +1,83 @@
-variable "aws_region" {
-  description = "Região AWS onde os recursos serão criados."
+variable "region" {
+  description = "Regiao AWS utilizada pelo provider."
   type        = string
   default     = "us-east-1"
-  validation {
-    condition     = can(regex("^[a-z]{2}-[a-z]+-\\d$", var.aws_region))
-    error_message = "aws_region deve estar no formato de região AWS válido, por exemplo: us-east-1."
-  }
 }
 
 variable "policy_name" {
-  description = "Nome amigável da IAM Policy (1-128 chars, [A-Za-z0-9+=,.@-_])."
+  description = "Nome da IAM Policy."
   type        = string
-  default     = "example-readonly-policy"
+  default     = "example-least-privilege-policy"
+
   validation {
     condition     = can(regex("^[\\w+=,.@-]{1,128}$", var.policy_name))
-    error_message = "policy_name deve corresponder ao padrão AWS: [\\w+=,.@-]{1,128}."
-  }
-}
-
-variable "path" {
-  description = "Caminho da policy. Deve iniciar e terminar com '/'."
-  type        = string
-  default     = "/"
-  validation {
-    condition     = startswith(var.path, "/") && endswith(var.path, "/")
-    error_message = "path deve iniciar e terminar com '/'."
+    error_message = "policy_name deve ter entre 1 e 128 caracteres e conter apenas letras, numeros ou os simbolos + = , . @ -."
   }
 }
 
 variable "policy_description" {
-  description = "Descrição da IAM Policy."
+  description = "Descricao da IAM Policy."
   type        = string
-  default     = "Managed policy created by Terraform."
+  default     = "Managed by Terraform"
+}
+
+variable "path" {
+  description = "Path da IAM Policy dentro do IAM."
+  type        = string
+  default     = "/"
+}
+
+variable "sid" {
+  description = "Identificador (Sid) da statement da policy."
+  type        = string
+  default     = "PolicyStatement"
 }
 
 variable "effect" {
-  description = "Efeito padrão da declaração principal ('Allow' ou 'Deny')."
+  description = "Efeito da statement (Allow ou Deny)."
   type        = string
   default     = "Allow"
+
   validation {
-    condition     = contains(["allow", "deny"], lower(var.effect))
-    error_message = "effect deve ser 'Allow' ou 'Deny'."
+    condition     = contains(["Allow", "Deny"], var.effect)
+    error_message = "effect deve ser \"Allow\" ou \"Deny\"."
   }
 }
 
 variable "actions" {
-  description = "Ações IAM para a declaração principal."
+  description = "Lista de acoes IAM permitidas/negadas pela policy. Wildcard \"*\" nao e permitido."
   type        = list(string)
-  default     = ["iam:GetAccountSummary"]
+  default     = ["s3:GetObject", "s3:ListBucket"]
+
   validation {
-    condition     = length(var.actions) > 0 && alltrue([for a in var.actions : length(trimspace(a)) > 0])
-    error_message = "actions deve conter ao menos uma ação não vazia."
+    condition     = length(var.actions) > 0
+    error_message = "actions deve conter ao menos uma acao."
+  }
+
+  validation {
+    condition     = !contains(var.actions, "*")
+    error_message = "A acao wildcard \"*\" nao e permitida. Especifique acoes IAM explicitas."
   }
 }
 
 variable "resources" {
-  description = "Recursos IAM para a declaração principal (ex.: '*', ou ARNs)."
+  description = "Lista de ARNs de recursos aos quais a policy se aplica. Wildcard \"*\" nao e permitido."
   type        = list(string)
-  default     = ["*"]
-  validation {
-    condition     = length(var.resources) > 0 && alltrue([for r in var.resources : length(trimspace(r)) > 0])
-    error_message = "resources deve conter ao menos um recurso não vazio (ex.: '*', arn:...)."
-  }
-}
+  default     = ["arn:aws:s3:::example-bucket/*"]
 
-variable "additional_statements" {
-  description = "Lista de declarações adicionais para compor o documento da policy."
-  type = list(object({
-    effect    = string
-    actions   = list(string)
-    resources = list(string)
-  }))
-  default = []
   validation {
-    condition = alltrue([
-      for s in var.additional_statements :
-      contains(["allow", "deny"], lower(s.effect))
-      && length(s.actions) > 0
-      && length(s.resources) > 0
-      && alltrue([for a in s.actions : length(trimspace(a)) > 0])
-      && alltrue([for r in s.resources : length(trimspace(r)) > 0])
-    ])
-    error_message = "Cada declaração adicional deve ter effect 'Allow' ou 'Deny', e listas não vazias de actions e resources."
+    condition     = length(var.resources) > 0
+    error_message = "resources deve conter ao menos um ARN."
   }
-}
 
-variable "policy_json" {
-  description = "JSON completo de uma IAM Policy. Quando definido, substitui o documento gerado por actions/resources/effect."
-  type        = string
-  default     = null
   validation {
-    condition     = var.policy_json == null ? true : (length(trimspace(var.policy_json)) > 0 && can(jsondecode(var.policy_json)))
-    error_message = "policy_json, quando definido, deve ser JSON válido e não vazio."
+    condition     = !contains(var.resources, "*")
+    error_message = "O recurso wildcard \"*\" nao e permitido. Especifique ARNs explicitos."
   }
 }
 
 variable "tags" {
-  description = "Tags adicionais a aplicar na policy."
+  description = "Tags aplicadas a IAM Policy."
   type        = map(string)
   default     = {}
 }

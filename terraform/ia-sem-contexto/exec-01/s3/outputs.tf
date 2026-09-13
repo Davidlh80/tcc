@@ -1,34 +1,24 @@
 output "bucket_id" {
-  description = "ID do bucket (igual ao nome)."
+  description = "Nome (ID) do bucket S3 criado."
   value       = aws_s3_bucket.this.id
 }
 
 output "bucket_arn" {
-  description = "ARN do bucket."
+  description = "ARN do bucket S3 criado."
   value       = aws_s3_bucket.this.arn
 }
 
-output "bucket_name" {
-  description = "Nome do bucket."
-  value       = aws_s3_bucket.this.bucket
-}
-
-output "bucket_domain_name" {
-  description = "Endpoint DNS global do bucket."
-  value       = aws_s3_bucket.this.bucket_domain_name
-}
-
 output "bucket_regional_domain_name" {
-  description = "Endpoint DNS regional do bucket."
+  description = "Nome de domínio regional do bucket S3."
   value       = aws_s3_bucket.this.bucket_regional_domain_name
 }
 
 output "versioning_status" {
-  description = "Status do versionamento."
-  value       = var.versioning_enabled ? "Enabled" : "Suspended"
+  description = "Status atual do versionamento do bucket."
+  value       = aws_s3_bucket_versioning.this.versioning_configuration[0].status
 }
 
 output "encryption_algorithm" {
-  description = "Algoritmo de criptografia configurado."
-  value       = var.sse_algorithm
+  description = "Algoritmo de criptografia server-side aplicado ao bucket."
+  value       = aws_s3_bucket_server_side_encryption_configuration.this.rule[0].apply_server_side_encryption_by_default[0].sse_algorithm
 }

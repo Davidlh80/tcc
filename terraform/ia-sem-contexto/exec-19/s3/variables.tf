@@ -1,72 +1,45 @@
-variable "aws_region" {
-  description = "AWS region onde os recursos serao criados."
-  type        = string
-  default     = "us-east-1"
-
-  validation {
-    condition     = can(regex("^[a-z]{2}-[a-z0-9-]+-\\d$", var.aws_region))
-    error_message = "aws_region deve ser um nome de regiao valido, por exemplo: us-east-1."
-  }
-}
-
 variable "bucket_name" {
-  description = "Nome do bucket S3 (deve ser globalmente unico)."
+  description = "Nome globalmente unico do bucket S3."
   type        = string
 
   validation {
     condition     = can(regex("^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$", var.bucket_name))
-    error_message = "bucket_name deve ter entre 3 e 63 caracteres, conter apenas letras minusculas, numeros, hifens ou pontos e iniciar/terminar com letra ou numero."
+    error_message = "O nome do bucket deve ter entre 3 e 63 caracteres, apenas letras minusculas, numeros, pontos e hifens, iniciando e terminando com letra ou numero."
   }
 }
 
 variable "force_destroy" {
-  description = "Permite destruir o bucket mesmo se houver objetos (use com cautela)."
+  description = "Permite exclusao do bucket mesmo que contenha objetos. Use com cautela."
   type        = bool
   default     = false
 }
 
 variable "enable_versioning" {
-  description = "Habilita versionamento do bucket."
+  description = "Habilita versionamento de objetos no bucket."
   type        = bool
   default     = true
 }
 
-variable "enable_lifecycle" {
-  description = "Habilita regras de ciclo de vida padrao (limpeza de partes incompletas e de versoes antigas)."
+variable "kms_key_arn" {
+  description = "ARN de uma chave KMS para criptografia SSE-KMS. Se nulo, usa SSE-S3 (AES256)."
+  type        = string
+  default     = null
+}
+
+variable "enable_lifecycle_rule" {
+  description = "Habilita regra de ciclo de vida para expirar versoes antigas de objetos."
   type        = bool
   default     = true
 }
 
-variable "lifecycle_abort_incomplete_upload_days" {
-  description = "Dias para abortar uploads multipart incompletos."
+variable "noncurrent_version_expiration_days" {
+  description = "Numero de dias apos os quais versoes nao atuais de objetos sao expiradas."
   type        = number
-  default     = 7
-
-  validation {
-    condition     = var.lifecycle_abort_incomplete_upload_days >= 1 && var.lifecycle_abort_incomplete_upload_days <= 365
-    error_message = "lifecycle_abort_incomplete_upload_days deve estar entre 1 e 365."
-  }
-}
-
-variable "lifecycle_noncurrent_expiration_days" {
-  description = "Dias para expirar versoes nao correntes de objetos."
-  type        = number
-  default     = 30
-
-  validation {
-    condition     = var.lifecycle_noncurrent_expiration_days >= 1
-    error_message = "lifecycle_noncurrent_expiration_days deve ser >= 1."
-  }
-}
-
-variable "enforce_tls" {
-  description = "Cria uma policy que nega acesso ao bucket via HTTP (somente HTTPS/TLS)."
-  type        = bool
-  default     = true
+  default     = 90
 }
 
 variable "tags" {
-  description = "Mapa de tags adicionais a aplicar em todos os recursos."
+  description = "Tags adicionais a serem aplicadas ao bucket."
   type        = map(string)
   default     = {}
 }

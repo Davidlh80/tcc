@@ -1,27 +1,23 @@
-provider "aws" {
-  region = var.region
-}
-
 locals {
-  # Resource name per organizational standard: <environment>-<system>-<recurso>-<finalidade>
-  resource_name = "${var.environment}-${var.system}-sg-${var.security_group_name}"
+  security_group_name = "${var.environment}-${var.system}-sg-${var.security_group_name}"
 
-  mandatory_tags = {
-    Project     = "tcc-iac-ia"
-    Environment = var.environment
-    ManagedBy   = "terraform"
-    Owner       = "devops"
-    CostCenter  = "academic-research"
-  }
-
-  merged_tags = merge(local.mandatory_tags, var.additional_tags)
+  common_tags = merge(
+    {
+      Project     = "tcc-iac-ia"
+      Environment = var.environment
+      ManagedBy   = "terraform"
+      Owner       = "devops"
+      CostCenter  = "academic-research"
+      Name        = local.security_group_name
+    },
+    var.additional_tags
+  )
 }
 
 resource "aws_security_group" "this" {
-  name                   = local.resource_name
-  description            = var.security_group_description
-  vpc_id                 = var.vpc_id
-  revoke_rules_on_delete = true
+  name        = local.security_group_name
+  description = var.security_group_description
+  vpc_id      = var.vpc_id
 
   dynamic "ingress" {
     for_each = var.ingress_rules
@@ -45,5 +41,9 @@ resource "aws_security_group" "this" {
     }
   }
 
-  tags = local.merged_tags
+  tags = local.common_tags
+
+  lifecycle {
+    create_before_destroy = true
+  }
 }

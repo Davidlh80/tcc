@@ -1,11 +1,7 @@
-provider "aws" {
-  region = var.region
-}
-
 locals {
   bucket_name = "${var.environment}-${var.system}-s3-${var.purpose}"
 
-  common_tags = merge(
+  tags = merge(
     {
       Project     = "tcc-iac-ia"
       Environment = var.environment
@@ -18,26 +14,17 @@ locals {
 }
 
 resource "aws_s3_bucket" "this" {
-  bucket        = local.bucket_name
-  force_destroy = var.force_destroy
+  bucket = local.bucket_name
 
-  tags = local.common_tags
-}
-
-resource "aws_s3_bucket_ownership_controls" "this" {
-  bucket = aws_s3_bucket.this.id
-
-  rule {
-    object_ownership = "BucketOwnerEnforced"
-  }
+  tags = local.tags
 }
 
 resource "aws_s3_bucket_public_access_block" "this" {
   bucket = aws_s3_bucket.this.id
 
-  block_public_acls       = true
-  block_public_policy     = true
-  ignore_public_acls      = true
+  block_public_acls      = true
+  block_public_policy    = true
+  ignore_public_acls     = true
   restrict_public_buckets = true
 }
 
@@ -61,17 +48,21 @@ resource "aws_s3_bucket_versioning" "this" {
 
 data "aws_iam_policy_document" "deny_insecure_transport" {
   statement {
-    sid     = "DenyInsecureTransport"
-    effect  = "Deny"
+    sid    = "DenyInsecureTransport"
+    effect = "Deny"
+
     actions = ["s3:*"]
-    principals {
-      type        = "*"
-      identifiers = ["*"]
-    }
+
     resources = [
       aws_s3_bucket.this.arn,
-      "${aws_s3_bucket.this.arn}/*",
+      "${aws_s3_bucket.this.arn}/*"
     ]
+
+    principals {
+      type        = "AWS"
+      identifiers = ["*"]
+    }
+
     condition {
       test     = "Bool"
       variable = "aws:SecureTransport"
@@ -83,4 +74,6 @@ data "aws_iam_policy_document" "deny_insecure_transport" {
 resource "aws_s3_bucket_policy" "this" {
   bucket = aws_s3_bucket.this.id
   policy = data.aws_iam_policy_document.deny_insecure_transport.json
+
+  depends_on = [aws_s3_bucket_public_access_block.this]
 }

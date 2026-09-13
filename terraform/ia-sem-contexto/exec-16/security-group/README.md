@@ -1,100 +1,76 @@
-Nome
-- Blueprint Terraform para criar um Security Group na AWS.
+# Security Group AWS via Terraform
 
-Descricao
-- Este template cria um Security Group em uma VPC informada, com regras de ingress/egress configuraveis via variaveis.
-- Seguranca por padrao: nenhuma regra de entrada e uma regra de saida liberando todo trafego (personalizavel).
+Blueprint Terraform para provisionar um Security Group na AWS dentro de uma VPC existente, com regras de entrada e saida configuraveis via variaveis.
 
-Arquivos
-- versions.tf: Versoes do Terraform e provider AWS.
-- variables.tf: Variaveis de configuracao.
-- main.tf: Provider AWS e recurso aws_security_group com regras dinamicas.
-- outputs.tf: Informacoes relevantes do Security Group criado.
-- README.md: Instrucoes de uso.
+## Recursos criados
 
-Requisitos
-- Terraform >= 1.3.0
-- Provider AWS >= 5.0
-- Credenciais AWS devem estar configuradas no ambiente de execucao (nao definidas neste template).
-- Uma VPC valida ja existente para associar o Security Group.
+- `aws_security_group.this`: Security Group associado a VPC informada em `var.vpc_id`.
 
-Variaveis principais
-- region (string): Regiao AWS. Padrao: us-east-1
-- vpc_id (string): ID da VPC de destino. Obrigatorio.
-- name (string): Nome do Security Group. Padrao: secure-sg
-- description (string): Descricao do Security Group. Padrao: Security Group gerenciado por Terraform
-- tags (map(string)): Tags adicionais. Padrao: {}
-- ingress_rules (list(object)): Regras de entrada. Padrao: []
-- egress_rules (list(object)): Regras de saida. Padrao: permite todo trafego de saida para IPv4 e IPv6
+## Uso
 
-Formato das regras (ingress_rules e egress_rules)
-- Cada item do atributo é um objeto com campos:
-  - description (string, opcional)
-  - protocol (string, ex: tcp, udp, icmp, -1 para todos)
-  - from_port (number)
-  - to_port (number)
-  - cidr_blocks (list(string), opcional)
-  - ipv6_cidr_blocks (list(string), opcional)
-  - prefix_list_ids (list(string), opcional)
-  - source_security_group_id (string, opcional)
-- Pelo menos um dos seguintes deve ser definido em cada regra: cidr_blocks, ipv6_cidr_blocks, prefix_list_ids ou source_security_group_id.
+```
+module "security_group" {
+  source = "./"
 
-Exemplos de uso
-- Definindo apenas a VPC (sem ingress; egress padrao liberado):
   vpc_id = "vpc-0123456789abcdef0"
+  name   = "app-sg"
 
-- Exemplo com regras de ingress para HTTP/HTTPS a partir da Internet e SSH restrito a um CIDR especifico:
-  vpc_id = "vpc-0123456789abcdef0"
-  name   = "web-sg"
   ingress_rules = [
     {
-      description  = "HTTP from Internet"
-      protocol     = "tcp"
-      from_port    = 80
-      to_port      = 80
-      cidr_blocks  = ["0.0.0.0/0"]
-    },
-    {
-      description      = "HTTPS from Internet (IPv6)"
-      protocol         = "tcp"
-      from_port        = 443
-      to_port          = 443
-      ipv6_cidr_blocks = ["::/0"]
-    },
-    {
-      description  = "SSH from corp"
-      protocol     = "tcp"
-      from_port    = 22
-      to_port      = 22
-      cidr_blocks  = ["203.0.113.0/24"]
+      description = "Permite trafego HTTPS de dentro da VPC"
+      from_port   = 443
+      to_port     = 443
+      protocol    = "tcp"
+      cidr_blocks = ["10.0.0.0/16"]
     }
   ]
 
-- Exemplo de regra de egress restrita somente a HTTP/HTTPS:
   egress_rules = [
     {
-      description = "Allow outbound HTTP"
-      protocol    = "tcp"
-      from_port   = 80
-      to_port     = 80
+      description = "Permite todo trafego de saida"
+      from_port   = 0
+      to_port     = 0
+      protocol    = "-1"
       cidr_blocks = ["0.0.0.0/0"]
-    },
-    {
-      description      = "Allow outbound HTTPS"
-      protocol         = "tcp"
-      from_port        = 443
-      to_port          = 443
-      ipv6_cidr_blocks = ["::/0"]
     }
   ]
 
-Como executar
-- terraform init -backend=false
-- terraform validate
-- terraform plan -var="vpc_id=vpc-0123456789abcdef0"
-- terraform apply -var="vpc_id=vpc-0123456789abcdef0"
+  tags = {
+    Environment = "dev"
+  }
+}
+```
 
-Boas praticas
-- Restrinja ingress ao minimo necessario usando cidr_blocks especificos ao inves de 0.0.0.0/0 ou ::/0.
-- Avalie restringir egress conforme o principio do menor privilegio.
-- Utilize tags para facilitar governanca e cobranca (cost allocation).
+## Variaveis
+
+| Nome            | Descricao                                              | Tipo                | Default                                    |
+|-----------------|---------------------------------------------------------|---------------------|---------------------------------------------|
+| region          | Regiao AWS onde os recursos serao provisionados          | string               | "us-east-1"                                 |
+| vpc_id          | ID da VPC onde o Security Group sera criado              | string               | (obrigatorio)                               |
+| name            | Nome base do Security Group                              | string               | "app-sg"                                    |
+| description     | Descricao do Security Group                              | string               | "Security Group gerenciado via Terraform"   |
+| ingress_rules   | Lista de regras de entrada (ingress)                      | list(object)         | Ver `variables.tf`                          |
+| egress_rules    | Lista de regras de saida (egress)                         | list(object)         | Ver `variables.tf`                          |
+| tags            | Tags adicionais aplicadas ao Security Group               | map(string)          | {}                                          |
+
+## Outputs
+
+| Nome                 | Descricao                                   |
+|----------------------|-----------------------------------------------|
+| security_group_id    | ID do Security Group criado                   |
+| security_group_arn   | ARN do Security Group criado                  |
+| security_group_name  | Nome do Security Group criado                 |
+| vpc_id               | ID da VPC associada ao Security Group         |
+
+## Consideracoes de seguranca
+
+- Nenhuma regra de entrada e definida por padrao com origem `0.0.0.0/0`; o valor padrao restringe o acesso HTTPS a um bloco CIDR interno de exemplo.
+- Ajuste `ingress_rules` e `egress_rules` para refletir apenas o trafego estritamente necessario, evitando exposicao desnecessaria de portas.
+- Revise os CIDRs padrao antes de aplicar em ambientes reais, substituindo-os pelos blocos de rede efetivamente utilizados.
+
+## Validacao
+
+```
+terraform init -backend=false
+terraform validate
+```

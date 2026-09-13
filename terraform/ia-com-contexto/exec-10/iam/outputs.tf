@@ -1,5 +1,5 @@
 output "policy_name" {
-  description = "Nome da IAM Policy criada seguindo o padrao <environment>-<system>-iam-<policy_name>."
+  description = "Nome da IAM Policy criada."
   value       = aws_iam_policy.this.name
 }
 

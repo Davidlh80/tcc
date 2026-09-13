@@ -1,59 +1,62 @@
-# Terraform - Amazon S3 Bucket
+# Blueprint Terraform — Bucket S3 (AWS)
 
-Blueprint simples e segura por padrao para criar um bucket Amazon S3.
+Este blueprint provisiona um bucket Amazon S3 seguro por padrao, sem vinculo com padroes organizacionais especificos.
 
-Principais caracteristicas:
-- Criptografia server-side default (SSE-S3 AES256 por padrao ou KMS se informado).
-- Bloqueio completo de acesso publico (ACLs e politicas).
-- Versionamento habilitado por padrao.
-- Regra de ciclo de vida opcional (abort multiparts, expira versoes antigas e opcionalmente objetos atuais).
-- Politica que nega acessos sem TLS (https).
+## Recursos criados
 
-Requisitos:
-- Terraform >= 1.3.0
-- Provider AWS >= 4.67
-- Credenciais AWS validas exportadas no ambiente ou via perfil
+- `aws_s3_bucket` — bucket S3 principal.
+- `aws_s3_bucket_ownership_controls` — forca propriedade do objeto pelo dono do bucket (`BucketOwnerEnforced`), desabilitando ACLs.
+- `aws_s3_bucket_public_access_block` — bloqueia todo acesso publico (ACLs e politicas).
+- `aws_s3_bucket_versioning` — versionamento configuravel (habilitado por padrao).
+- `aws_s3_bucket_server_side_encryption_configuration` — criptografia server-side (SSE-S3 por padrao, ou SSE-KMS se `kms_key_arn` for informado).
+- `aws_s3_bucket_lifecycle_configuration` (opcional) — expira versoes nao-atuais apos um numero configuravel de dias.
 
-Uso rapido:
-1. Defina as variaveis minimas (exemplo de terraform.tfvars):
-   aws_region = "us-east-1"
-   bucket_name = "meu-bucket-unico-global-123"
+## Decisoes de seguranca padrao
 
-2. Inicialize e valide:
-   terraform init -backend=false
-   terraform validate
+- Acesso publico totalmente bloqueado (`block_public_acls`, `block_public_policy`, `ignore_public_acls`, `restrict_public_buckets` = `true`).
+- ACLs desabilitadas via `BucketOwnerEnforced`.
+- Criptografia server-side habilitada por padrao (AES256), com opcao de usar KMS.
+- Versionamento habilitado por padrao para permitir recuperacao de objetos.
+- `force_destroy` desabilitado por padrao para evitar exclusao acidental de dados.
 
-3. Planeje e aplique:
-   terraform plan
-   terraform apply
+## Variaveis principais
 
-Variaveis principais:
-- aws_region (string, obrigatoria): Regiao AWS.
-- bucket_name (string, obrigatoria): Nome globalmente unico do bucket.
-- force_destroy (bool, padrao: false): Destruir mesmo se houver objetos.
-- versioning_enabled (bool, padrao: true): Ativa versionamento.
-- enable_lifecycle_rules (bool, padrao: true): Cria regra padrao de ciclo de vida.
-- lifecycle_abort_multipart_days (number, padrao: 7): Aborta uploads incompletos.
-- lifecycle_noncurrent_version_expiration_days (number, padrao: 30): Expira versoes antigas.
-- lifecycle_expiration_days (number|null, padrao: null): Expira objetos atuais (null desativa).
-- logging_enabled (bool, padrao: false): Ativa Server Access Logging.
-- logging_target_bucket (string|null, padrao: null): Bucket alvo para logs (exigido se logging_enabled = true).
-- logging_target_prefix (string, padrao: "s3-access-logs/"): Prefixo para logs.
-- kms_key_id (string|null, padrao: null): ARN/ID da CMK KMS; se nao informado, usa AES256.
-- tags (map(string), padrao: {}): Tags adicionais.
+| Nome                                  | Descricao                                                        | Padrao   |
+|----------------------------------------|-------------------------------------------------------------------|----------|
+| `bucket_name`                          | Nome globalmente unico do bucket                                  | -        |
+| `force_destroy`                        | Permite destruir bucket com objetos                               | `false`  |
+| `versioning_enabled`                   | Habilita versionamento                                             | `true`   |
+| `kms_key_arn`                          | ARN de chave KMS para SSE-KMS (opcional)                           | `null`   |
+| `enable_lifecycle_rule`                | Habilita expiracao de versoes nao-atuais                           | `true`   |
+| `noncurrent_version_expiration_days`   | Dias para expirar versoes nao-atuais                               | `90`     |
+| `tags`                                 | Mapa de tags aplicadas ao bucket                                   | `{}`     |
 
-Outputs:
-- bucket_id: Nome do bucket.
-- bucket_arn: ARN do bucket.
-- bucket_domain_name: Endpoint global.
-- bucket_regional_domain_name: Endpoint regional.
-- versioning_status: Status do versionamento.
-- public_access_block: Mapa com configuracoes de bloqueio publico.
-- sse_algorithm: Algoritmo de criptografia efetivo.
-- kms_key_id_effective: KMS Key ID/ARN efetivo (se houver).
+## Outputs
 
-Observacoes:
-- bucket_name deve ser unico globalmente e seguir as regras do S3.
-- Se ativar logging, garanta que o bucket de destino permita recebimento de logs do S3 (permissoes/ACLs apropriadas).
-- Por padrao, todos os acessos sem TLS (http) sao negados pela politica do bucket.
-- force_destroy permanece false por seguranca; altere conscientemente se precisar destruir um bucket com objetos.
+- `bucket_id` — nome/ID do bucket.
+- `bucket_arn` — ARN do bucket.
+- `bucket_domain_name` — dominio do bucket.
+- `bucket_regional_domain_name` — dominio regional do bucket.
+- `bucket_region` — regiao onde o bucket foi criado.
+
+## Uso
+
+```
+module "s3_bucket" {
+  source      = "./"
+  bucket_name = "meu-bucket-exemplo-12345"
+
+  tags = {
+    Ambiente = "producao"
+  }
+}
+```
+
+## Validacao
+
+```
+terraform init -backend=false
+terraform validate
+```
+
+Nenhuma credencial real e necessaria para validacao sintatica.

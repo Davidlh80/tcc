@@ -1,94 +1,51 @@
-Blueprint Terraform — Amazon S3 Bucket
+# Blueprint Terraform — Bucket Amazon S3
 
-Descrição
-Cria um bucket Amazon S3 com padrões seguros: bloqueio de acesso público, criptografia do lado do servidor, versionamento (opcional), política que nega acesso sem TLS, e opções de logging e lifecycle simples.
+Blueprint autonomo para provisionamento de um bucket S3 seguro por padrao, sem vinculo com padroes organizacionais especificos.
 
-Arquivos
-- versions.tf: Restrições de versão do Terraform e provider AWS.
-- variables.tf: Variáveis configuráveis com validações.
-- main.tf: Definição dos recursos AWS.
-- outputs.tf: Saídas úteis.
-- README.md: Instruções de uso.
+## Recursos criados
 
-Pré-requisitos
-- Terraform >= 1.3
-- Provider AWS ~> 5.0
-- Credenciais AWS configuradas no ambiente (para aplicar)
+- `aws_s3_bucket` — bucket S3 principal.
+- `aws_s3_bucket_ownership_controls` — forca `BucketOwnerEnforced`, desabilitando ACLs.
+- `aws_s3_bucket_public_access_block` — bloqueia todo acesso publico (ACLs e policies).
+- `aws_s3_bucket_versioning` — versionamento de objetos (habilitado por padrao).
+- `aws_s3_bucket_server_side_encryption_configuration` — criptografia server-side (SSE-S3 por padrao, ou SSE-KMS se `kms_key_arn` for informado).
+- `aws_s3_bucket_lifecycle_configuration` — expira versoes antigas e aborta uploads multipart incompletos (opcional).
+- `aws_s3_bucket_policy` — nega explicitamente requisicoes fora de HTTPS (`aws:SecureTransport = false`).
 
-Uso rápido
-1) Ajuste as variáveis necessárias, especialmente bucket_name e opcionalmente region.
-2) Inicialize e valide:
-   terraform init -backend=false
-   terraform validate
-3) Planeje e aplique:
-   terraform plan
-   terraform apply
+## Uso
 
-Exemplo de uso
-terraform {
-  required_version = ">= 1.3.0"
-}
+```
+terraform init -backend=false
+terraform validate
+terraform plan -var="bucket_name=meu-bucket-unico-global"
+terraform apply -var="bucket_name=meu-bucket-unico-global"
+```
 
-provider "aws" {
-  region = "us-east-1"
-}
+## Variaveis principais
 
-module "bucket" {
-  source = "./."  # se você colar estes arquivos num diretório de módulo
+| Nome | Descricao | Padrao |
+|---|---|---|
+| `region` | Regiao AWS | `us-east-1` |
+| `bucket_name` | Nome globalmente unico do bucket | (obrigatorio) |
+| `force_destroy` | Permite destruir bucket com objetos | `false` |
+| `enable_versioning` | Habilita versionamento | `true` |
+| `kms_key_arn` | ARN de chave KMS para SSE-KMS | `null` (usa SSE-S3) |
+| `enable_lifecycle_rule` | Habilita regra de ciclo de vida | `true` |
+| `noncurrent_version_expiration_days` | Dias para expirar versoes antigas | `90` |
+| `tags` | Tags adicionais | `{}` |
 
-  bucket_name        = "meu-bucket-unico-global-123456"
-  region             = "us-east-1"
-  versioning_enabled = true
+## Outputs
 
-  sse_algorithm          = "AES256"
-  sse_bucket_key_enabled = true
+- `bucket_id`
+- `bucket_arn`
+- `bucket_domain_name`
+- `bucket_regional_domain_name`
+- `account_id`
 
-  public_access_block = {
-    block_public_acls       = true
-    block_public_policy     = true
-    ignore_public_acls      = true
-    restrict_public_buckets = true
-  }
+## Consideracoes de seguranca
 
-  logging = {
-    enabled       = false
-    target_bucket = ""
-    target_prefix = "s3-access-logs/"
-  }
-
-  lifecycle = {
-    enabled                                = true
-    abort_incomplete_multipart_upload_days = 7
-    noncurrent_version_expiration_days     = 365
-  }
-
-  tags = {
-    environment = "dev"
-    project     = "s3-blueprint"
-  }
-}
-
-Notas de segurança
-- O acesso público é bloqueado por padrão.
-- O bucket aplica criptografia do lado do servidor (AES256 por padrão).
-- Uma política nega qualquer requisição não-TLS (aws:SecureTransport=false).
-- Para usar KMS, defina sse_algorithm = "aws:kms" e informe kms_key_arn.
-
-Logging de acesso
-- Para habilitar logging, defina logging.enabled = true e logging.target_bucket com o nome/ID de um bucket já existente destinado a logs.
-
-Limitações
-- O nome do bucket deve ser globalmente único.
-- Este template não cria chave KMS automaticamente; forneça kms_key_arn se optar por aws:kms.
-
-Saídas
-- bucket_id, bucket_arn, bucket_name
-- bucket_domain_name, bucket_regional_domain_name
-- versioning_status, sse_algorithm
-
-Comandos úteis
-- terraform fmt
-- terraform init -backend=false
-- terraform validate
-- terraform plan
-- terraform apply
+- Acesso publico bloqueado em todas as dimensoes (`aws_s3_bucket_public_access_block`).
+- ACLs desabilitadas via `BucketOwnerEnforced`, exigindo controle de acesso somente por policy.
+- Criptografia em repouso habilitada por padrao (AES256), com suporte a KMS.
+- Trafego nao criptografado (HTTP) e negado explicitamente via bucket policy.
+- Versionamento habilitado por padrao para protecao contra exclusao/sobrescrita acidental.

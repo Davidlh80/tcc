@@ -2,22 +2,38 @@ provider "aws" {
   region = var.aws_region
 }
 
-locals {
-  sse_algorithm = var.kms_key_id != null && var.kms_key_id != "" ? "aws:kms" : "AES256"
-  bucket_arn    = "arn:aws:s3:::${var.bucket_name}"
-}
-
 resource "aws_s3_bucket" "this" {
   bucket        = var.bucket_name
   force_destroy = var.force_destroy
 
   tags = merge(
     {
-      Name      = var.bucket_name
-      ManagedBy = "Terraform"
+      Name        = var.bucket_name
+      Environment = var.environment
+      ManagedBy   = "terraform"
     },
     var.tags
   )
+}
+
+resource "aws_s3_bucket_versioning" "this" {
+  bucket = aws_s3_bucket.this.id
+
+  versioning_configuration {
+    status = var.enable_versioning ? "Enabled" : "Suspended"
+  }
+}
+
+resource "aws_s3_bucket_server_side_encryption_configuration" "this" {
+  bucket = aws_s3_bucket.this.id
+
+  rule {
+    apply_server_side_encryption_by_default {
+      sse_algorithm     = var.sse_algorithm
+      kms_master_key_id = var.sse_algorithm == "aws:kms" ? var.kms_key_arn : null
+    }
+    bucket_key_enabled = var.sse_algorithm == "aws:kms" ? true : null
+  }
 }
 
 resource "aws_s3_bucket_ownership_controls" "this" {
@@ -31,64 +47,27 @@ resource "aws_s3_bucket_ownership_controls" "this" {
 resource "aws_s3_bucket_public_access_block" "this" {
   bucket = aws_s3_bucket.this.id
 
-  block_public_acls       = var.block_public_acls
-  block_public_policy     = var.block_public_policy
-  ignore_public_acls      = var.ignore_public_acls
-  restrict_public_buckets = var.restrict_public_buckets
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
 }
 
-resource "aws_s3_bucket_versioning" "this" {
-  bucket = aws_s3_bucket.this.id
-
-  versioning_configuration {
-    status = var.versioning_enabled ? "Enabled" : "Suspended"
-  }
-}
-
-resource "aws_s3_bucket_server_side_encryption_configuration" "this" {
-  bucket = aws_s3_bucket.this.id
-
-  rule {
-    apply_server_side_encryption_by_default {
-      sse_algorithm     = local.sse_algorithm
-      kms_master_key_id = var.kms_key_id != null && var.kms_key_id != "" ? var.kms_key_id : null
-    }
-  }
-}
-
-resource "aws_s3_bucket_lifecycle_configuration" "this" {
-  bucket = aws_s3_bucket.this.id
-
-  rule {
-    id     = "abort-incomplete-multipart-uploads"
-    status = "Enabled"
-
-    filter {}
-
-    abort_incomplete_multipart_upload {
-      days_after_initiation = var.abort_incomplete_multipart_days
-    }
-  }
-}
-
-data "aws_iam_policy_document" "https_only" {
-  count = var.attach_https_only_policy ? 1 : 0
-
+data "aws_iam_policy_document" "deny_insecure_transport" {
   statement {
-    sid    = "DenyInsecureTransport"
-    effect = "Deny"
+    sid     = "DenyInsecureTransport"
+    effect  = "Deny"
+    actions = ["s3:*"]
+
+    resources = [
+      aws_s3_bucket.this.arn,
+      "${aws_s3_bucket.this.arn}/*"
+    ]
 
     principals {
       type        = "*"
       identifiers = ["*"]
     }
-
-    actions = ["s3:*"]
-
-    resources = [
-      local.bucket_arn,
-      "${local.bucket_arn}/*",
-    ]
 
     condition {
       test     = "Bool"
@@ -98,13 +77,7 @@ data "aws_iam_policy_document" "https_only" {
   }
 }
 
-resource "aws_s3_bucket_policy" "this" {
-  count  = var.attach_https_only_policy ? 1 : 0
+resource "aws_s3_bucket_policy" "deny_insecure_transport" {
   bucket = aws_s3_bucket.this.id
-  policy = data.aws_iam_policy_document.https_only[0].json
-
-  depends_on = [
-    aws_s3_bucket_public_access_block.this,
-    aws_s3_bucket_ownership_controls.this
-  ]
+  policy = data.aws_iam_policy_document.deny_insecure_transport.json
 }

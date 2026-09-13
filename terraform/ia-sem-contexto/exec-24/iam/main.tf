@@ -1,45 +1,19 @@
-provider "aws" {
-  region = var.aws_region
-
-  default_tags {
-    tags = merge(
-      {
-        Managed-By = "Terraform"
-      },
-      var.tags
-    )
-  }
+terraform {
+  required_version = ">= 1.5.0"
 }
 
-locals {
-  default_statements = [
-    {
-      effect    = "Allow"
-      actions   = ["sts:GetCallerIdentity"]
-      resources = ["*"]
-      condition = []
-    }
-  ]
-
-  effective_statements = length(var.policy_statements) > 0 ? var.policy_statements : local.default_statements
+provider "aws" {
+  region = var.aws_region
 }
 
 data "aws_iam_policy_document" "this" {
   dynamic "statement" {
-    for_each = local.effective_statements
+    for_each = var.statements
     content {
+      sid       = statement.value.sid
       effect    = statement.value.effect
       actions   = statement.value.actions
       resources = statement.value.resources
-
-      dynamic "condition" {
-        for_each = try(statement.value.condition, [])
-        content {
-          test     = condition.value.test
-          variable = condition.value.variable
-          values   = condition.value.values
-        }
-      }
     }
   }
 }
@@ -49,5 +23,6 @@ resource "aws_iam_policy" "this" {
   description = var.policy_description
   path        = var.policy_path
   policy      = data.aws_iam_policy_document.this.json
-  tags        = var.tags
+
+  tags = var.tags
 }

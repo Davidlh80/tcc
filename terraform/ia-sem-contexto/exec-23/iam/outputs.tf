@@ -1,24 +1,19 @@
-output "iam_policy_arn" {
-  description = "The ARN of the IAM Policy."
+output "policy_arn" {
+  description = "ARN of the created IAM policy."
   value       = aws_iam_policy.this.arn
 }
 
-output "iam_policy_id" {
-  description = "The IAM Policy ID."
+output "policy_id" {
+  description = "ID of the created IAM policy."
   value       = aws_iam_policy.this.id
 }
 
-output "iam_policy_name" {
-  description = "The name of the IAM Policy."
+output "policy_name" {
+  description = "Name of the created IAM policy."
   value       = aws_iam_policy.this.name
 }
 
-output "iam_policy_path" {
-  description = "The path of the IAM Policy."
-  value       = aws_iam_policy.this.path
-}
-
-output "iam_policy_document_json" {
-  description = "The effective IAM Policy document JSON used to create the policy."
-  value       = local.effective_policy_json
+output "policy_document_json" {
+  description = "Rendered JSON document of the IAM policy."
+  value       = data.aws_iam_policy_document.this.json
 }

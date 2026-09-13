@@ -1,58 +1,52 @@
-1. Visão geral do recurso
-Este template provisiona um bucket Amazon S3 seguindo o padrão organizacional:
-- Nomenclatura: <environment>-<system>-s3-<purpose>
-- Bloqueio completo de acesso público (quatro flags do Public Access Block)
-- Criptografia server-side habilitada por padrão (SSE-S3 AES256), com opção de KMS
-- Policy do bucket negando requisições sem TLS (aws:SecureTransport = false)
-- Versionamento configurável por variável (padrão Enabled)
-- Tags obrigatórias aplicadas e possibilidade de tags adicionais
+# S3 Bucket
 
-2. Tabela de variáveis (nome, tipo, obrigatória, descrição)
-| Nome              | Tipo         | Obrigatória | Descrição                                                                 |
-|-------------------|--------------|-------------|---------------------------------------------------------------------------|
-| environment       | string       | Sim         | Ambiente da implantação (dev, hml, prd).                                  |
-| system            | string       | Sim         | Nome do sistema, minúsculo com números e hífens (ex.: tcc).               |
-| purpose           | string       | Sim         | Finalidade do bucket no padrão de nome (ex.: logs, data, assets).         |
-| region            | string       | Sim         | Região AWS (ex.: us-east-1).                                              |
-| versioning_status | string       | Não         | Status do versionamento (Enabled ou Suspended). Padrão: Enabled.          |
-| sse_algorithm     | string       | Não         | Algoritmo SSE: AES256 (padrão) ou aws:kms.                                 |
-| kms_key_id        | string/null  | Condicional | ARN/ID da CMK quando sse_algorithm=aws:kms. Obrigatório nestes casos.     |
-| force_destroy     | bool         | Não         | Se true, permite destruir bucket não vazio. Padrão: false.                |
-| additional_tags   | map(string)  | Não         | Tags adicionais sem sobrescrever as obrigatórias.                         |
+## 1. Visao geral
 
-3. Tabela de outputs (nome, descrição)
-| Nome         | Descrição                         |
-|--------------|-----------------------------------|
-| bucket_name  | Nome do bucket S3 criado.         |
-| bucket_arn   | ARN do bucket S3 criado.          |
-| bucket_id    | ID do bucket (igual ao nome).     |
+Este modulo provisiona um bucket Amazon S3 seguindo os padroes internos de Infraestrutura como Codigo da organizacao. O recurso inclui:
 
-4. Exemplo de uso do módulo/recurso
-module "s3_bucket" {
+- Nomenclatura padronizada no formato `<ambiente>-<sistema>-s3-<finalidade>`;
+- Bloqueio total de acesso publico (quatro flags do Public Access Block);
+- Criptografia server-side habilitada por padrao (AES256, configuravel via variavel);
+- Bucket policy que nega explicitamente requisicoes sem `aws:SecureTransport`;
+- Versionamento configuravel por variavel, com padrao `Enabled`;
+- Tags obrigatorias da organizacao aplicadas automaticamente.
+
+## 2. Variaveis
+
+| Nome                | Tipo          | Obrigatoria | Descricao                                                                          |
+|----------------------|---------------|-------------|--------------------------------------------------------------------------------------|
+| `environment`         | `string`      | Sim         | Ambiente de implantacao (`dev`, `hml` ou `prd`).                                      |
+| `system`              | `string`      | Nao         | Nome do sistema/projeto, usado na nomenclatura padronizada. Padrao: `tcc`.            |
+| `region`              | `string`      | Nao         | Regiao AWS onde o bucket sera criado. Padrao: `us-east-1`.                            |
+| `purpose`             | `string`      | Sim         | Finalidade do bucket, usada na nomenclatura padronizada (ex.: `logs`, `artifacts`).   |
+| `additional_tags`     | `map(string)` | Nao         | Tags adicionais mescladas com as tags obrigatorias da organizacao. Padrao: `{}`.      |
+| `versioning_status`   | `string`      | Nao         | Status do versionamento (`Enabled` ou `Suspended`). Padrao: `Enabled`.                |
+| `sse_algorithm`       | `string`      | Nao         | Algoritmo de criptografia server-side (`AES256` ou `aws:kms`). Padrao: `AES256`.      |
+
+## 3. Outputs
+
+| Nome           | Descricao                                  |
+|----------------|---------------------------------------------|
+| `bucket_name`  | Nome (identificador) do bucket S3 criado.    |
+| `bucket_arn`   | ARN do bucket S3 criado.                     |
+| `bucket_id`    | ID do bucket S3 criado.                      |
+
+## 4. Exemplo de uso
+
+```hcl
+module "s3_logs" {
   source = "./"
 
-  environment       = "dev"
-  system            = "tcc"
-  purpose           = "logs"
-  region            = "us-east-1"
+  environment = "dev"
+  system      = "tcc"
+  region      = "us-east-1"
+  purpose     = "logs"
 
-  # Opcional: manter padrão AES256
-  # sse_algorithm   = "AES256"
+  versioning_status = "Enabled"
+  sse_algorithm     = "AES256"
 
-  # Exemplo com KMS:
-  # sse_algorithm   = "aws:kms"
-  # kms_key_id      = "arn:aws:kms:us-east-1:111122223333:key/abcd-1234-efgh-5678"
-
-  # Versionamento (padrão Enabled)
-  # versioning_status = "Enabled"
-
-  # Não sobrescreva as chaves obrigatórias
   additional_tags = {
-    Team = "platform"
+    Squad = "plataforma"
   }
-
-  # Destruição forçada (opcional)
-  # force_destroy = false
 }
-
-Após aplicar, os recursos principais estarão disponíveis via outputs: bucket_name, bucket_arn e bucket_id.
+```

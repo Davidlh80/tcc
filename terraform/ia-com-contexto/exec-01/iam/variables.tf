@@ -1,82 +1,72 @@
 variable "environment" {
-  description = "Ambiente do recurso (dev, hml, prd)."
+  description = "Ambiente de implantacao do recurso."
   type        = string
 
   validation {
     condition     = contains(["dev", "hml", "prd"], var.environment)
-    error_message = "O environment deve ser um dos valores permitidos: dev, hml, prd."
+    error_message = "O valor de environment deve ser um dos seguintes: dev, hml, prd."
   }
 }
 
 variable "system" {
-  description = "Identificador do sistema/projeto (minúsculo, números e hífens)."
+  description = "Nome do sistema ou aplicacao dona do recurso, usado na nomenclatura padronizada."
   type        = string
 
   validation {
-    condition     = length(var.system) > 0 && can(regex("^[a-z0-9-]+$", var.system))
-    error_message = "O system deve conter apenas [a-z0-9-] e não pode ser vazio."
+    condition     = length(var.system) > 0
+    error_message = "O valor de system nao pode ser vazio."
   }
 }
 
 variable "region" {
-  description = "Região AWS para o provider (ex.: us-east-1)."
+  description = "Regiao AWS onde os recursos serao provisionados."
   type        = string
+  default     = "us-east-1"
 
   validation {
-    condition     = can(regex("^[a-z]{2}-[a-z]+-\\d$", var.region))
-    error_message = "A região deve seguir o padrão, por exemplo: us-east-1, eu-west-1, sa-east-1."
+    condition     = can(regex("^[a-z]{2}-[a-z]+-[0-9]$", var.region))
+    error_message = "O valor de region deve seguir o formato de uma regiao AWS valida, ex.: us-east-1."
   }
 }
 
 variable "additional_tags" {
-  description = "Tags adicionais (não sobrescrevem as obrigatórias)."
+  description = "Tags adicionais a serem mescladas com as tags obrigatorias da organizacao."
   type        = map(string)
   default     = {}
 }
 
 variable "policy_name" {
-  description = "Finalidade da política (usado no padrão de nome: <env>-<system>-iam-<policy_name>, ex.: readonly)."
+  description = "Finalidade da policy, usada como ultimo segmento do padrao de nomenclatura <ambiente>-<sistema>-iam-<finalidade>."
   type        = string
 
   validation {
-    condition     = length(var.policy_name) > 0 && can(regex("^[a-z0-9-]+$", var.policy_name))
-    error_message = "O policy_name deve conter apenas [a-z0-9-] e não pode ser vazio."
+    condition     = can(regex("^[a-z0-9-]+$", var.policy_name))
+    error_message = "O valor de policy_name deve conter apenas letras minusculas, numeros e hifens."
   }
 }
 
 variable "policy_description" {
-  description = "Descrição da IAM Policy."
+  description = "Descricao da IAM Policy."
   type        = string
-  default     = "IAM policy gerenciada por Terraform conforme padrão organizacional."
+  default     = "Policy gerenciada via Terraform com escopo restrito de acoes e recursos."
 }
 
 variable "allowed_actions" {
-  description = "Lista de ações explícitas a serem permitidas (Effect: Allow)."
+  description = "Lista de acoes IAM permitidas na statement Allow da policy."
   type        = list(string)
 
   validation {
-    condition     = length(var.allowed_actions) > 0 && alltrue([for a in var.allowed_actions : length(trim(a)) > 0])
-    error_message = "allowed_actions não pode ser vazio e não pode conter strings vazias."
+    condition     = length(var.allowed_actions) > 0
+    error_message = "A lista allowed_actions deve conter pelo menos uma acao."
   }
 }
 
 variable "allowed_resources" {
-  description = "Lista de ARNs de recursos sobre os quais as ações serão permitidas."
+  description = "Lista de recursos (ARNs) aos quais as acoes permitidas se aplicam."
   type        = list(string)
 
   validation {
-    condition     = length(var.allowed_resources) > 0 && alltrue([for r in var.allowed_resources : length(trim(r)) > 0])
-    error_message = "allowed_resources não pode ser vazio e não pode conter strings vazias."
-  }
-}
-
-variable "policy_path" {
-  description = "Caminho da IAM Policy (deve iniciar com '/', recomendado terminar com '/')."
-  type        = string
-  default     = "/"
-
-  validation {
-    condition     = startswith(var.policy_path, "/") && (var.policy_path == "/" || endswith(var.policy_path, "/"))
-    error_message = "policy_path deve iniciar com '/' e ser '/' ou terminar com '/'."
+    condition     = length(var.allowed_resources) > 0
+    error_message = "A lista allowed_resources deve conter pelo menos um recurso."
   }
 }

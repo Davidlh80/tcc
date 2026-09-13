@@ -1,90 +1,85 @@
-variable "region" {
-  description = "AWS region where resources will be created."
-  type        = string
-  default     = "us-east-1"
-  validation {
-    condition     = can(regex("^[a-z]{2}-[a-z]+-\\d+$", var.region))
-    error_message = "Region must match the pattern like us-east-1."
-  }
-}
-
 variable "vpc_id" {
-  description = "The ID of the VPC where the Security Group will be created."
+  description = "ID da VPC onde o Security Group sera criado."
   type        = string
+
   validation {
-    condition     = can(regex("^vpc-([0-9a-f]{8}|[0-9a-f]{17})$", var.vpc_id))
-    error_message = "vpc_id must look like vpc-xxxxxxxx or vpc-xxxxxxxxxxxxxxxxx."
+    condition     = can(regex("^vpc-[a-f0-9]+$", var.vpc_id))
+    error_message = "O valor de vpc_id deve ser um ID de VPC valido (ex: vpc-0123456789abcdef0)."
   }
 }
 
 variable "name" {
-  description = "Name of the Security Group."
+  description = "Nome do Security Group. Se vazio, um nome padrao sera gerado com base em environment."
   type        = string
-  default     = "secure-sg"
-  validation {
-    condition     = can(regex("^[A-Za-z0-9-_\\.]{1,128}$", var.name))
-    error_message = "Name may include letters, numbers, dashes, underscores and dots, up to 128 chars."
-  }
+  default     = ""
 }
 
 variable "description" {
-  description = "Description of the Security Group."
+  description = "Descricao do Security Group."
   type        = string
-  default     = "Security Group managed by Terraform"
-  validation {
-    condition     = length(var.description) > 0 && length(var.description) <= 255
-    error_message = "Description must be between 1 and 255 characters."
-  }
+  default     = "Managed by Terraform"
+}
+
+variable "environment" {
+  description = "Nome do ambiente (ex: dev, staging, prod), usado para nomear e taguear o recurso."
+  type        = string
+  default     = "dev"
 }
 
 variable "ingress_rules" {
-  description = "List of ingress rules to apply to the Security Group."
+  description = "Lista de regras de entrada do Security Group."
   type = list(object({
-    description       = string
-    protocol          = string         # e.g., tcp, udp, icmp, -1
-    from_port         = number
-    to_port           = number
-    cidr_blocks       = list(string)   # e.g., ["10.0.0.0/16"]
-    ipv6_cidr_blocks  = list(string)   # e.g., ["::/0"]
-    prefix_list_ids   = list(string)   # e.g., ["pl-12345678"]
+    description = string
+    from_port   = number
+    to_port     = number
+    protocol    = string
+    cidr_blocks = list(string)
   }))
-  default = []
+  default = [
+    {
+      description = "Acesso HTTPS interno"
+      from_port   = 443
+      to_port     = 443
+      protocol    = "tcp"
+      cidr_blocks = ["10.0.0.0/8"]
+    }
+  ]
+
   validation {
-    condition     = alltrue([for r in var.ingress_rules : r.from_port <= r.to_port])
-    error_message = "Ingress rules: from_port must be <= to_port."
+    condition     = alltrue([for rule in var.ingress_rules : !contains(rule.cidr_blocks, "0.0.0.0/0") || rule.from_port != 0 || rule.to_port != 65535])
+    error_message = "Regras de ingresso nao podem liberar todas as portas (0-65535) para 0.0.0.0/0."
   }
 }
 
 variable "egress_rules" {
-  description = "List of egress rules to apply to the Security Group. If empty, AWS default allow-all may apply."
+  description = "Lista de regras de saida do Security Group."
   type = list(object({
-    description       = string
-    protocol          = string
-    from_port         = number
-    to_port           = number
-    cidr_blocks       = list(string)
-    ipv6_cidr_blocks  = list(string)
-    prefix_list_ids   = list(string)
+    description = string
+    from_port   = number
+    to_port     = number
+    protocol    = string
+    cidr_blocks = list(string)
   }))
   default = [
     {
-      description      = "Allow all outbound IPv4"
-      protocol         = "-1"
-      from_port        = 0
-      to_port          = 0
-      cidr_blocks      = ["0.0.0.0/0"]
-      ipv6_cidr_blocks = []
-      prefix_list_ids  = []
+      description = "Saida HTTPS"
+      from_port   = 443
+      to_port     = 443
+      protocol    = "tcp"
+      cidr_blocks = ["0.0.0.0/0"]
+    },
+    {
+      description = "Saida HTTP"
+      from_port   = 80
+      to_port     = 80
+      protocol    = "tcp"
+      cidr_blocks = ["0.0.0.0/0"]
     }
   ]
-  validation {
-    condition     = alltrue([for r in var.egress_rules : r.from_port <= r.to_port])
-    error_message = "Egress rules: from_port must be <= to_port."
-  }
 }
 
 variable "tags" {
-  description = "Additional tags to apply to the Security Group."
+  description = "Tags adicionais a serem aplicadas ao Security Group."
   type        = map(string)
   default     = {}
 }

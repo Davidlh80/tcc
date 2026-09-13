@@ -1,39 +1,38 @@
-provider "aws" {
-  region = var.region
+locals {
+  policy_full_name = "${var.environment}-${var.system}-iam-${var.policy_name}"
+
+  common_tags = merge(
+    {
+      Project     = "tcc-iac-ia"
+      Environment = var.environment
+      ManagedBy   = "terraform"
+      Owner       = "devops"
+      CostCenter  = "academic-research"
+    },
+    var.additional_tags
+  )
 }
 
-locals {
-  resource_name = "${var.environment}-${var.system}-iam-${var.policy_name}"
-
-  mandatory_tags = {
-    Project     = "tcc-iac-ia"
-    Environment = var.environment
-    ManagedBy   = "terraform"
-    Owner       = "devops"
-    CostCenter  = "academic-research"
+data "aws_iam_policy_document" "this" {
+  statement {
+    sid       = "AllowConfiguredActions"
+    effect    = "Allow"
+    actions   = var.allowed_actions
+    resources = var.allowed_resources
   }
 
-  tags = merge(var.additional_tags, local.mandatory_tags)
-
-  policy_description_effective = var.policy_description != "" ? var.policy_description : "IAM policy for ${local.resource_name}"
+  lifecycle {
+    precondition {
+      condition     = !(contains(var.allowed_actions, "*") && contains(var.allowed_resources, "*"))
+      error_message = "Nao e permitido combinar Action \"*\" com Resource \"*\" na mesma statement."
+    }
+  }
 }
 
 resource "aws_iam_policy" "this" {
-  name        = local.resource_name
-  path        = var.policy_path
-  description = local.policy_description_effective
+  name        = local.policy_full_name
+  description = var.policy_description
+  policy      = data.aws_iam_policy_document.this.json
 
-  policy = jsonencode({
-    Version   = "2012-10-17"
-    Statement = [
-      {
-        Sid      = "AllowConfiguredActions"
-        Effect   = "Allow"
-        Action   = var.allowed_actions
-        Resource = var.allowed_resources
-      }
-    ]
-  })
-
-  tags = local.tags
+  tags = local.common_tags
 }

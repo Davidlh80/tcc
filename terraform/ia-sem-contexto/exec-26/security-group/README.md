@@ -1,95 +1,75 @@
-Blueprint Terraform — AWS Security Group
+# Security Group Blueprint
 
-Descrição
-- Este template cria um Security Group na AWS com foco em configurações seguras por padrão.
-- Por padrão, não há regras de ingress nem egress (zero trust). Defina explicitamente as regras necessárias.
-- Compatível com terraform init -backend=false e terraform validate.
+Blueprint Terraform para provisionar um Security Group na AWS dentro de uma VPC existente, informada via variavel.
 
-Recursos
-- aws_security_group com:
-  - vpc_id parametrizável
-  - revoke_rules_on_delete habilitado por padrão
-  - Regras de ingress/egress definidas via variáveis
-  - Tags customizáveis e tag Name gerada a partir do nome do SG
+## Recursos criados
 
-Variáveis principais
-- aws_region (string): Região AWS. Padrão: us-east-1
-- vpc_id (string): ID da VPC onde o SG será criado. Obrigatório.
-- name (string): Nome do SG. Padrão: sg-app
-- description (string): Descrição do SG. Padrão: Security Group managed by Terraform
-- revoke_rules_on_delete (bool): Revogar regras na destruição. Padrão: true
-- ingress_rules (list(object)): Lista de regras de entrada. Padrão: []
-- egress_rules (list(object)): Lista de regras de saída. Padrão: []
-- tags (map(string)): Tags adicionais. Padrão: {}
+- `aws_security_group.this`
 
-Formato das regras (ingress_rules e egress_rules)
-Cada item da lista deve seguir a estrutura:
-- description (opcional, string)
-- protocol (string, ex: "tcp", "udp", "icmp", "-1" para todos)
-- from_port (number)
-- to_port (number)
-- cidr_blocks (opcional, list(string), ex: ["10.0.0.0/16"])
-- ipv6_cidr_blocks (opcional, list(string), ex: ["::/0"])
-- prefix_list_ids (opcional, list(string))
-- security_groups (opcional, list(string) — IDs de SG de origem)
-- self (opcional, bool — se true, referencia o próprio SG)
+## Requisitos
 
-Observações
-- Para protocol = "-1" (todos os protocolos), use from_port = 0 e to_port = 0 conforme prática comum da AWS.
-- Em IPv6, use "::/0" para equivalente a 0.0.0.0/0.
-- As validações básicas de portas (0–65535) e to_port >= from_port já estão incluídas.
+- Terraform >= 1.5.0
+- Provider `hashicorp/aws` ~> 5.0
+- Um `vpc_id` valido de uma VPC ja existente no ambiente de teste
 
-Exemplo de uso (valores em terraform.tfvars)
-aws_region = "us-east-1"
-vpc_id     = "vpc-0123456789abcdef0"
-name       = "sg-web"
-description = "Web SG"
+## Uso
 
-ingress_rules = [
-  {
-    description      = "Allow HTTP"
-    protocol         = "tcp"
-    from_port        = 80
-    to_port          = 80
-    cidr_blocks      = ["0.0.0.0/0"]
-    ipv6_cidr_blocks = ["::/0"]
-  },
-  {
-    description      = "Allow HTTPS"
-    protocol         = "tcp"
-    from_port        = 443
-    to_port          = 443
-    cidr_blocks      = ["0.0.0.0/0"]
-    ipv6_cidr_blocks = ["::/0"]
+module "security_group" {
+  source = "./"
+
+  vpc_id      = "vpc-0123456789abcdef0"
+  name        = "app-sg"
+  description = "Security group da aplicacao"
+
+  ingress_rules = [
+    {
+      description = "HTTPS interno"
+      from_port   = 443
+      to_port     = 443
+      protocol    = "tcp"
+      cidr_blocks = ["10.0.0.0/16"]
+    }
+  ]
+
+  egress_rules = [
+    {
+      description = "Saida HTTPS"
+      from_port   = 443
+      to_port     = 443
+      protocol    = "tcp"
+      cidr_blocks = ["0.0.0.0/0"]
+    }
+  ]
+
+  tags = {
+    Environment = "test"
   }
-]
-
-egress_rules = [
-  {
-    description      = "Allow all egress (use com cautela)"
-    protocol         = "-1"
-    from_port        = 0
-    to_port          = 0
-    cidr_blocks      = ["0.0.0.0/0"]
-    ipv6_cidr_blocks = ["::/0"]
-  }
-]
-
-tags = {
-  Environment = "dev"
-  Project     = "example"
 }
 
-Comandos úteis
-- terraform init -backend=false
-- terraform validate
-- terraform plan
-- terraform apply
+## Variaveis
 
-Saídas (outputs)
-- security_group_id: ID do SG
-- security_group_arn: ARN do SG
-- security_group_name: Nome do SG
-- security_group_vpc_id: VPC associada
-- ingress_rule_count: Quantidade de regras de entrada
-- egress_rule_count: Quantidade de regras de saída
+| Nome          | Descricao                                            | Tipo         | Default                       |
+|---------------|-------------------------------------------------------|--------------|--------------------------------|
+| vpc_id        | ID da VPC onde o Security Group sera criado           | string       | n/a (obrigatorio)             |
+| name          | Nome do Security Group                                | string       | "sg-managed-by-terraform"     |
+| description   | Descricao do Security Group                           | string       | "Security group gerenciado..."|
+| ingress_rules | Lista de regras de entrada                            | list(object) | []                             |
+| egress_rules  | Lista de regras de saida                              | list(object) | []                             |
+| tags          | Tags adicionais                                       | map(string)  | {}                              |
+
+## Outputs
+
+| Nome     | Descricao                                    |
+|----------|-----------------------------------------------|
+| id       | ID do Security Group criado                   |
+| arn      | ARN do Security Group criado                  |
+| name     | Nome do Security Group criado                 |
+| vpc_id   | ID da VPC associada                           |
+| owner_id | ID da conta AWS proprietaria do recurso       |
+
+## Seguranca
+
+- Por padrao, nenhuma regra de ingress ou egress e criada (`[]`), seguindo o principio de menor privilegio: o Security Group nasce fechado e as regras sao adicionadas explicitamente pelo consumidor do modulo.
+- Ha validacao que bloqueia a liberacao das portas 22 (SSH) e 3389 (RDP) para `0.0.0.0/0` em `ingress_rules`.
+- `revoke_rules_on_delete = true` garante que as regras sejam removidas antes da exclusao do Security Group, evitando problemas de dependencia.
+- Nenhuma credencial real e necessaria para `terraform init -backend=false` e `terraform validate`.

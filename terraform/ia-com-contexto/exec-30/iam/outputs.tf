@@ -1,5 +1,5 @@
 output "policy_name" {
-  description = "Nome da IAM Policy criada."
+  description = "Nome padronizado da IAM Policy criada."
   value       = aws_iam_policy.this.name
 }
 
@@ -9,6 +9,6 @@ output "policy_arn" {
 }
 
 output "policy_id" {
-  description = "ID da IAM Policy criada (geralmente o ARN)."
+  description = "ID da IAM Policy criada."
   value       = aws_iam_policy.this.id
 }

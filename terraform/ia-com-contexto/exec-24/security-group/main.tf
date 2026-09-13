@@ -1,62 +1,56 @@
+terraform {
+}
+
 provider "aws" {
   region = var.region
 }
 
 locals {
-  resource_name = "${var.environment}-${var.system}-sg-${var.security_group_name}"
+  name = "${var.environment}-${var.system}-sg-${var.security_group_name}"
 
-  mandatory_tags = {
-    Project     = "tcc-iac-ia"
-    Environment = var.environment
-    ManagedBy   = "terraform"
-    Owner       = "devops"
-    CostCenter  = "academic-research"
-  }
-
-  tags = merge(local.mandatory_tags, var.additional_tags)
+  common_tags = merge(
+    {
+      Project     = "tcc-iac-ia"
+      Environment = var.environment
+      ManagedBy   = "terraform"
+      Owner       = "devops"
+      CostCenter  = "academic-research"
+    },
+    var.additional_tags
+  )
 }
 
 resource "aws_security_group" "this" {
-  name                   = local.resource_name
-  description            = var.security_group_description
-  vpc_id                 = var.vpc_id
-  revoke_rules_on_delete = true
+  name        = local.name
+  description = "Security Group ${local.name} gerenciado via Terraform"
+  vpc_id      = var.vpc_id
 
-  # Segurança por padrão: nenhuma regra inline; regras serão gerenciadas
-  # explicitamente via aws_security_group_rule abaixo. Estas listas vazias
-  # garantem remoção das regras padrão "allow all" criadas pela AWS.
-  ingress = []
-  egress  = []
+  dynamic "ingress" {
+    for_each = var.ingress_rules
+    content {
+      description = ingress.value.description
+      from_port   = ingress.value.from_port
+      to_port     = ingress.value.to_port
+      protocol    = ingress.value.protocol
+      cidr_blocks = ingress.value.cidr_blocks
+    }
+  }
 
-  tags = local.tags
-}
+  dynamic "egress" {
+    for_each = var.egress_rules
+    content {
+      description = egress.value.description
+      from_port   = egress.value.from_port
+      to_port     = egress.value.to_port
+      protocol    = egress.value.protocol
+      cidr_blocks = egress.value.cidr_blocks
+    }
+  }
 
-# Regras de ingress
-resource "aws_security_group_rule" "ingress" {
-  for_each          = { for idx, r in var.ingress_rules : tostring(idx) => r }
-  type              = "ingress"
-  security_group_id = aws_security_group.this.id
-
-  description = each.value.description
-  protocol    = lower(each.value.protocol)
-  from_port   = lower(each.value.protocol) == "-1" ? 0 : each.value.from_port
-  to_port     = lower(each.value.protocol) == "-1" ? 0 : each.value.to_port
-
-  cidr_blocks       = length(each.value.cidr_blocks) > 0 ? each.value.cidr_blocks : null
-  ipv6_cidr_blocks  = length(each.value.ipv6_cidr_blocks) > 0 ? each.value.ipv6_cidr_blocks : null
-}
-
-# Regras de egress explícitas (sem liberação irrestrita por padrão)
-resource "aws_security_group_rule" "egress" {
-  for_each          = { for idx, r in var.egress_rules : tostring(idx) => r }
-  type              = "egress"
-  security_group_id = aws_security_group.this.id
-
-  description = each.value.description
-  protocol    = lower(each.value.protocol)
-  from_port   = lower(each.value.protocol) == "-1" ? 0 : each.value.from_port
-  to_port     = lower(each.value.protocol) == "-1" ? 0 : each.value.to_port
-
-  cidr_blocks       = length(each.value.cidr_blocks) > 0 ? each.value.cidr_blocks : null
-  ipv6_cidr_blocks  = length(each.value.ipv6_cidr_blocks) > 0 ? each.value.ipv6_cidr_blocks : null
+  tags = merge(
+    local.common_tags,
+    {
+      Name = local.name
+    }
+  )
 }

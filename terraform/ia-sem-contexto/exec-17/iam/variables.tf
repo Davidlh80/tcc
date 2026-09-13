@@ -1,100 +1,77 @@
-variable "aws_region" {
-  description = "AWS region to use for the provider."
-  type        = string
-  default     = "us-east-1"
-  validation {
-    condition     = can(regex("^[a-z]{2}-[a-z]+-\\d$", var.aws_region))
-    error_message = "The aws_region must be in the form e.g. us-east-1."
-  }
-}
-
 variable "policy_name" {
-  description = "Name of the IAM policy."
   type        = string
-  default     = "example-iam-policy"
+  description = "Nome da IAM Policy."
+
   validation {
-    condition     = length(var.policy_name) >= 1 && length(var.policy_name) <= 128 && can(regex("^[A-Za-z0-9+=,.@_-]+$", var.policy_name))
-    error_message = "policy_name must be 1-128 characters using A-Za-z0-9+=,.@_-."
+    condition     = can(regex("^[\\w+=,.@-]{1,128}$", var.policy_name))
+    error_message = "policy_name deve ter de 1 a 128 caracteres validos para IAM (letras, numeros e os simbolos + = , . @ _ -)."
   }
 }
 
 variable "policy_description" {
-  description = "Description of the IAM policy."
   type        = string
-  default     = "Managed by Terraform - example IAM policy."
-  validation {
-    condition     = length(var.policy_description) <= 1000
-    error_message = "policy_description must be 1000 characters or fewer."
-  }
+  description = "Descricao da IAM Policy."
+  default     = "Managed by Terraform."
 }
 
 variable "policy_path" {
-  description = "Path for the IAM policy. Must start and end with a slash."
   type        = string
+  description = "Path da IAM Policy dentro da conta AWS."
   default     = "/"
+
   validation {
-    condition     = can(regex("^/.*/$", var.policy_path))
-    error_message = "policy_path must start and end with '/'. Example: /service/ or /"
+    condition     = can(regex("^/([\\w+=,.@-]+/)*$", var.policy_path))
+    error_message = "policy_path deve comecar e terminar com '/' e conter apenas caracteres validos para paths do IAM."
   }
 }
 
-variable "policy_statements" {
-  description = "List of policy statements composing the policy document."
+variable "allow_wildcard_actions" {
+  type        = bool
+  description = "Quando true, permite statements com acao wildcard total ('*'). Mantenha false para seguir o principio de privilegio minimo."
+  default     = false
+}
+
+variable "statements" {
+  description = "Lista de statements da IAM Policy Document a serem gerados."
   type = list(object({
-    sid           = optional(string)
-    effect        = string
-    actions       = optional(list(string))
-    not_actions   = optional(list(string))
-    resources     = optional(list(string))
-    not_resources = optional(list(string))
-    conditions    = optional(map(map(list(string))))
+    sid    = optional(string)
+    effect = string
+    actions   = list(string)
+    resources = list(string)
+    conditions = optional(list(object({
+      test     = string
+      variable = string
+      values   = list(string)
+    })), [])
   }))
+
   default = [
     {
-      sid      = "ReadAccountInfo"
-      effect   = "Allow"
-      actions  = ["sts:GetCallerIdentity", "iam:ListAccountAliases", "iam:GetAccountPasswordPolicy"]
+      sid       = "AllowDescribeEC2Instances"
+      effect    = "Allow"
+      actions   = ["ec2:DescribeInstances"]
       resources = ["*"]
     }
   ]
+
   validation {
-    condition     = length(var.policy_statements) >= 1
-    error_message = "At least one statement must be provided."
+    condition     = alltrue([for s in var.statements : contains(["Allow", "Deny"], s.effect)])
+    error_message = "O campo 'effect' de cada statement deve ser 'Allow' ou 'Deny'."
+  }
+
+  validation {
+    condition     = alltrue([for s in var.statements : length(s.actions) > 0])
+    error_message = "Cada statement deve conter ao menos uma acao em 'actions'."
+  }
+
+  validation {
+    condition     = alltrue([for s in var.statements : length(s.resources) > 0])
+    error_message = "Cada statement deve conter ao menos um recurso em 'resources'."
   }
 }
 
 variable "tags" {
-  description = "Tags to apply to the IAM policy."
   type        = map(string)
+  description = "Tags aplicadas a IAM Policy."
   default     = {}
-}
-
-variable "attach_to_roles" {
-  description = "List of IAM role names to attach the policy to."
-  type        = list(string)
-  default     = []
-  validation {
-    condition     = alltrue([for r in var.attach_to_roles : can(regex("^[A-Za-z0-9+=,.@_-]{1,64}$", r))])
-    error_message = "Each role name must be 1-64 characters using A-Za-z0-9+=,.@_-."
-  }
-}
-
-variable "attach_to_users" {
-  description = "List of IAM user names to attach the policy to."
-  type        = list(string)
-  default     = []
-  validation {
-    condition     = alltrue([for u in var.attach_to_users : can(regex("^[A-Za-z0-9+=,.@_-]{1,64}$", u))])
-    error_message = "Each user name must be 1-64 characters using A-Za-z0-9+=,.@_-."
-  }
-}
-
-variable "attach_to_groups" {
-  description = "List of IAM group names to attach the policy to."
-  type        = list(string)
-  default     = []
-  validation {
-    condition     = alltrue([for g in var.attach_to_groups : can(regex("^[A-Za-z0-9+=,.@_-]{1,128}$", g))])
-    error_message = "Each group name must be 1-128 characters using A-Za-z0-9+=,.@_-."
-  }
 }

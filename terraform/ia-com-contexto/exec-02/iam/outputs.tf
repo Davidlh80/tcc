@@ -1,5 +1,5 @@
 output "policy_name" {
-  description = "Nome final da IAM Policy criada seguindo o padrao de nomenclatura organizacional."
+  description = "Nome padronizado da IAM Policy criada."
   value       = aws_iam_policy.this.name
 }
 

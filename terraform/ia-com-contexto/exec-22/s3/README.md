@@ -1,40 +1,50 @@
-Visão geral do recurso
-Este template provisiona um bucket Amazon S3 seguindo o padrão organizacional:
-- Nomenclatura: <environment>-<system>-s3-<purpose>
-- Public Access Block: todas as quatro flags ativadas
-- Criptografia em repouso: SSE-S3 (AES256) habilitada por configuração do bucket
-- Policy de segurança: nega qualquer requisição sem aws:SecureTransport (exige TLS)
-- Versionamento: controlado por variável, padrão Enabled
-- Tags: aplica as tags obrigatórias da organização e permite tags adicionais
+# S3 Bucket - dev-tcc-s3-\<finalidade\>
 
-Tabela de variáveis
-| Nome              | Tipo        | Obrigatória | Descrição                                                                 |
-|-------------------|-------------|-------------|---------------------------------------------------------------------------|
-| environment       | string      | Sim         | Ambiente de deploy. Valores permitidos: dev, hml, prd.                    |
-| system            | string      | Sim         | Identificador do sistema/produto. Somente [a-z0-9-].                       |
-| purpose           | string      | Sim         | Finalidade do bucket (ex.: logs, assets, backups). Somente [a-z0-9-].      |
-| region            | string      | Sim         | Região AWS (ex.: us-east-1).                                              |
-| additional_tags   | map(string) | Não         | Tags adicionais aplicadas aos recursos com suporte a tags.                |
-| versioning_status | string      | Não         | Status do versionamento: Enabled (padrão) ou Suspended.                   |
+## Visao geral
 
-Tabela de outputs
-| Nome         | Descrição                          |
-|--------------|------------------------------------|
-| bucket_name  | Nome do bucket S3 criado.          |
-| bucket_arn   | ARN do bucket S3.                  |
-| bucket_id    | ID do bucket S3 (igual ao nome).   |
+Este template provisiona um bucket Amazon S3 seguindo os padroes internos de nomenclatura, tags e seguranca da organizacao. O bucket e criado com:
 
-Exemplo de uso do módulo/recurso
-module "s3_bucket" {
+- Nome padronizado no formato `<ambiente>-<sistema>-s3-<finalidade>`;
+- Bloqueio total de acesso publico (quatro flags do Public Access Block habilitadas);
+- Criptografia server-side com o algoritmo AES256 (SSE-S3);
+- Bucket policy que nega explicitamente qualquer requisicao sem `aws:SecureTransport`;
+- Versionamento configuravel via variavel, com padrao `Enabled`;
+- Tags obrigatorias da organizacao aplicadas automaticamente.
+
+## Variaveis
+
+| Nome                | Tipo          | Obrigatoria | Descricao                                                                 |
+|---------------------|---------------|-------------|----------------------------------------------------------------------------|
+| `environment`        | `string`      | Sim         | Ambiente de implantacao (`dev`, `hml`, `prd`).                             |
+| `system`             | `string`      | Sim         | Identificador do sistema ou produto.                                       |
+| `region`             | `string`      | Sim         | Regiao AWS onde os recursos serao provisionados.                           |
+| `additional_tags`    | `map(string)` | Nao         | Tags adicionais mescladas com as tags obrigatorias. Padrao: `{}`.          |
+| `purpose`            | `string`      | Sim         | Finalidade do bucket, usada na composicao do nome (ex.: `logs`).           |
+| `versioning_status`  | `string`      | Nao         | Status do versionamento (`Enabled` ou `Suspended`). Padrao: `Enabled`.     |
+
+## Outputs
+
+| Nome          | Descricao                              |
+|---------------|-----------------------------------------|
+| `bucket_name` | Nome do bucket S3 criado.               |
+| `bucket_arn`  | ARN do bucket S3 criado.                |
+| `bucket_id`   | Identificador (ID) do bucket S3 criado. |
+
+## Exemplo de uso
+
+```hcl
+module "s3_logs" {
   source = "./"
 
-  environment       = "dev"
-  system            = "tcc"
-  purpose           = "logs"
-  region            = "us-east-1"
-  versioning_status = "Enabled"
+  environment = "dev"
+  system      = "tcc"
+  region      = "us-east-1"
+  purpose     = "logs"
 
   additional_tags = {
-    OwnerEmail = "squad-tcc@example.com"
+    Team = "plataforma"
   }
+
+  versioning_status = "Enabled"
 }
+```

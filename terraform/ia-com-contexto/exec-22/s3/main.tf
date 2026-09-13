@@ -1,9 +1,5 @@
-provider "aws" {
-  region = var.region
-}
-
 locals {
-  bucket_name = lower(format("%s-%s-s3-%s", var.environment, var.system, var.purpose))
+  bucket_name = "${var.environment}-${var.system}-s3-${var.purpose}"
 
   mandatory_tags = {
     Project     = "tcc-iac-ia"
@@ -13,7 +9,7 @@ locals {
     CostCenter  = "academic-research"
   }
 
-  tags = merge(var.additional_tags, local.mandatory_tags)
+  tags = merge(local.mandatory_tags, var.additional_tags)
 }
 
 resource "aws_s3_bucket" "this" {
@@ -22,16 +18,6 @@ resource "aws_s3_bucket" "this" {
   tags = local.tags
 }
 
-# Enforce bucket owner for all objects, ACLs disabled (secure by default)
-resource "aws_s3_bucket_ownership_controls" "this" {
-  bucket = aws_s3_bucket.this.id
-
-  rule {
-    object_ownership = "BucketOwnerEnforced"
-  }
-}
-
-# Block all forms of public access (all four flags)
 resource "aws_s3_bucket_public_access_block" "this" {
   bucket = aws_s3_bucket.this.id
 
@@ -41,7 +27,6 @@ resource "aws_s3_bucket_public_access_block" "this" {
   restrict_public_buckets = true
 }
 
-# Server-side encryption with SSE-S3 (AES256) as mandated
 resource "aws_s3_bucket_server_side_encryption_configuration" "this" {
   bucket = aws_s3_bucket.this.id
 
@@ -52,7 +37,6 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "this" {
   }
 }
 
-# Versioning configurable by variable, default Enabled
 resource "aws_s3_bucket_versioning" "this" {
   bucket = aws_s3_bucket.this.id
 
@@ -61,28 +45,33 @@ resource "aws_s3_bucket_versioning" "this" {
   }
 }
 
-# Deny requests without SecureTransport (TLS)
-resource "aws_s3_bucket_policy" "deny_insecure_transport" {
-  bucket = aws_s3_bucket.this.id
+data "aws_iam_policy_document" "deny_insecure_transport" {
+  statement {
+    sid     = "DenyInsecureTransport"
+    effect  = "Deny"
+    actions = ["s3:*"]
 
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Sid       = "DenyInsecureTransport"
-        Effect    = "Deny"
-        Principal = "*"
-        Action    = "s3:*"
-        Resource = [
-          aws_s3_bucket.this.arn,
-          "${aws_s3_bucket.this.arn}/*"
-        ]
-        Condition = {
-          Bool = {
-            "aws:SecureTransport" = "false"
-          }
-        }
-      }
+    resources = [
+      aws_s3_bucket.this.arn,
+      "${aws_s3_bucket.this.arn}/*",
     ]
-  })
+
+    principals {
+      type        = "*"
+      identifiers = ["*"]
+    }
+
+    condition {
+      test     = "Bool"
+      variable = "aws:SecureTransport"
+      values   = ["false"]
+    }
+  }
+}
+
+resource "aws_s3_bucket_policy" "this" {
+  bucket = aws_s3_bucket.this.id
+  policy = data.aws_iam_policy_document.deny_insecure_transport.json
+
+  depends_on = [aws_s3_bucket_public_access_block.this]
 }

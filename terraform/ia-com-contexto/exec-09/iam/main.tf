@@ -1,10 +1,5 @@
-provider "aws" {
-  region = var.region
-}
-
 locals {
-  # Nomenclatura: <ambiente>-<sistema>-<recurso>-<finalidade>
-  name = lower("${var.environment}-${var.system}-iam-${var.policy_name}")
+  name = "${var.environment}-${var.system}-iam-${var.policy_name}"
 
   tags = merge(
     {
@@ -18,19 +13,19 @@ locals {
   )
 }
 
-data "aws_iam_policy_document" "allow" {
+data "aws_iam_policy_document" "this" {
   statement {
-    sid     = "AllowConfiguredActions"
-    effect  = "Allow"
-    actions = var.allowed_actions
+    sid       = "AllowConfiguredActions"
+    effect    = "Allow"
+    actions   = var.allowed_actions
     resources = var.allowed_resources
   }
 }
 
 resource "aws_iam_policy" "this" {
   name        = local.name
-  description = var.description
-  path        = var.path
-  policy      = data.aws_iam_policy_document.allow.json
-  tags        = local.tags
+  description = var.policy_description
+  policy      = data.aws_iam_policy_document.this.json
+
+  tags = local.tags
 }

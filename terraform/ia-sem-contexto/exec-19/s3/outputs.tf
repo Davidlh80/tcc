@@ -1,24 +1,24 @@
 output "bucket_id" {
-  description = "ID do bucket (igual ao nome)."
+  description = "Identificador (nome) do bucket S3 criado."
   value       = aws_s3_bucket.this.id
 }
 
-output "bucket_name" {
-  description = "Nome do bucket S3."
-  value       = aws_s3_bucket.this.bucket
-}
-
 output "bucket_arn" {
-  description = "ARN do bucket S3."
+  description = "ARN do bucket S3 criado."
   value       = aws_s3_bucket.this.arn
 }
 
 output "bucket_domain_name" {
-  description = "DNS publico do bucket."
+  description = "Nome de dominio padrao do bucket S3."
   value       = aws_s3_bucket.this.bucket_domain_name
 }
 
 output "bucket_regional_domain_name" {
-  description = "DNS regional do bucket."
+  description = "Nome de dominio regional do bucket S3."
   value       = aws_s3_bucket.this.bucket_regional_domain_name
+}
+
+output "bucket_region" {
+  description = "Regiao AWS onde o bucket foi criado."
+  value       = aws_s3_bucket.this.region
 }

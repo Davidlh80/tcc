@@ -1,53 +1,46 @@
+terraform {
+  required_version = ">= 1.5.0"
+}
+
 provider "aws" {
   region = var.region
 }
 
 locals {
-  mandatory_tags = {
-    Project     = "tcc-iac-ia"
-    Environment = var.environment
-    ManagedBy   = "terraform"
-    Owner       = "devops"
-    CostCenter  = "academic-research"
+  policy_name = "${var.environment}-${var.system}-iam-${var.policy_name}"
+
+  tags = merge(
+    {
+      Project     = "tcc-iac-ia"
+      Environment = var.environment
+      ManagedBy   = "terraform"
+      Owner       = "devops"
+      CostCenter  = "academic-research"
+    },
+    var.additional_tags
+  )
+}
+
+data "aws_iam_policy_document" "this" {
+  statement {
+    sid       = "AllowConfiguredActionsOnConfiguredResources"
+    effect    = "Allow"
+    actions   = var.allowed_actions
+    resources = var.allowed_resources
   }
-
-  # Tags obrigatórias prevalecem sobre adicionais em caso de conflito
-  tags = merge(var.additional_tags, local.mandatory_tags)
-
-  actions   = distinct(var.allowed_actions)
-  resources = distinct(var.allowed_resources)
-
-  # Proibição explícita: não permitir Action:"*" com Resource:"*"
-  wildcard_both = contains(local.actions, "*") && contains(local.resources, "*")
 }
 
 resource "aws_iam_policy" "this" {
-  name        = var.policy_name
+  name        = local.policy_name
   description = var.policy_description
-  path        = "/"
-
-  policy = jsonencode({
-    Version   = "2012-10-17"
-    Statement = [
-      {
-        Sid      = "AllowConfiguredActions"
-        Effect   = "Allow"
-        Action   = local.actions
-        Resource = local.resources
-      }
-    ]
-  })
+  policy      = data.aws_iam_policy_document.this.json
 
   tags = local.tags
 
   lifecycle {
     precondition {
-      condition     = length(local.actions) > 0 && length(local.resources) > 0
-      error_message = "As variáveis allowed_actions e allowed_resources devem conter pelo menos um item."
-    }
-    precondition {
-      condition     = !local.wildcard_both
-      error_message = "Proibido combinar Action: \"*\" com Resource: \"*\" na mesma policy statement."
+      condition     = !(contains(var.allowed_actions, "*") && contains(var.allowed_resources, "*"))
+      error_message = "Nao e permitido combinar Action \"*\" com Resource \"*\" na mesma statement da policy."
     }
   }
 }

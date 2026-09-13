@@ -1,48 +1,53 @@
+terraform {
+  required_version = ">= 1.3"
+}
+
 provider "aws" {
-  region = var.aws_region
+  region = var.region
 }
 
 locals {
-  tags = merge(var.tags, {
-    Name      = var.name
-    ManagedBy = "Terraform"
-  })
+  name = "${var.name_prefix}-sg"
+
+  common_tags = merge(
+    {
+      Name      = local.name
+      ManagedBy = "terraform"
+    },
+    var.tags
+  )
 }
 
 resource "aws_security_group" "this" {
-  name        = var.name
+  name_prefix = "${var.name_prefix}-sg-"
   description = var.description
   vpc_id      = var.vpc_id
-
-  revoke_rules_on_delete = true
 
   dynamic "ingress" {
     for_each = var.ingress_rules
     content {
-      description      = try(ingress.value.description, null)
-      from_port        = ingress.value.from_port
-      to_port          = ingress.value.to_port
-      protocol         = lower(ingress.value.protocol)
-      cidr_blocks      = try(ingress.value.cidr_blocks, [])
-      ipv6_cidr_blocks = try(ingress.value.ipv6_cidr_blocks, [])
-      prefix_list_ids  = try(ingress.value.prefix_list_ids, [])
-      self             = try(ingress.value.self, false)
+      description = ingress.value.description
+      from_port   = ingress.value.from_port
+      to_port     = ingress.value.to_port
+      protocol    = ingress.value.protocol
+      cidr_blocks = ingress.value.cidr_blocks
     }
   }
 
   dynamic "egress" {
     for_each = var.egress_rules
     content {
-      description      = try(egress.value.description, null)
-      from_port        = egress.value.from_port
-      to_port          = egress.value.to_port
-      protocol         = lower(egress.value.protocol)
-      cidr_blocks      = try(egress.value.cidr_blocks, [])
-      ipv6_cidr_blocks = try(egress.value.ipv6_cidr_blocks, [])
-      prefix_list_ids  = try(egress.value.prefix_list_ids, [])
-      self             = try(egress.value.self, false)
+      description = egress.value.description
+      from_port   = egress.value.from_port
+      to_port     = egress.value.to_port
+      protocol    = egress.value.protocol
+      cidr_blocks = egress.value.cidr_blocks
     }
   }
 
-  tags = local.tags
+  tags = local.common_tags
+
+  lifecycle {
+    create_before_destroy = true
+  }
 }

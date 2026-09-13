@@ -1,76 +1,42 @@
-Nome
-Blueprint Terraform para criar uma AWS IAM Policy gerenciada.
+# IAM Policy — Blueprint Terraform
 
-Visão geral
-Esta configuração Terraform provisiona uma IAM Policy gerenciada na AWS com:
-- Provider AWS configurável por região
-- Documento de política gerado via aws_iam_policy_document
-- Variáveis para nome, descrição, path, tags e declarações (statements)
-- Validações básicas de variáveis
-- Tags aplicadas por padrão (ManagedBy, Environment)
-- Outputs úteis (ARN, ID, versão, etc.)
+Blueprint autonomo para provisionamento de uma IAM Policy na AWS, gerado sem vinculo a padroes organizacionais especificos. As decisoes de nomenclatura, escopo de permissoes e tags seguem boas praticas gerais de mercado para Terraform e AWS, priorizando o principio de menor privilegio.
 
-Requisitos
-- Terraform >= 1.3
-- Provider AWS >= 5.0
-- Credenciais AWS válidas no ambiente de execução (por exemplo, variáveis de ambiente AWS)
+## Recursos criados
 
-Arquivos
-- versions.tf: Versões mínimas de Terraform e provider.
-- variables.tf: Variáveis configuráveis.
-- main.tf: Provider, data source do documento da policy e recurso da IAM Policy.
-- outputs.tf: Saídas relevantes.
-- README.md: Instruções e informações.
+- `aws_iam_policy.this`: IAM Policy com statement unica, construida a partir de `data.aws_iam_policy_document.this`.
 
-Como usar
-1) Ajuste as variáveis conforme necessário (via tfvars ou -var).
-   Exemplos de customização:
-   - Definir a região:
-     -var 'region=us-east-1'
-   - Alterar nome/descrição da policy:
-     -var 'policy_name=my-custom-policy' -var 'policy_description=Policy criada via Terraform'
-   - Alterar o path:
-     -var 'policy_path=/service-role/'
-   - Adicionar tags:
-     -var 'tags={Owner="team-x",CostCenter="1234"}'
+## Decisoes de seguranca
 
-2) Customizar as declarações (statements) da policy:
-   As declarações aceitam:
-   - sid: string identificadora (pode ser vazia)
-   - effect: Allow ou Deny
-   - actions: lista de ações IAM (ex.: ["ec2:Describe*"])
-   - resources: lista de ARNs ou "*"
-   - conditions: lista de objetos { test, variable, values }
-   Exemplo em tfvars:
-   statements = [
-     {
-       sid       = "AllowReadCWLogs"
-       effect    = "Allow"
-       actions   = ["logs:DescribeLogGroups", "logs:DescribeLogStreams", "logs:GetLogEvents", "logs:FilterLogEvents"]
-       resources = ["*"]
-       conditions = []
-     }
-   ]
+- Nao ha wildcard (`*`) permitido por padrao em `actions` nem em `resources`, tanto no valor padrao quanto via validacao das variaveis — forcando o consumidor da policy a declarar explicitamente as permissoes necessarias.
+- `effect` e restrito a `Allow` ou `Deny` via validacao.
+- Nenhuma credencial ou valor sensivel esta hardcoded no codigo.
+- Nenhum backend remoto e configurado; o estado deve ser gerenciado externamente conforme a necessidade de cada ambiente.
 
-3) Executar:
-   terraform init -backend=false
-   terraform validate
-   terraform plan
-   terraform apply
+## Variaveis principais
 
-Padrões seguros
-- Nenhum dado sensível é fixado em código.
-- Política padrão com permissões de leitura mínimas (S3 listagem de buckets).
-- Tags padrão facilitam governança e inventário.
+| Nome | Descricao | Padrao |
+|---|---|---|
+| `aws_region` | Regiao AWS do provider | `us-east-1` |
+| `policy_name` | Nome da IAM Policy | `example-restricted-policy` |
+| `policy_description` | Descricao da IAM Policy | ver `variables.tf` |
+| `path` | Path da IAM Policy | `/` |
+| `effect` | Efeito da statement (`Allow`/`Deny`) | `Allow` |
+| `actions` | Lista de actions IAM | `["s3:GetObject", "s3:ListBucket"]` |
+| `resources` | Lista de ARNs de recursos | `["arn:aws:s3:::example-bucket", "arn:aws:s3:::example-bucket/*"]` |
+| `tags` | Tags aplicadas ao recurso | `{}` |
 
-Saídas
-- iam_policy_arn: ARN da policy.
-- iam_policy_id: ID estável da policy.
-- iam_policy_name: Nome final da policy.
-- iam_policy_path: Path configurado.
-- iam_policy_default_version_id: Versão padrão da policy.
-- iam_policy_document_json: Documento JSON renderizado.
+## Outputs
 
-Notas
-- Esta blueprint não configura backend remoto.
-- A política é criada, mas não é anexada automaticamente a usuários, grupos ou roles; isso pode ser feito em outra configuração conforme necessidade.
+- `policy_arn`: ARN da IAM Policy criada.
+- `policy_id`: ID da IAM Policy criada.
+- `policy_name`: Nome da IAM Policy criada.
+
+## Uso
+
+```
+terraform init -backend=false
+terraform validate
+```
+
+Para provisionar de fato, ajuste as variaveis `actions`, `resources`, `policy_name` e `tags` conforme o caso de uso real, mantendo o escopo minimo necessario, e forneca credenciais AWS validas antes de executar `terraform plan`/`terraform apply`.

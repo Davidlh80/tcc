@@ -1,0 +1,12 @@
+scenario: ia-com-contexto
+execution_id: exec-24
+resource: iam
+model: "sonnet"
+prompt_file: "prompts/ia-com-contexto/prompt-iam.md"
+context_file: "contexto/contexto-organizacional.md"
+started_at: "2026-09-12T14:53:31.247685-03:00"
+finished_at: "2026-09-12T14:54:40.261708-03:00"
+api_duration_ms: 69012
+total_duration_ms: 69014
+generated_at: "2026-09-12T14:54:40.261708-03:00"
+generation_tool: "scripts/generate-blueprint"

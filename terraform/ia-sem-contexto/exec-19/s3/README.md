@@ -1,57 +1,67 @@
-Blueprint Terraform — Amazon S3 Bucket
+# Blueprint Terraform: Bucket Amazon S3
 
-Visao geral
-Este template cria um bucket Amazon S3 com configuracoes seguras por padrao:
-- Bloqueio total de acesso publico (Public Access Block).
-- Propriedade do bucket para o dono (BucketOwnerEnforced), desabilitando ACLs.
-- Criptografia padrao SSE-S3 (AES256) para todos os objetos.
-- Versionamento habilitado por padrao (pode ser suspenso).
-- Regras opcionais de ciclo de vida: abortar uploads multipart incompletos e expirar versoes nao correntes.
-- Policy opcional para exigir conexoes TLS (HTTPS).
+Este modulo provisiona um bucket Amazon S3 com configuracoes seguras por padrao, adequado para uso geral de armazenamento de objetos.
 
-Requisitos
-- Terraform >= 1.3.0
-- Provider AWS >= 5.0
-- Credenciais AWS configuradas no ambiente (ex.: variaveis de ambiente ou perfil local)
+## Recursos criados
 
-Como usar (exemplo rapido)
-1) Defina as variaveis principais (ex.: via -var):
-   - bucket_name
-   - aws_region (opcional, padrao us-east-1)
+- `aws_s3_bucket` — bucket S3 principal.
+- `aws_s3_bucket_ownership_controls` — forca propriedade do bucket sobre objetos (`BucketOwnerEnforced`), desabilitando ACLs.
+- `aws_s3_bucket_public_access_block` — bloqueia todo acesso publico ao bucket.
+- `aws_s3_bucket_versioning` — habilita versionamento de objetos (configuravel).
+- `aws_s3_bucket_server_side_encryption_configuration` — criptografia server-side padrao (SSE-S3 ou SSE-KMS).
+- `aws_s3_bucket_lifecycle_configuration` — expira versoes nao atuais de objetos apos um numero configuravel de dias (opcional).
 
-2) Comandos:
-   terraform init -backend=false
-   terraform plan -var="bucket_name=meu-bucket-exemplo-123" -var="aws_region=us-east-1"
-   terraform apply -auto-approve -var="bucket_name=meu-bucket-exemplo-123" -var="aws_region=us-east-1"
+## Decisoes de seguranca padrao
 
-Variaveis
-- aws_region (string, default: us-east-1)
-  Regiao AWS onde os recursos serao criados.
-- bucket_name (string, obrigatorio)
-  Nome globalmente unico do bucket S3; segue regras de nomenclatura do S3.
-- force_destroy (bool, default: false)
-  Permite destruir o bucket mesmo contendo objetos.
-- enable_versioning (bool, default: true)
-  Habilita ou suspende o versionamento.
-- enable_lifecycle (bool, default: true)
-  Controla a criacao das regras de ciclo de vida padrao.
-- lifecycle_abort_incomplete_upload_days (number, default: 7)
-  Aborta uploads multipart incompletos apos N dias.
-- lifecycle_noncurrent_expiration_days (number, default: 30)
-  Expira versoes nao correntes apos N dias.
-- enforce_tls (bool, default: true)
-  Se verdadeiro, aplica policy que nega trafego sem TLS.
-- tags (map(string), default: {})
-  Tags extras aplicadas via default_tags do provider (ManagedBy=terraform e Name no recurso sao adicionadas automaticamente).
+- Acesso publico totalmente bloqueado (`block_public_acls`, `block_public_policy`, `ignore_public_acls`, `restrict_public_buckets` = `true`).
+- ACLs desabilitadas via `BucketOwnerEnforced`, seguindo a recomendacao atual da AWS.
+- Criptografia server-side habilitada por padrao (AES256), com suporte opcional a SSE-KMS via `kms_key_arn`.
+- Versionamento habilitado por padrao para protecao contra exclusao/sobrescrita acidental.
+- `force_destroy` desabilitado por padrao para evitar exclusao acidental de dados.
 
-Outputs
-- bucket_id
-- bucket_name
-- bucket_arn
-- bucket_domain_name
-- bucket_regional_domain_name
+## Uso
 
-Notas
-- Este template nao configura backend remoto.
-- Nenhuma credencial real e exigida para terraform validate; as credenciais sao necessarias apenas para aplicar.
-- O nome do bucket deve ser unico globalmente na AWS.
+```hcl
+module "bucket" {
+  source = "./"
+
+  bucket_name       = "meu-bucket-exemplo-123"
+  enable_versioning = true
+
+  tags = {
+    Environment = "producao"
+    Owner       = "equipe-plataforma"
+  }
+}
+```
+
+## Variaveis
+
+| Nome | Descricao | Tipo | Padrao |
+|---|---|---|---|
+| `bucket_name` | Nome globalmente unico do bucket S3 | `string` | — |
+| `force_destroy` | Permite exclusao do bucket com objetos dentro | `bool` | `false` |
+| `enable_versioning` | Habilita versionamento de objetos | `bool` | `true` |
+| `kms_key_arn` | ARN de chave KMS para SSE-KMS | `string` | `null` |
+| `enable_lifecycle_rule` | Habilita expiracao de versoes antigas | `bool` | `true` |
+| `noncurrent_version_expiration_days` | Dias para expirar versoes nao atuais | `number` | `90` |
+| `tags` | Tags adicionais do bucket | `map(string)` | `{}` |
+
+## Outputs
+
+| Nome | Descricao |
+|---|---|
+| `bucket_id` | Identificador (nome) do bucket |
+| `bucket_arn` | ARN do bucket |
+| `bucket_domain_name` | Dominio padrao do bucket |
+| `bucket_regional_domain_name` | Dominio regional do bucket |
+| `bucket_region` | Regiao onde o bucket foi criado |
+
+## Validacao
+
+```bash
+terraform init -backend=false
+terraform validate
+```
+
+Nenhuma credencial real e necessaria para validacao sintatica.

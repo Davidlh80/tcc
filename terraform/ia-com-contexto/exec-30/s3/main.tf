@@ -1,8 +1,10 @@
+terraform {
+  required_version = ">= 1.5.0"
+}
+
 provider "aws" {
   region = var.region
 }
-
-data "aws_partition" "current" {}
 
 locals {
   bucket_name = "${var.environment}-${var.system}-s3-${var.purpose}"
@@ -15,13 +17,13 @@ locals {
     CostCenter  = "academic-research"
   }
 
-  # Enforce mandatory tags even if provided in additional_tags
-  tags = merge(var.additional_tags, local.mandatory_tags)
+  tags = merge(local.mandatory_tags, var.additional_tags)
 }
 
 resource "aws_s3_bucket" "this" {
   bucket = local.bucket_name
-  tags   = local.tags
+
+  tags = local.tags
 }
 
 resource "aws_s3_bucket_public_access_block" "this" {
@@ -38,15 +40,7 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "this" {
 
   rule {
     apply_server_side_encryption_by_default {
-      sse_algorithm     = var.sse_algorithm
-      kms_master_key_id = var.sse_algorithm == "aws:kms" ? var.kms_key_id : null
-    }
-  }
-
-  lifecycle {
-    precondition {
-      condition     = var.sse_algorithm != "aws:kms" || (var.kms_key_id != null && length(var.kms_key_id) > 0)
-      error_message = "kms_key_id must be provided when sse_algorithm is set to aws:kms."
+      sse_algorithm = "AES256"
     }
   }
 }
@@ -59,20 +53,23 @@ resource "aws_s3_bucket_versioning" "this" {
   }
 }
 
-data "aws_iam_policy_document" "https_only" {
+data "aws_iam_policy_document" "deny_insecure_transport" {
   statement {
-    sid     = "DenyInsecureTransport"
-    effect  = "Deny"
-    actions = ["s3:*"]
+    sid    = "DenyInsecureTransport"
+    effect = "Deny"
 
     principals {
-      type        = "*"
+      type        = "AWS"
       identifiers = ["*"]
     }
 
+    actions = [
+      "s3:*",
+    ]
+
     resources = [
       aws_s3_bucket.this.arn,
-      "${aws_s3_bucket.this.arn}/*"
+      "${aws_s3_bucket.this.arn}/*",
     ]
 
     condition {
@@ -83,7 +80,9 @@ data "aws_iam_policy_document" "https_only" {
   }
 }
 
-resource "aws_s3_bucket_policy" "https_only" {
+resource "aws_s3_bucket_policy" "this" {
   bucket = aws_s3_bucket.this.id
-  policy = data.aws_iam_policy_document.https_only.json
+  policy = data.aws_iam_policy_document.deny_insecure_transport.json
+
+  depends_on = [aws_s3_bucket_public_access_block.this]
 }

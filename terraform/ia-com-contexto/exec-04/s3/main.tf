@@ -1,7 +1,5 @@
 locals {
-  resource_type = "s3"
-
-  bucket_name = "${var.environment}-${var.system}-${local.resource_type}-${var.purpose}"
+  bucket_name = "${var.environment}-${var.system}-s3-${var.purpose}"
 
   mandatory_tags = {
     Project     = "tcc-iac-ia"
@@ -11,12 +9,7 @@ locals {
     CostCenter  = "academic-research"
   }
 
-  # Mandatory tags override any conflicting additional tags
-  tags = merge(var.additional_tags, local.mandatory_tags)
-}
-
-provider "aws" {
-  region = var.region
+  tags = merge(local.mandatory_tags, var.additional_tags)
 }
 
 resource "aws_s3_bucket" "this" {
@@ -40,8 +33,10 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "this" {
 
   rule {
     apply_server_side_encryption_by_default {
-      sse_algorithm = var.sse_algorithm
+      sse_algorithm     = var.sse_algorithm
+      kms_master_key_id = var.sse_algorithm == "aws:kms" ? var.kms_key_id : null
     }
+    bucket_key_enabled = var.sse_algorithm == "aws:kms" ? true : null
   }
 }
 
@@ -53,27 +48,33 @@ resource "aws_s3_bucket_versioning" "this" {
   }
 }
 
-resource "aws_s3_bucket_policy" "secure_transport" {
-  bucket = aws_s3_bucket.this.id
+data "aws_iam_policy_document" "deny_insecure_transport" {
+  statement {
+    sid     = "DenyInsecureTransport"
+    effect  = "Deny"
+    actions = ["s3:*"]
 
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Sid       = "DenyInsecureTransport"
-        Effect    = "Deny"
-        Principal = "*"
-        Action    = "s3:*"
-        Resource = [
-          aws_s3_bucket.this.arn,
-          "${aws_s3_bucket.this.arn}/*"
-        ]
-        Condition = {
-          Bool = {
-            "aws:SecureTransport" = "false"
-          }
-        }
-      }
+    resources = [
+      aws_s3_bucket.this.arn,
+      "${aws_s3_bucket.this.arn}/*",
     ]
-  })
+
+    principals {
+      type        = "AWS"
+      identifiers = ["*"]
+    }
+
+    condition {
+      test     = "Bool"
+      variable = "aws:SecureTransport"
+      values   = ["false"]
+    }
+  }
+}
+
+resource "aws_s3_bucket_policy" "this" {
+  bucket = aws_s3_bucket.this.id
+  policy = data.aws_iam_policy_document.deny_insecure_transport.json
+
+  depends_on = [aws_s3_bucket_public_access_block.this]
 }

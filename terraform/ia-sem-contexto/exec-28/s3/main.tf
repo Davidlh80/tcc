@@ -1,23 +1,18 @@
-provider "aws" {
-  region = var.aws_region
-}
-
-locals {
-  default_tags = {
-    ManagedBy = "Terraform"
-  }
-
-  tags = merge(local.default_tags, var.tags)
-
-  kms_key_arn  = trimspace(coalesce(var.kms_key_arn, ""))
-  sse_algorithm = local.kms_key_arn != "" ? "aws:kms" : "AES256"
+terraform {
+  required_version = ">= 1.5.0"
 }
 
 resource "aws_s3_bucket" "this" {
   bucket        = var.bucket_name
   force_destroy = var.force_destroy
 
-  tags = local.tags
+  tags = merge(
+    {
+      Name        = var.bucket_name
+      Environment = var.environment
+    },
+    var.tags
+  )
 }
 
 resource "aws_s3_bucket_ownership_controls" "this" {
@@ -41,7 +36,7 @@ resource "aws_s3_bucket_versioning" "this" {
   bucket = aws_s3_bucket.this.id
 
   versioning_configuration {
-    status = var.versioning_enabled ? "Enabled" : "Suspended"
+    status = var.enable_versioning ? "Enabled" : "Suspended"
   }
 }
 
@@ -50,46 +45,29 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "this" {
 
   rule {
     apply_server_side_encryption_by_default {
-      sse_algorithm     = local.sse_algorithm
-      kms_master_key_id = local.sse_algorithm == "aws:kms" ? local.kms_key_arn : null
+      sse_algorithm     = var.kms_key_arn != null ? "aws:kms" : "AES256"
+      kms_master_key_id = var.kms_key_arn
     }
-
-    bucket_key_enabled = local.sse_algorithm == "aws:kms"
+    bucket_key_enabled = var.kms_key_arn != null
   }
 }
 
-resource "aws_s3_bucket_lifecycle_configuration" "this" {
-  count  = var.lifecycle_abort_incomplete_multipart_upload_days > 0 ? 1 : 0
-  bucket = aws_s3_bucket.this.id
-
-  rule {
-    id     = "abort-incomplete-multipart-upload"
-    status = "Enabled"
-
-    filter {}
-
-    abort_incomplete_multipart_upload {
-      days_after_initiation = var.lifecycle_abort_incomplete_multipart_upload_days
-    }
-  }
-}
-
-data "aws_iam_policy_document" "enforce_tls" {
-  count = var.enforce_tls_only ? 1 : 0
-
+data "aws_iam_policy_document" "secure_transport" {
   statement {
-    sid     = "DenyInsecureTransport"
-    effect  = "Deny"
+    sid    = "DenyInsecureTransport"
+    effect = "Deny"
+
     actions = ["s3:*"]
-    principals {
-      type        = "*"
-      identifiers = ["*"]
-    }
 
     resources = [
       aws_s3_bucket.this.arn,
       "${aws_s3_bucket.this.arn}/*"
     ]
+
+    principals {
+      type        = "*"
+      identifiers = ["*"]
+    }
 
     condition {
       test     = "Bool"
@@ -100,7 +78,8 @@ data "aws_iam_policy_document" "enforce_tls" {
 }
 
 resource "aws_s3_bucket_policy" "this" {
-  count  = var.enforce_tls_only ? 1 : 0
   bucket = aws_s3_bucket.this.id
-  policy = data.aws_iam_policy_document.enforce_tls[0].json
+  policy = data.aws_iam_policy_document.secure_transport.json
+
+  depends_on = [aws_s3_bucket_public_access_block.this]
 }

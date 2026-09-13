@@ -1,65 +1,67 @@
-variable "region" {
-  description = "Região AWS onde os recursos serão criados (ex.: us-east-1)."
-  type        = string
-  validation {
-    condition     = can(regex("^[a-z]{2}-[a-z]+-\\d$", var.region))
-    error_message = "A região deve seguir o padrão AWS (ex.: us-east-1)."
-  }
-}
-
 variable "environment" {
-  description = "Ambiente de implantação (dev, hml, prd)."
+  description = "Ambiente de implantacao do recurso. Deve ser um dos ambientes permitidos pela organizacao."
   type        = string
+
   validation {
     condition     = contains(["dev", "hml", "prd"], var.environment)
-    error_message = "environment deve ser um dos valores: dev, hml, prd."
+    error_message = "O valor de environment deve ser um dos seguintes: dev, hml, prd."
   }
 }
 
 variable "system" {
-  description = "Identificador do sistema/aplicação (minúsculas, números e hífens)."
+  description = "Nome do sistema ou produto ao qual o recurso pertence, utilizado na nomenclatura padronizada."
   type        = string
+
   validation {
-    condition     = can(regex("^[a-z0-9-]+$", var.system))
-    error_message = "system deve conter apenas letras minúsculas, números e hífens."
+    condition     = length(var.system) > 0
+    error_message = "O valor de system nao pode ser vazio."
   }
 }
 
+variable "region" {
+  description = "Regiao AWS onde o provider sera configurado."
+  type        = string
+  default     = "us-east-1"
+}
+
 variable "additional_tags" {
-  description = "Tags adicionais para os recursos (as tags obrigatórias são sempre aplicadas)."
+  description = "Tags adicionais a serem mescladas com as tags obrigatorias da organizacao."
   type        = map(string)
   default     = {}
 }
 
 variable "policy_name" {
-  description = "Nome da IAM Policy seguindo o padrão <environment>-<system>-iam-<finalidade> (ex.: dev-tcc-iam-readonly)."
+  description = "Finalidade da IAM Policy, utilizada na composicao do nome padronizado (ex.: readonly, deploy, logs)."
   type        = string
+
   validation {
-    condition     = can(regex("^${var.environment}-${var.system}-iam-[a-z0-9-]+$", var.policy_name))
-    error_message = "policy_name deve seguir exatamente o padrão <environment>-<system>-iam-<finalidade>, por exemplo: dev-tcc-iam-readonly."
+    condition     = length(var.policy_name) > 0
+    error_message = "O valor de policy_name nao pode ser vazio."
   }
 }
 
 variable "policy_description" {
-  description = "Descrição da IAM Policy."
+  description = "Descricao da IAM Policy."
   type        = string
-  default     = "Managed by Terraform - least privilege policy"
+  default     = "IAM Policy gerenciada via Terraform seguindo o padrao organizacional."
 }
 
 variable "allowed_actions" {
-  description = "Lista de ações permitidas (ex.: [\"s3:GetObject\", \"s3:ListBucket\"])."
+  description = "Lista de actions IAM permitidas na statement Allow da policy. Nao pode conter \"*\" combinado com allowed_resources contendo \"*\"."
   type        = list(string)
+
   validation {
     condition     = length(var.allowed_actions) > 0
-    error_message = "allowed_actions deve conter ao menos uma ação."
+    error_message = "O valor de allowed_actions deve conter ao menos uma action."
   }
 }
 
 variable "allowed_resources" {
-  description = "Lista de ARNs de recursos permitidos ou \"*\" (evitar \"*\" com ações \"*\")."
+  description = "Lista de recursos (ARNs) permitidos na statement Allow da policy. Nao pode conter \"*\" combinado com allowed_actions contendo \"*\"."
   type        = list(string)
+
   validation {
     condition     = length(var.allowed_resources) > 0
-    error_message = "allowed_resources deve conter ao menos um recurso."
+    error_message = "O valor de allowed_resources deve conter ao menos um recurso."
   }
 }

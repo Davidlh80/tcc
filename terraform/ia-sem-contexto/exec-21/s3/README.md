@@ -1,57 +1,58 @@
-Nome
-- Blueprint Terraform para criar um bucket Amazon S3 seguro por padrao.
+# Blueprint Terraform — Bucket S3
 
-Recursos criados
-- aws_s3_bucket: bucket S3 com force_destroy configuravel.
-- aws_s3_bucket_ownership_controls: BucketOwnerEnforced (desativa ACLs).
-- aws_s3_bucket_public_access_block: bloqueia acesso publico por padrao.
-- aws_s3_bucket_versioning: versionamento habilitado por padrao.
-- aws_s3_bucket_server_side_encryption_configuration: criptografia SSE-S3 (AES256) por padrao, opcional KMS.
-- aws_s3_bucket_policy (opcional): nega trafego sem TLS (aws:SecureTransport=false).
+Blueprint para provisionar um bucket Amazon S3 seguro por padrão.
 
-Pre-requisitos
-- Terraform >= 1.4.0
-- Provider AWS >= 5.0
-- Credenciais AWS exportadas no ambiente (para aplicar), por exemplo via AWS_PROFILE ou variaveis de ambiente.
+## Recursos criados
 
-Como usar
-1) Ajuste variaveis conforme necessario (veja Variaveis):
-- bucket_name (obrigatorio; deve ser globalmente unico).
-- opcionalmente ajuste aws_region, tags, e demais parametros.
+- `aws_s3_bucket` — bucket S3 principal.
+- `aws_s3_bucket_versioning` — versionamento de objetos.
+- `aws_s3_bucket_server_side_encryption_configuration` — criptografia server-side (SSE-S3 por padrão, ou SSE-KMS se `kms_key_arn` for informado).
+- `aws_s3_bucket_ownership_controls` — força `BucketOwnerEnforced`, desabilitando ACLs.
+- `aws_s3_bucket_public_access_block` — bloqueia todo acesso público ao bucket.
 
-2) Comandos basicos:
-- terraform init -backend=false
-- terraform validate
-- terraform plan -var 'bucket_name=meu-bucket-unico-123'
-- terraform apply -var 'bucket_name=meu-bucket-unico-123'
+## Uso
 
-Variaveis principais
-- aws_region (string, default: us-east-1): regiao AWS.
-- bucket_name (string, obrigatoria): nome globalmente unico do bucket.
-- force_destroy (bool, default: false): remove objetos ao destruir o bucket.
-- enable_versioning (bool, default: true): ativa versionamento.
-- sse_algorithm (string, default: AES256): AES256 ou aws:kms.
-- sse_kms_key_id (string, default: null): ARN/alias da KMS Key quando usar aws:kms.
-- enable_bucket_key (bool, default: true): ativa S3 Bucket Keys com KMS.
-- attach_deny_insecure_transport (bool, default: true): aplica politica que exige TLS.
-- block_public_acls, ignore_public_acls, block_public_policy, restrict_public_buckets (bools, default: true): controles de acesso publico.
-- default_tags (map(string), default: {}): tags padrao via provider.
-- bucket_tags (map(string), default: {}): tags especificas do bucket.
+```hcl
+module "bucket" {
+  source      = "./"
+  bucket_name = "meu-bucket-exemplo-unico"
+  tags = {
+    Owner = "time-plataforma"
+  }
+}
+```
 
-Decisoes de seguranca padrao
-- Bloqueio de acesso publico ativado.
-- Criptografia no servidor habilitada por padrao (AES256).
-- Politica que exige conexao segura (TLS) ativada por padrao.
-- Ownership Controls com BucketOwnerEnforced (ACLs desativadas).
+## Inputs
 
-Observacoes
-- Para usar KMS, defina sse_algorithm="aws:kms" e, opcionalmente, sse_kms_key_id com uma chave valida (pode ser um alias: alias/minha-chave ou ARN).
-- O nome do bucket deve ser unico globalmente na AWS e obedecer as regras de nomeacao do S3.
-- Nao ha backend remoto configurado neste template.
+| Nome | Descrição | Tipo | Default | Obrigatório |
+|---|---|---|---|---|
+| region | Região AWS onde os recursos serão provisionados | string | "us-east-1" | não |
+| bucket_name | Nome globalmente único do bucket S3 | string | — | sim |
+| enable_versioning | Habilita versionamento de objetos | bool | true | não |
+| force_destroy | Permite destruir o bucket mesmo com objetos dentro | bool | false | não |
+| kms_key_arn | ARN de chave KMS para SSE-KMS; se nulo, usa AES256 | string | null | não |
+| tags | Tags adicionais aplicadas ao bucket | map(string) | {} | não |
 
-Outputs
-- bucket_id: nome/ID do bucket.
-- bucket_arn: ARN do bucket.
-- bucket_domain_name: endpoint do bucket.
-- bucket_regional_domain_name: endpoint regional do bucket.
-- region: regiao do provider.
+## Outputs
+
+| Nome | Descrição |
+|---|---|
+| bucket_id | Identificador (nome) do bucket |
+| bucket_arn | ARN do bucket |
+| bucket_domain_name | Nome de domínio do bucket |
+| bucket_regional_domain_name | Nome de domínio regional do bucket |
+
+## Segurança
+
+- Acesso público bloqueado em todas as dimensões (`aws_s3_bucket_public_access_block`).
+- ACLs desabilitadas via `BucketOwnerEnforced`, exigindo controle de acesso apenas por políticas IAM/bucket policy.
+- Criptografia server-side habilitada por padrão (AES256), com suporte opcional a SSE-KMS.
+- Versionamento habilitado por padrão para proteção contra sobrescrita/exclusão acidental.
+- `force_destroy` desabilitado por padrão para evitar perda acidental de dados.
+
+## Validação
+
+```
+terraform init -backend=false
+terraform validate
+```

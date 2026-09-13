@@ -1,42 +1,21 @@
-provider "aws" {
-  region = var.aws_region
+terraform {
+  required_version = ">= 1.5.0"
 }
 
-locals {
-  common_tags = merge(
-    {
-      Name = var.bucket_name
-    },
-    var.tags
-  )
-
-  tls_policy_json = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Sid       = "DenyInsecureTransport"
-        Effect    = "Deny"
-        Principal = "*"
-        Action    = "s3:*"
-        Resource = [
-          aws_s3_bucket.this.arn,
-          "${aws_s3_bucket.this.arn}/*"
-        ]
-        Condition = {
-          Bool = {
-            "aws:SecureTransport" = "false"
-          }
-        }
-      }
-    ]
-  })
+provider "aws" {
+  region = var.aws_region
 }
 
 resource "aws_s3_bucket" "this" {
   bucket        = var.bucket_name
   force_destroy = var.force_destroy
 
-  tags = local.common_tags
+  tags = merge(
+    var.tags,
+    {
+      Name = var.bucket_name
+    }
+  )
 }
 
 resource "aws_s3_bucket_ownership_controls" "this" {
@@ -50,10 +29,10 @@ resource "aws_s3_bucket_ownership_controls" "this" {
 resource "aws_s3_bucket_public_access_block" "this" {
   bucket = aws_s3_bucket.this.id
 
-  block_public_acls   = var.enable_public_access_block
-  block_public_policy = var.enable_public_access_block
-  ignore_public_acls  = var.enable_public_access_block
-  restrict_public_buckets = var.enable_public_access_block
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
 }
 
 resource "aws_s3_bucket_versioning" "this" {
@@ -69,45 +48,50 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "this" {
 
   rule {
     apply_server_side_encryption_by_default {
-      sse_algorithm = "AES256"
+      sse_algorithm     = var.kms_key_arn != "" ? "aws:kms" : "AES256"
+      kms_master_key_id = var.kms_key_arn != "" ? var.kms_key_arn : null
     }
-    bucket_key_enabled = false
+    bucket_key_enabled = var.kms_key_arn != ""
   }
+}
+
+resource "aws_s3_bucket_logging" "this" {
+  count = var.logging_target_bucket != "" ? 1 : 0
+
+  bucket = aws_s3_bucket.this.id
+
+  target_bucket = var.logging_target_bucket
+  target_prefix = var.logging_target_prefix
 }
 
 resource "aws_s3_bucket_lifecycle_configuration" "this" {
+  count = length(var.lifecycle_rules) > 0 ? 1 : 0
+
   bucket = aws_s3_bucket.this.id
 
-  rule {
-    id     = "abort-incomplete-multipart-uploads"
-    status = "Enabled"
-
-    filter {}
-
-    abort_incomplete_multipart_upload {
-      days_after_initiation = var.abort_incomplete_multipart_upload_days
-    }
-  }
-
   dynamic "rule" {
-    for_each = var.versioning_enabled && var.noncurrent_version_expiration_days > 0 ? [1] : []
+    for_each = var.lifecycle_rules
     content {
-      id     = "expire-noncurrent-versions"
-      status = "Enabled"
+      id     = rule.value.id
+      status = rule.value.enabled ? "Enabled" : "Disabled"
 
-      filter {}
+      filter {
+        prefix = lookup(rule.value, "prefix", "")
+      }
 
-      noncurrent_version_expiration {
-        noncurrent_days = var.noncurrent_version_expiration_days
+      dynamic "expiration" {
+        for_each = rule.value.expiration_days != null ? [rule.value.expiration_days] : []
+        content {
+          days = expiration.value
+        }
+      }
+
+      dynamic "noncurrent_version_expiration" {
+        for_each = rule.value.noncurrent_version_expiration_days != null ? [rule.value.noncurrent_version_expiration_days] : []
+        content {
+          noncurrent_days = noncurrent_version_expiration.value
+        }
       }
     }
   }
-
-  depends_on = [aws_s3_bucket_versioning.this]
-}
-
-resource "aws_s3_bucket_policy" "tls_only" {
-  count  = var.attach_tls_enforce_policy ? 1 : 0
-  bucket = aws_s3_bucket.this.id
-  policy = local.tls_policy_json
 }

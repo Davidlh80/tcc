@@ -1,71 +1,75 @@
 variable "aws_region" {
-  description = "Regiao AWS onde os recursos serao criados."
+  description = "Regiao AWS onde o provider ira operar."
   type        = string
   default     = "us-east-1"
-  validation {
-    condition     = length(var.aws_region) > 0
-    error_message = "A regiao AWS nao pode ser vazia."
-  }
 }
 
 variable "policy_name" {
-  description = "Nome exato da IAM Policy. Se nulo, sera usado name_prefix."
+  description = "Nome da IAM Policy."
   type        = string
-  default     = null
-  validation {
-    condition     = var.policy_name == null || can(regex("^[\\w+=,.@-]{1,128}$", var.policy_name))
-    error_message = "policy_name deve corresponder ao padrao IAM: [A-Za-z0-9+=,.@_-], max 128 caracteres."
-  }
-}
+  default     = "app-least-privilege-policy"
 
-variable "policy_name_prefix" {
-  description = "Prefixo para o nome da policy quando policy_name nao for definido."
-  type        = string
-  default     = "custom-"
   validation {
-    condition     = can(regex("^[\\w+=,.@-]{1,64}$", var.policy_name_prefix))
-    error_message = "policy_name_prefix deve corresponder ao padrao IAM e ter ate 64 caracteres."
+    condition     = length(var.policy_name) > 0 && length(var.policy_name) <= 128
+    error_message = "policy_name deve ter entre 1 e 128 caracteres."
   }
 }
 
 variable "policy_description" {
   description = "Descricao da IAM Policy."
   type        = string
-  default     = "Policy gerenciada pelo Terraform."
+  default     = "Policy gerada com escopo restrito de acoes e recursos."
 }
 
 variable "policy_path" {
-  description = "Caminho (path) da IAM Policy. Deve iniciar e terminar com '/'."
+  description = "Path da IAM Policy dentro da conta AWS."
   type        = string
-  default     = "/customer-managed/"
+  default     = "/"
+}
+
+variable "effect" {
+  description = "Efeito da statement da policy (Allow ou Deny)."
+  type        = string
+  default     = "Allow"
+
   validation {
-    condition     = startswith(var.policy_path, "/") && endswith(var.policy_path, "/")
-    error_message = "policy_path deve iniciar e terminar com '/'. Ex.: /customer-managed/."
+    condition     = contains(["Allow", "Deny"], var.effect)
+    error_message = "effect deve ser \"Allow\" ou \"Deny\"."
+  }
+}
+
+variable "actions" {
+  description = "Lista de acoes IAM permitidas/negadas pela policy. Evite wildcards amplos (ex: \"*\") em ambientes produtivos."
+  type        = list(string)
+  default = [
+    "s3:GetObject",
+    "s3:ListBucket",
+  ]
+
+  validation {
+    condition     = length(var.actions) > 0
+    error_message = "actions nao pode ser uma lista vazia."
+  }
+}
+
+variable "resources" {
+  description = "Lista de ARNs de recursos aos quais a policy se aplica. Evite \"*\" para manter o principio de menor privilegio."
+  type        = list(string)
+  default = [
+    "arn:aws:s3:::example-bucket",
+    "arn:aws:s3:::example-bucket/*",
+  ]
+
+  validation {
+    condition     = length(var.resources) > 0
+    error_message = "resources nao pode ser uma lista vazia."
   }
 }
 
 variable "tags" {
-  description = "Tags a serem aplicadas na IAM Policy."
+  description = "Tags aplicadas a IAM Policy."
   type        = map(string)
-  default     = {}
-}
-
-variable "statements" {
-  description = "Lista de statements que compoem o documento da policy. Cada statement contem actions, resources e opcoes como effect, sid e conditions."
-  type = list(object({
-    sid       = optional(string)
-    effect    = optional(string) # Allow ou Deny
-    actions   = set(string)
-    resources = set(string)
-    conditions = optional(list(object({
-      test     = string          # Ex.: StringEquals, ArnLike, Bool, NumericLessThan, etc.
-      variable = string          # Ex.: aws:PrincipalOrgID, s3:prefix, etc.
-      values   = set(string)
-    })))
-  }))
-  default = []
-  validation {
-    condition     = var.statements == [] || alltrue([for s in var.statements : length(s.actions) > 0 && length(s.resources) > 0])
-    error_message = "Cada statement deve conter pelo menos uma action e um resource."
+  default = {
+    ManagedBy = "terraform"
   }
 }

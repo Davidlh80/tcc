@@ -1,171 +1,55 @@
-provider "aws" {
-  region = var.region
+terraform {
+  required_version = ">= 1.5.0"
 }
 
 locals {
-  resource_name = "${var.environment}-${var.system}-sg-${var.security_group_name}"
+  name = "${var.environment}-${var.system}-sg-${var.security_group_name}"
 
-  required_tags = {
+  mandatory_tags = {
     Project     = "tcc-iac-ia"
     Environment = var.environment
     ManagedBy   = "terraform"
     Owner       = "devops"
     CostCenter  = "academic-research"
   }
+}
 
-  tags_merged = merge(var.additional_tags, local.required_tags)
-
-  ingress_rules_expanded = flatten([
-    for idx, r in var.ingress_rules : concat(
-      [
-        for cidr in r.ipv4_cidrs : {
-          key                           = "ingress-ipv4-${idx}-${cidr}-${r.from_port}-${r.to_port}-${lower(r.protocol)}"
-          description                   = r.description
-          from_port                     = r.from_port
-          to_port                       = r.to_port
-          ip_protocol                   = lower(r.protocol)
-          cidr_ipv4                     = cidr
-          cidr_ipv6                     = null
-          prefix_list_id                = null
-          referenced_security_group_id  = null
-        }
-      ],
-      [
-        for cidr6 in r.ipv6_cidrs : {
-          key                           = "ingress-ipv6-${idx}-${cidr6}-${r.from_port}-${r.to_port}-${lower(r.protocol)}"
-          description                   = r.description
-          from_port                     = r.from_port
-          to_port                       = r.to_port
-          ip_protocol                   = lower(r.protocol)
-          cidr_ipv4                     = null
-          cidr_ipv6                     = cidr6
-          prefix_list_id                = null
-          referenced_security_group_id  = null
-        }
-      ],
-      [
-        for pl in r.prefix_list_ids : {
-          key                           = "ingress-pl-${idx}-${pl}-${r.from_port}-${r.to_port}-${lower(r.protocol)}"
-          description                   = r.description
-          from_port                     = r.from_port
-          to_port                       = r.to_port
-          ip_protocol                   = lower(r.protocol)
-          cidr_ipv4                     = null
-          cidr_ipv6                     = null
-          prefix_list_id                = pl
-          referenced_security_group_id  = null
-        }
-      ],
-      [
-        for sgid in r.referenced_security_group_ids : {
-          key                           = "ingress-sgref-${idx}-${sgid}-${r.from_port}-${r.to_port}-${lower(r.protocol)}"
-          description                   = r.description
-          from_port                     = r.from_port
-          to_port                       = r.to_port
-          ip_protocol                   = lower(r.protocol)
-          cidr_ipv4                     = null
-          cidr_ipv6                     = null
-          prefix_list_id                = null
-          referenced_security_group_id  = sgid
-        }
-      ]
-    )
-  ])
-
-  egress_rules_expanded = flatten([
-    for idx, r in var.egress_rules : concat(
-      [
-        for cidr in r.ipv4_cidrs : {
-          key                           = "egress-ipv4-${idx}-${cidr}-${r.from_port}-${r.to_port}-${lower(r.protocol)}"
-          description                   = r.description
-          from_port                     = r.from_port
-          to_port                       = r.to_port
-          ip_protocol                   = lower(r.protocol)
-          cidr_ipv4                     = cidr
-          cidr_ipv6                     = null
-          prefix_list_id                = null
-          referenced_security_group_id  = null
-        }
-      ],
-      [
-        for cidr6 in r.ipv6_cidrs : {
-          key                           = "egress-ipv6-${idx}-${cidr6}-${r.from_port}-${r.to_port}-${lower(r.protocol)}"
-          description                   = r.description
-          from_port                     = r.from_port
-          to_port                       = r.to_port
-          ip_protocol                   = lower(r.protocol)
-          cidr_ipv4                     = null
-          cidr_ipv6                     = cidr6
-          prefix_list_id                = null
-          referenced_security_group_id  = null
-        }
-      ],
-      [
-        for pl in r.prefix_list_ids : {
-          key                           = "egress-pl-${idx}-${pl}-${r.from_port}-${r.to_port}-${lower(r.protocol)}"
-          description                   = r.description
-          from_port                     = r.from_port
-          to_port                       = r.to_port
-          ip_protocol                   = lower(r.protocol)
-          cidr_ipv4                     = null
-          cidr_ipv6                     = null
-          prefix_list_id                = pl
-          referenced_security_group_id  = null
-        }
-      ],
-      [
-        for sgid in r.referenced_security_group_ids : {
-          key                           = "egress-sgref-${idx}-${sgid}-${r.from_port}-${r.to_port}-${lower(r.protocol)}"
-          description                   = r.description
-          from_port                     = r.from_port
-          to_port                       = r.to_port
-          ip_protocol                   = lower(r.protocol)
-          cidr_ipv4                     = null
-          cidr_ipv6                     = null
-          prefix_list_id                = null
-          referenced_security_group_id  = sgid
-        }
-      ]
-    )
-  ])
+provider "aws" {
+  region = var.region
 }
 
 resource "aws_security_group" "this" {
-  name                   = local.resource_name
-  description            = var.security_group_description
-  vpc_id                 = var.vpc_id
-  revoke_rules_on_delete = true
+  name        = local.name
+  description = var.description
+  vpc_id      = var.vpc_id
 
-  # Segurança: egress explícito e sem liberação irrestrita por padrão
-  egress = []
+  dynamic "ingress" {
+    for_each = var.ingress_rules
+    content {
+      description = ingress.value.description
+      from_port   = ingress.value.from_port
+      to_port     = ingress.value.to_port
+      protocol    = ingress.value.protocol
+      cidr_blocks = ingress.value.cidr_blocks
+    }
+  }
 
-  tags = local.tags_merged
-}
+  dynamic "egress" {
+    for_each = var.egress_rules
+    content {
+      description = egress.value.description
+      from_port   = egress.value.from_port
+      to_port     = egress.value.to_port
+      protocol    = egress.value.protocol
+      cidr_blocks = egress.value.cidr_blocks
+    }
+  }
 
-resource "aws_vpc_security_group_ingress_rule" "this" {
-  for_each = { for r in local.ingress_rules_expanded : r.key => r }
-
-  security_group_id              = aws_security_group.this.id
-  cidr_ipv4                      = each.value.cidr_ipv4
-  cidr_ipv6                      = each.value.cidr_ipv6
-  prefix_list_id                 = each.value.prefix_list_id
-  referenced_security_group_id   = each.value.referenced_security_group_id
-  from_port                      = each.value.from_port
-  to_port                        = each.value.to_port
-  ip_protocol                    = each.value.ip_protocol
-  description                    = each.value.description
-}
-
-resource "aws_vpc_security_group_egress_rule" "this" {
-  for_each = { for r in local.egress_rules_expanded : r.key => r }
-
-  security_group_id              = aws_security_group.this.id
-  cidr_ipv4                      = each.value.cidr_ipv4
-  cidr_ipv6                      = each.value.cidr_ipv6
-  prefix_list_id                 = each.value.prefix_list_id
-  referenced_security_group_id   = each.value.referenced_security_group_id
-  from_port                      = each.value.from_port
-  to_port                        = each.value.to_port
-  ip_protocol                    = each.value.ip_protocol
-  description                    = each.value.description
+  tags = merge(
+    local.mandatory_tags,
+    {
+      Name = local.name
+    },
+    var.additional_tags
+  )
 }

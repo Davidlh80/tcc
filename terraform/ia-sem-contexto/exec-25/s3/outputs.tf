@@ -1,34 +1,24 @@
 output "bucket_id" {
-  description = "ID do bucket (igual ao nome)."
+  description = "Identificador (nome) do bucket S3 criado."
   value       = aws_s3_bucket.this.id
 }
 
 output "bucket_arn" {
-  description = "ARN do bucket."
+  description = "ARN do bucket S3 criado."
   value       = aws_s3_bucket.this.arn
 }
 
 output "bucket_domain_name" {
-  description = "Domain name público do bucket."
+  description = "Nome de dominio padrao do bucket S3."
   value       = aws_s3_bucket.this.bucket_domain_name
 }
 
 output "bucket_regional_domain_name" {
-  description = "Domain name regional do bucket."
+  description = "Nome de dominio regional do bucket S3."
   value       = aws_s3_bucket.this.bucket_regional_domain_name
 }
 
-output "versioning_enabled" {
-  description = "Indica se o versionamento está habilitado."
-  value       = var.enable_versioning
-}
-
-output "bucket_region" {
-  description = "Região configurada no provider."
-  value       = var.region
-}
-
-output "logging_enabled" {
-  description = "Indica se o Server Access Logging está habilitado."
-  value       = length(aws_s3_bucket_logging.this) > 0
+output "bucket_versioning_status" {
+  description = "Status do versionamento configurado no bucket."
+  value       = aws_s3_bucket_versioning.this.versioning_configuration[0].status
 }

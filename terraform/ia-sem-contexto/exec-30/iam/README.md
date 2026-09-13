@@ -1,61 +1,66 @@
-Blueprint Terraform — AWS IAM Policy
+# IAM Policy - Blueprint Terraform
 
-Visao geral
-- Cria uma IAM Managed Policy na AWS a partir de um documento gerado com aws_iam_policy_document.
-- Parametriza nome, path, descricao, effect, actions, resources, conditions e tags.
-- Padrao seguro: acoes somente-leitura em servicos comuns e recursos "*".
+Blueprint autonomo para provisionamento de uma IAM Policy gerenciada pelo cliente (customer-managed policy) na AWS, sem vinculo com padroes organizacionais especificos. Todas as decisoes de nivel de privilegio, nomenclatura e escopo de recursos ficam a cargo de quem instancia o modulo, atraves das variaveis de entrada.
 
-Arquivos
-- versions.tf: Versoes requeridas do Terraform e provider AWS.
-- variables.tf: Variaveis de configuracao.
-- main.tf: Provider, documento da policy e recurso aws_iam_policy.
-- outputs.tf: Saidas com informacoes da policy criada.
+## Recursos criados
 
-Como usar
-1) Inicializar
-   terraform init -backend=false
+- `aws_iam_policy.this`: IAM Policy gerenciada, com documento JSON gerado dinamicamente via `data.aws_iam_policy_document.this`.
 
-2) Visualizar o plano com valores padrao
-   terraform plan
+## Uso
 
-3) Aplicar com valores customizados (exemplos)
-   terraform apply \
-     -var 'aws_region=us-east-1' \
-     -var 'policy_name=my-readonly-policy' \
-     -var 'policy_description=Read-only access to selected services' \
-     -var 'policy_actions=["ec2:Describe*","s3:Get*","s3:List*"]' \
-     -var 'policy_resources=["*"]' \
-     -var 'tags={Environment="lab",Owner="devops"}'
+```
+module "iam_policy" {
+  source = "./"
 
-4) Destruir
-   terraform destroy
+  policy_name         = "app-s3-read-only"
+  policy_description  = "Permite leitura de objetos em um bucket especifico"
+  effect              = "Allow"
+  allowed_actions     = ["s3:GetObject", "s3:ListBucket"]
+  allowed_resources   = [
+    "arn:aws:s3:::meu-bucket",
+    "arn:aws:s3:::meu-bucket/*"
+  ]
 
-Variaveis principais
-- aws_region (string): Regiao AWS. Padrao: us-east-1
-- policy_name (string): Nome da policy. Padrao: example-managed-policy
-- policy_path (string): Path da policy (ex.: /, /custom/). Padrao: /
-- policy_description (string): Descricao. Padrao: Managed policy criada via Terraform.
-- policy_effect (string): Allow ou Deny. Padrao: Allow
-- policy_actions (list(string)): Acoes IAM do statement principal. Padrao: somente-leitura em servicos comuns.
-- policy_resources (list(string)): ARNs de recursos aplicaveis. Padrao: ["*"]
-- policy_conditions (map): Conditions opcionais do statement principal.
-  Exemplo de valor:
-  {
-    "restrict_by_mfa" = {
-      test     = "Bool"
-      variable = "aws:MultiFactorAuthPresent"
-      values   = ["true"]
-    }
+  tags = {
+    Environment = "dev"
+    Owner       = "team-devops"
   }
-- tags (map(string)): Tags a aplicar. Padrao: {}
+}
+```
 
-Saidas
-- iam_policy_arn: ARN da policy.
-- iam_policy_name: Nome da policy.
-- iam_policy_id: ID (ARN) da policy.
-- iam_policy_path: Path da policy.
-- iam_policy_document: Documento JSON resultante.
+## Inputs
 
-Notas
-- Nao ha backend remoto; adequado para validacao local com terraform init -backend=false.
-- O template nao depende de credenciais para validacao sintatica; credenciais so sao necessarias para aplicar de fato na AWS.
+| Nome                | Descricao                                                                 | Tipo         | Default              | Obrigatorio |
+|---------------------|----------------------------------------------------------------------------|--------------|-----------------------|-------------|
+| aws_region          | Regiao AWS do provider                                                     | string       | "us-east-1"           | nao         |
+| policy_name         | Nome da IAM Policy                                                          | string       | -                     | sim         |
+| policy_description  | Descricao da IAM Policy                                                    | string       | "Gerenciada via Terraform." | nao   |
+| path                | Path da IAM Policy                                                          | string       | "/"                   | nao         |
+| effect              | Efeito da statement (Allow ou Deny)                                        | string       | "Allow"               | nao         |
+| allowed_actions     | Lista de acoes IAM permitidas/negadas                                       | list(string) | -                     | sim         |
+| allowed_resources   | Lista de ARNs de recursos alvo                                              | list(string) | -                     | sim         |
+| conditions          | Lista de condicoes IAM adicionais (test, variable, values)                  | list(object) | []                    | nao         |
+| tags                | Tags aplicadas ao recurso                                                   | map(string)  | {}                    | nao         |
+
+## Outputs
+
+| Nome                  | Descricao                                          |
+|-----------------------|-----------------------------------------------------|
+| policy_arn            | ARN da IAM Policy criada                            |
+| policy_id             | ID da IAM Policy criada                             |
+| policy_name           | Nome da IAM Policy criada                           |
+| policy_document_json  | Documento JSON efetivamente gerado para a policy    |
+
+## Consideracoes de seguranca
+
+- `allowed_actions` e `allowed_resources` sao obrigatorios e nao possuem default, forcando uma definicao explicita do escopo — evite usar `"*"` em qualquer um dos dois, exceto quando estritamente necessario e justificado.
+- Utilize o bloco `conditions` para restringir a policy por IP de origem, MFA, tags de recurso, etc., sempre que possivel.
+- Revise o `policy_document_json` de saida antes de anexar a policy a usuarios, grupos ou roles em ambientes de producao.
+- Prefira anexar esta policy a roles (via `aws_iam_role_policy_attachment`) em vez de usuarios individuais.
+
+## Validacao
+
+```
+terraform init -backend=false
+terraform validate
+```

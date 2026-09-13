@@ -1,60 +1,65 @@
-# Terraform AWS IAM Policy
+# IAM Policy - Blueprint Terraform
 
-Este módulo cria uma IAM Policy gerenciada (customer managed) na AWS de forma segura por padrão.
+Blueprint Terraform para provisionamento de uma IAM Policy gerenciada pelo cliente (customer managed policy) na AWS, com guarda-corpos contra o uso inadvertido de curingas (`*`) em acoes e recursos.
 
-Principais características:
-- Provider AWS com região configurável.
-- Política de permissões construída via aws_iam_policy_document.
-- Declaração opcional de negação total sem MFA (habilitada por padrão).
-- Condições opcionais por região (aws:RequestedRegion) e por IP (aws:SourceIp).
-- Variáveis com validações e tags incluídas.
-- Sem backend remoto.
+## Recursos criados
 
-Requisitos:
-- Terraform >= 1.3.0
-- Provider AWS >= 5.0
+- `data.aws_iam_policy_document.this`: documento de policy validado sintaticamente pelo provider AWS.
+- `aws_iam_policy.this`: IAM Policy gerenciada, com precondicoes de seguranca em `lifecycle`.
 
-Arquivos:
-- main.tf
-- variables.tf
-- outputs.tf
-- versions.tf
-- README.md
+## Uso
 
-Como usar:
-1) Ajuste variáveis conforme necessidade (ex.: terraform.tfvars).
-2) Execute:
-   - terraform init -backend=false
-   - terraform validate
-   - terraform plan
-   - terraform apply
+```
+module "iam_policy" {
+  source = "./"
 
-Variáveis principais:
-- aws_region: Região do provider (padrão: us-east-1).
-- policy_name: Nome da policy (padrão: readonly-s3-policy).
-- policy_description: Descrição opcional.
-- policy_path: Caminho da policy (padrão: /customer-managed/).
-- allowed_actions: Ações permitidas (padrão seguro de leitura S3).
-- policy_resources: ARNs de recursos alvo (padrão usa bucket de exemplo).
-- allowed_regions: Lista de regiões permitidas (condição opcional).
-- allowed_source_ips: Lista de CIDRs IPv4 permitidos (condição opcional).
-- enforce_mfa: Se true, nega tudo quando MFA não presente (padrão: true).
-- allow_wildcard_actions: Permite uso de curingas em ações (padrão: false).
-- allow_wildcard_resources: Permite recurso '*' (padrão: false).
-- tags: Tags adicionais para a policy.
+  policy_name = "app-s3-read-write"
+  actions     = ["s3:GetObject", "s3:PutObject"]
+  resources   = ["arn:aws:s3:::my-bucket/*"]
 
-Notas de segurança:
-- Por padrão, a policy é restritiva e voltada a leitura no S3, sem curingas.
-- MFA é exigido por padrão via uma declaração Deny; desative se não se aplicar ao seu caso.
-- Condições por região e IP podem ser usadas para reforçar o controle de acesso, mas podem não ser suportadas por todos os serviços.
+  tags = {
+    Environment = "production"
+    ManagedBy   = "terraform"
+  }
+}
+```
 
-Saídas:
-- iam_policy_arn
-- iam_policy_name
-- iam_policy_id
-- iam_policy_path
-- iam_policy_document
+## Seguranca por padrao
 
-Limitações:
-- aws:SourceIp pode não ser avaliado para todas as APIs/serviços.
-- Ajuste actions/resources conforme o serviço-alvo para obter o efeito desejado.
+- `allow_wildcard_actions` e `allow_wildcard_resources` sao `false` por padrao: se `actions` ou `resources` contiverem `"*"`, o `terraform plan/apply` falhara com um erro explicito, a menos que o consumidor habilite explicitamente a flag correspondente.
+- Nenhum valor sensivel ou credencial e utilizado ou fixado no codigo.
+- `effect` e validado para aceitar apenas `Allow` ou `Deny`.
+- `policy_name` e `policy_path` sao validados contra os formatos aceitos pela API IAM da AWS.
+
+## Inputs
+
+| Nome                      | Tipo           | Padrao                        | Descricao                                                        |
+|---------------------------|----------------|--------------------------------|-------------------------------------------------------------------|
+| region                    | string         | "us-east-1"                   | Regiao AWS do provider.                                           |
+| policy_name               | string         | (obrigatorio)                  | Nome da IAM Policy.                                               |
+| policy_description        | string         | "Gerenciada via Terraform."   | Descricao da policy.                                              |
+| policy_path               | string         | "/"                            | Path da policy (deve iniciar e terminar com "/").                 |
+| effect                    | string         | "Allow"                        | Efeito da statement: "Allow" ou "Deny".                           |
+| actions                   | list(string)   | (obrigatorio)                   | Lista de acoes IAM.                                               |
+| resources                 | list(string)   | (obrigatorio)                   | Lista de ARNs de recursos.                                        |
+| allow_wildcard_actions    | bool           | false                           | Permite `"*"` em `actions` quando true.                           |
+| allow_wildcard_resources  | bool           | false                           | Permite `"*"` em `resources` quando true.                         |
+| tags                      | map(string)    | {}                              | Tags aplicadas ao recurso.                                        |
+
+## Outputs
+
+| Nome                  | Descricao                                      |
+|-----------------------|--------------------------------------------------|
+| policy_arn            | ARN da IAM Policy criada.                        |
+| policy_id             | ID da IAM Policy criada.                         |
+| policy_name           | Nome da IAM Policy criada.                       |
+| policy_document_json  | Documento JSON da policy gerado.                 |
+
+## Validacao local
+
+```
+terraform init -backend=false
+terraform validate
+```
+
+Nao ha dependencia de backend remoto nem de credenciais reais para as validacoes acima.

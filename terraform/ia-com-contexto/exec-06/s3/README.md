@@ -1,38 +1,53 @@
-1. Visão geral do recurso
-Este template provisiona um bucket Amazon S3 seguindo o padrão organizacional:
-- Nomenclatura: <environment>-<system>-s3-<purpose>
-- Segurança:
-  - Public Access Block com as quatro flags habilitadas
-  - Criptografia server-side SSE-S3 (AES256) por padrão
-  - Bucket Policy negando qualquer requisição sem aws:SecureTransport
-  - Versionamento configurável por variável (padrão Enabled)
-- Tags obrigatórias aplicadas e possibilidade de tags adicionais
+# S3 Bucket - dev-tcc-s3-<purpose>
 
-2. Tabela de variáveis (nome, tipo, obrigatória, descrição)
-- environment | string | sim | Ambiente do recurso. Valores permitidos: dev, hml, prd.
-- system | string | sim | Identificador do sistema (apenas [a-z0-9-]).
-- purpose | string | sim | Finalidade do recurso (apenas [a-z0-9-]).
-- region | string | sim | Região AWS para criação (ex.: us-east-1).
-- additional_tags | map(string) | não | Tags adicionais a serem mescladas às tags obrigatórias.
-- versioning_status | string | não | Status do versionamento (Enabled ou Suspended). Padrão: Enabled.
-- force_destroy | bool | não | Permite destruir o bucket mesmo contendo objetos. Padrão: false.
+## Visao geral
 
-3. Tabela de outputs (nome, descrição)
-- bucket_name | Nome do bucket S3 criado.
-- bucket_arn | ARN do bucket S3 criado.
-- bucket_id | ID do bucket S3 (normalmente igual ao nome).
+Este modulo provisiona um bucket Amazon S3 seguindo os padroes internos de nomenclatura, tags e seguranca da organizacao. O bucket e criado com:
 
-4. Exemplo de uso do módulo/recurso
-module "s3_bucket" {
+- Nomenclatura padronizada no formato `<ambiente>-<sistema>-s3-<finalidade>`;
+- Bloqueio total de acesso publico (as quatro flags do Public Access Block habilitadas);
+- Criptografia server-side habilitada por padrao (AES256, configuravel);
+- Bucket policy que nega explicitamente qualquer requisicao sem `aws:SecureTransport`;
+- Versionamento configuravel por variavel, com padrao `Enabled`;
+- Tags obrigatorias da organizacao aplicadas automaticamente.
+
+## Variaveis
+
+| Nome                | Tipo         | Obrigatoria | Descricao                                                                 |
+|---------------------|--------------|-------------|----------------------------------------------------------------------------|
+| environment         | string       | Sim         | Ambiente de implantacao (dev, hml ou prd).                                |
+| system              | string       | Sim         | Nome do sistema ao qual o bucket pertence.                                |
+| region              | string       | Nao         | Regiao AWS onde o bucket sera criado. Padrao: `us-east-1`.                |
+| purpose             | string       | Sim         | Finalidade do bucket, utilizada na nomenclatura padronizada.              |
+| versioning_status   | string       | Nao         | Status do versionamento do bucket (Enabled ou Suspended). Padrao: `Enabled`. |
+| sse_algorithm       | string       | Nao         | Algoritmo de criptografia server-side (AES256 ou aws:kms). Padrao: `AES256`. |
+| force_destroy       | bool         | Nao         | Permite exclusao do bucket com objetos. Padrao: `false`.                  |
+| additional_tags     | map(string)  | Nao         | Tags adicionais aplicadas ao bucket, alem das obrigatorias. Padrao: `{}`. |
+
+## Outputs
+
+| Nome         | Descricao                              |
+|--------------|-----------------------------------------|
+| bucket_name  | Nome do bucket S3 criado.               |
+| bucket_arn   | ARN do bucket S3 criado.                |
+| bucket_id    | Identificador (id) do bucket S3 criado. |
+
+## Exemplo de uso
+
+```hcl
+module "s3_logs" {
   source = "./"
 
-  environment     = "dev"
-  system          = "tcc"
-  purpose         = "logs"
-  region          = "us-east-1"
+  environment = "dev"
+  system      = "tcc"
+  purpose     = "logs"
+  region      = "us-east-1"
+
   versioning_status = "Enabled"
+  sse_algorithm     = "AES256"
 
   additional_tags = {
     Team = "platform"
   }
 }
+```

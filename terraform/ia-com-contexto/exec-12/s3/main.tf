@@ -1,34 +1,25 @@
+locals {
+  bucket_name = "${var.environment}-${var.system}-s3-${var.purpose}"
+
+  mandatory_tags = {
+    Project     = "tcc-iac-ia"
+    Environment = var.environment
+    ManagedBy   = "terraform"
+    Owner       = "devops"
+    CostCenter  = "academic-research"
+  }
+
+  tags = merge(local.mandatory_tags, var.additional_tags)
+}
+
 provider "aws" {
   region = var.region
 }
 
-locals {
-  bucket_name = lower(format("%s-%s-s3-%s", var.environment, var.system, var.purpose))
-
-  common_tags = merge(
-    {
-      Project     = "tcc-iac-ia"
-      Environment = var.environment
-      ManagedBy   = "terraform"
-      Owner       = "devops"
-      CostCenter  = "academic-research"
-    },
-    var.additional_tags
-  )
-}
-
 resource "aws_s3_bucket" "this" {
-  bucket        = local.bucket_name
-  force_destroy = var.force_destroy
+  bucket = local.bucket_name
 
-  tags = local.common_tags
-}
-
-resource "aws_s3_bucket_ownership_controls" "this" {
-  bucket = aws_s3_bucket.this.id
-  rule {
-    object_ownership = "BucketOwnerEnforced"
-  }
+  tags = local.tags
 }
 
 resource "aws_s3_bucket_public_access_block" "this" {
@@ -45,8 +36,7 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "this" {
 
   rule {
     apply_server_side_encryption_by_default {
-      sse_algorithm     = var.sse_algorithm
-      kms_master_key_id = var.sse_algorithm == "aws:kms" ? var.kms_key_id : null
+      sse_algorithm = "AES256"
     }
   }
 }
@@ -61,18 +51,19 @@ resource "aws_s3_bucket_versioning" "this" {
 
 data "aws_iam_policy_document" "deny_insecure_transport" {
   statement {
-    sid     = "DenyInsecureTransport"
-    effect  = "Deny"
-    actions = ["s3:*"]
+    sid    = "DenyInsecureTransport"
+    effect = "Deny"
 
     principals {
-      type        = "*"
+      type        = "AWS"
       identifiers = ["*"]
     }
 
+    actions = ["s3:*"]
+
     resources = [
       aws_s3_bucket.this.arn,
-      "${aws_s3_bucket.this.arn}/*"
+      "${aws_s3_bucket.this.arn}/*",
     ]
 
     condition {
@@ -86,4 +77,6 @@ data "aws_iam_policy_document" "deny_insecure_transport" {
 resource "aws_s3_bucket_policy" "this" {
   bucket = aws_s3_bucket.this.id
   policy = data.aws_iam_policy_document.deny_insecure_transport.json
+
+  depends_on = [aws_s3_bucket_public_access_block.this]
 }

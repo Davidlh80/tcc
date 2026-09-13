@@ -1,44 +1,62 @@
-Visão geral do recurso
-- Este template cria uma AWS IAM Policy com nome padronizado <ambiente>-<sistema>-iam-<policy_name>, aplicando tags obrigatórias e seguindo o princípio do menor privilégio.
-- A policy contém apenas um bloco Effect: Allow com as ações e recursos explicitamente informados por variável.
-- Controle de segurança: é proibido combinar Action "*" com Resource "*" na mesma statement. A validação das variáveis impede essa configuração.
-- O template não anexa a policy a entidades IAM e não replica efeitos de policies administrativas gerenciadas (ex.: AdministratorAccess).
+# IAM Policy — dev-tcc-iam-\<finalidade\>
 
-Tabela de variáveis
-- environment (string, obrigatório): Ambiente alvo. Valores permitidos: dev, hml, prd.
-- system (string, obrigatório): Identificador do sistema/produto (minúsculo, números e hífen), usado na composição do nome.
-- region (string, obrigatório): Região AWS (ex.: us-east-1) usada pelo provider.
-- policy_name (string, obrigatório): Finalidade/nome lógico da policy, parte final do padrão de nomenclatura.
-- allowed_actions (set(string), obrigatório): Lista de ações explícitas permitidas (ex.: s3:GetObject, s3:ListBucket, ec2:*). Regra: não pode ser "*" ao mesmo tempo que allowed_resources contenha "*".
-- allowed_resources (set(string), obrigatório): Lista de recursos explícitos (ARNs). Pode usar "*" desde que allowed_actions não seja "*".
-- description (string, opcional): Descrição da IAM Policy. Padrão: texto informativo gerado pelo template.
-- additional_tags (map(string), opcional): Tags adicionais para complementar as obrigatórias.
+## 1. Visão Geral
 
-Tabela de outputs
-- policy_name: Nome final da IAM Policy criada.
-- policy_arn: ARN da IAM Policy criada.
-- policy_id: ID interno da IAM Policy criada.
+Este template Terraform provisiona uma IAM Policy (`aws_iam_policy`) seguindo o padrão de nomenclatura `<ambiente>-<sistema>-iam-<finalidade>` e as tags obrigatórias da organização.
 
-Exemplo de uso
-module "iam_policy_readonly" {
-  source = "./"
+O documento da policy é construído dinamicamente a partir da variável `policy_statements`, permitindo múltiplos statements com `Effect = "Allow"`. As restrições de segurança abaixo são aplicadas via validação de variável:
 
-  region       = "us-east-1"
-  environment  = "dev"
-  system       = "tcc"
-  policy_name  = "readonly"
+- todo statement é sempre `Effect = "Allow"`; a policy não suporta `Deny` nem `Effect` customizado;
+- é proibido combinar a action `"*"` com o resource `"*"` na mesma statement;
+- ações e recursos permitidos são definidos exclusivamente pela variável `policy_statements`, informada pelo consumidor do módulo;
+- este template não anexa nem replica nenhuma policy gerenciada administrativa (ex.: `AdministratorAccess`) — apenas cria a policy, sem realizar attachments.
 
-  allowed_actions = [
-    "s3:GetObject",
-    "s3:ListBucket"
-  ]
+## 2. Variáveis
 
-  allowed_resources = [
-    "arn:aws:s3:::example-bucket",
-    "arn:aws:s3:::example-bucket/*"
-  ]
+| Nome                  | Tipo                                                                 | Obrigatória | Descrição                                                                                     |
+|-----------------------|-----------------------------------------------------------------------|:-----------:|-----------------------------------------------------------------------------------------------|
+| `environment`         | `string`                                                              | Sim         | Ambiente de implantação (`dev`, `hml` ou `prd`).                                              |
+| `system`               | `string`                                                              | Sim         | Nome do sistema/aplicação, usado na composição do nome padronizado.                           |
+| `region`               | `string`                                                              | Não         | Região AWS de referência. Padrão: `us-east-1`.                                                |
+| `additional_tags`      | `map(string)`                                                         | Não         | Tags adicionais mescladas com as tags obrigatórias da organização. Padrão: `{}`.               |
+| `policy_name`          | `string`                                                              | Sim         | Finalidade da policy, usada no nome padronizado (`<ambiente>-<sistema>-iam-<finalidade>`).     |
+| `policy_description`   | `string`                                                              | Não         | Descrição da IAM Policy. Padrão: `"IAM Policy gerenciada via Terraform."`.                    |
+| `policy_statements`    | `list(object({ sid = optional(string), actions = list(string), resources = list(string) }))` | Sim | Lista de statements `Allow` da policy, com ações e recursos permitidos por statement.          |
 
-  additional_tags = {
-    Team = "platform"
-  }
-}
+## 3. Outputs
+
+| Nome           | Descrição                              |
+|----------------|-----------------------------------------|
+| `policy_name`  | Nome da IAM Policy criada.              |
+| `policy_arn`   | ARN da IAM Policy criada.               |
+| `policy_id`    | ID da IAM Policy criada.                |
+
+## 4. Exemplo de Uso
+
+    module "iam_policy_readonly" {
+      source = "./."
+
+      environment = "prd"
+      system      = "tcc"
+      region      = "us-east-1"
+      policy_name = "readonly"
+
+      policy_statements = [
+        {
+          sid       = "ReadOnlyS3"
+          actions   = ["s3:GetObject", "s3:ListBucket"]
+          resources = [
+            "arn:aws:s3:::prd-tcc-s3-logs",
+            "arn:aws:s3:::prd-tcc-s3-logs/*"
+          ]
+        }
+      ]
+
+      additional_tags = {
+        Squad = "plataforma"
+      }
+    }
+
+    output "iam_policy_arn" {
+      value = module.iam_policy_readonly.policy_arn
+    }

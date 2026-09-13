@@ -1,12 +1,16 @@
+terraform {
+  required_version = ">= 1.5.0"
+}
+
 provider "aws" {
-  region = var.region
+  region = var.aws_region
 }
 
 locals {
   tags = merge(
     {
+      Name      = var.bucket_name
       ManagedBy = "Terraform"
-      Component = "s3-bucket"
     },
     var.tags
   )
@@ -30,10 +34,10 @@ resource "aws_s3_bucket_ownership_controls" "this" {
 resource "aws_s3_bucket_public_access_block" "this" {
   bucket = aws_s3_bucket.this.id
 
-  block_public_acls       = var.block_public_acls
-  block_public_policy     = var.block_public_policy
-  ignore_public_acls      = var.ignore_public_acls
-  restrict_public_buckets = var.restrict_public_buckets
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
 }
 
 resource "aws_s3_bucket_versioning" "this" {
@@ -49,30 +53,27 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "this" {
 
   rule {
     apply_server_side_encryption_by_default {
-      sse_algorithm     = var.sse_algorithm
-      kms_master_key_id = var.sse_algorithm == "aws:kms" ? var.kms_key_id : null
+      sse_algorithm     = var.kms_key_arn != null ? "aws:kms" : "AES256"
+      kms_master_key_id = var.kms_key_arn
     }
-    bucket_key_enabled = var.enable_bucket_key
+    bucket_key_enabled = var.kms_key_arn != null
   }
 }
 
 data "aws_iam_policy_document" "deny_insecure_transport" {
   statement {
-    sid    = "DenyInsecureTransport"
-    effect = "Deny"
-    actions = [
-      "s3:*"
-    ]
-
-    principals {
-      type        = "*"
-      identifiers = ["*"]
-    }
-
+    sid       = "DenyInsecureTransport"
+    effect    = "Deny"
+    actions   = ["s3:*"]
     resources = [
       aws_s3_bucket.this.arn,
       "${aws_s3_bucket.this.arn}/*"
     ]
+
+    principals {
+      type        = "AWS"
+      identifiers = ["*"]
+    }
 
     condition {
       test     = "Bool"
@@ -83,11 +84,8 @@ data "aws_iam_policy_document" "deny_insecure_transport" {
 }
 
 resource "aws_s3_bucket_policy" "this" {
-  count  = var.attach_tls_policy ? 1 : 0
   bucket = aws_s3_bucket.this.id
   policy = data.aws_iam_policy_document.deny_insecure_transport.json
 
-  depends_on = [
-    aws_s3_bucket_public_access_block.this
-  ]
+  depends_on = [aws_s3_bucket_public_access_block.this]
 }

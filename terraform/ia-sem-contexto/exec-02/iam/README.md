@@ -1,46 +1,60 @@
-# Terraform AWS IAM Policy
+# IAM Policy — Blueprint Terraform
 
-Blueprint simples e segura para criar uma AWS IAM Policy gerenciada via Terraform.
+Blueprint autonoma para provisionar uma IAM Policy gerenciada pelo cliente (customer managed policy) na AWS, seguindo o principio de menor privilegio por padrao.
 
-Principais caracteristicas:
-- Provider AWS oficial
-- Variaveis para valores configuraveis
-- Policy document gerado com aws_iam_policy_document
-- Suporte opcional a conditions
-- Tags padrao ManagedBy=Terraform (mescladas com suas tags)
+## Recursos criados
 
-Como usar (exemplo rapido):
-1) Defina variaveis (ex.: em terraform.tfvars)
-policy_name   = "example-readonly"
-actions       = ["s3:ListAllMyBuckets", "s3:ListBucket"]
-resource_arns = ["*"]
-aws_region    = "us-east-1"
+- `data.aws_iam_policy_document.this`: documento de politica montado dinamicamente a partir de `var.statements`.
+- `aws_iam_policy.this`: IAM Policy gerenciada.
 
-2) Execute
+## Decisoes de seguranca
+
+- Nenhum statement default permite `Resource = "*"`; validacoes em `variables.tf` bloqueiam wildcard isolado em `resources`.
+- `effect` de cada statement e restrito a `Allow` ou `Deny` via validacao.
+- Cada statement exige ao menos uma action e um resource explicitos.
+- Nao ha valores sensiveis fixos nem dependencia de credenciais reais para `terraform validate`.
+
+## Uso
+
+```
 terraform init -backend=false
 terraform validate
-terraform plan
-terraform apply
+terraform plan -var="aws_region=us-east-1"
+```
 
-Variaveis principais:
-- aws_region (string, default: us-east-1)
-- policy_name (string, obrigatoria)
-- policy_path (string, default: "/")
-- description (string, default: "IAM policy gerenciada pelo Terraform.")
-- policy_effect (string, default: "Allow", valores: Allow|Deny)
-- statement_sid (string, default: "PrimaryStatement")
-- actions (list(string), obrigatoria)
-- resource_arns (list(string), obrigatoria)
-- conditions (list(object), opcional)
-- tags (map(string), opcional)
+Para customizar as permissoes, sobrescreva `statements` com os ARNs e actions desejados, por exemplo via arquivo `terraform.tfvars`:
 
-Outputs:
-- policy_arn
-- policy_name
-- policy_id
-- policy_path
-- policy_document_json
+```
+statements = [
+  {
+    sid       = "AllowReadDynamoTable"
+    effect    = "Allow"
+    actions   = ["dynamodb:GetItem", "dynamodb:Query"]
+    resources = ["arn:aws:dynamodb:us-east-1:123456789012:table/minha-tabela"]
+  }
+]
+```
 
-Notas:
-- Este template evita backend remoto e nao depende de credenciais reais para validacao sintatica.
-- Ajuste actions e resource_arns conforme sua necessidade de privilegios minimos.
+## Variaveis
+
+| Nome          | Descricao                                         | Tipo                  | Default                  |
+|---------------|----------------------------------------------------|------------------------|---------------------------|
+| aws_region    | Regiao AWS utilizada pelo provider                 | string                 | "us-east-1"               |
+| policy_name   | Nome da IAM Policy                                 | string                 | "app-custom-policy"       |
+| path          | Path da IAM Policy no IAM                          | string                 | "/"                       |
+| description   | Descricao da IAM Policy                            | string                 | ver `variables.tf`        |
+| statements    | Lista de statements (sid, effect, actions, resources) | list(object)        | statement de exemplo em S3 |
+| tags          | Tags aplicadas ao recurso                          | map(string)            | { ManagedBy = "terraform" } |
+
+## Outputs
+
+| Nome         | Descricao                          |
+|--------------|-------------------------------------|
+| policy_arn   | ARN da IAM Policy criada            |
+| policy_id    | ID da IAM Policy criada             |
+| policy_name  | Nome da IAM Policy criada           |
+| policy_path  | Path da IAM Policy criada           |
+
+## Observacoes
+
+Esta blueprint nao anexa a policy a nenhuma role, user ou group — o attachment deve ser feito por outro modulo/recurso conforme a necessidade de cada ambiente.

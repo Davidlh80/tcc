@@ -1,77 +1,52 @@
-Visão geral do recurso
-- Este template cria um bucket Amazon S3 seguindo as diretrizes organizacionais:
-  - Nome no padrão <ambiente>-<sistema>-<recurso>-<finalidade> (com recurso = s3).
-  - Bloqueio das quatro flags do Public Access Block.
-  - Criptografia server-side habilitada por padrão (SSE-S3/AES256), com opção de KMS.
-  - Bucket policy negando qualquer requisição sem aws:SecureTransport (somente HTTPS).
-  - Versionamento configurável por variável (padrão Enabled).
-  - Tags obrigatórias aplicadas, com suporte a tags adicionais sem sobrescrever as mandatórias.
-  - Ownership Controls em BucketOwnerEnforced para eliminar ACLs.
+# S3 Bucket - dev-tcc-s3-logs (exemplo)
 
-Tabela de variáveis (nome, tipo, obrigatória, descrição)
-- environment
-  - tipo: string
-  - obrigatória: sim (valores permitidos: dev, hml, prd)
-  - descrição: Ambiente do recurso.
-- system
-  - tipo: string
-  - obrigatória: sim
-  - descrição: Identificador do sistema/produto, usado na composição do nome do recurso.
-- region
-  - tipo: string
-  - obrigatória: sim
-  - descrição: Região AWS do provider (ex.: us-east-1).
-- additional_tags
-  - tipo: map(string)
-  - obrigatória: não (padrão: {})
-  - descrição: Tags adicionais. As tags mandatórias não são sobrescritas.
-- purpose
-  - tipo: string
-  - obrigatória: sim
-  - descrição: Finalidade do bucket, usada na composição do nome (ex.: logs).
-- versioning_status
-  - tipo: string
-  - obrigatória: não (padrão: Enabled)
-  - descrição: Status do versionamento (Enabled ou Suspended).
-- sse_algorithm
-  - tipo: string
-  - obrigatória: não (padrão: AES256)
-  - descrição: Algoritmo de criptografia server-side (AES256 ou aws:kms).
-- kms_key_id
-  - tipo: string
-  - obrigatória: condicional (obrigatório se sse_algorithm = aws:kms)
-  - descrição: ARN/ID da CMK usada para SSE-KMS.
-- force_destroy
-  - tipo: bool
-  - obrigatória: não (padrão: false)
-  - descrição: Se true, permite destruir o bucket mesmo contendo objetos.
+## Visao geral
 
-Tabela de outputs (nome, descrição)
-- bucket_name
-  - descrição: Nome do bucket S3 criado.
-- bucket_arn
-  - descrição: ARN do bucket S3 criado.
-- bucket_id
-  - descrição: ID do bucket S3 (igual ao nome).
+Este modulo provisiona um bucket Amazon S3 seguindo os padroes internos de nomenclatura, tags e seguranca da organizacao. O recurso e criado com:
 
-Exemplo de uso do módulo/recurso
-- Exemplo mínimo:
-  module "s3_bucket" {
-    source = "./"
+- Bloqueio total de acesso publico (quatro flags do Public Access Block habilitadas);
+- Criptografia server-side habilitada por padrao (AES256, configuravel para aws:kms);
+- Bucket policy que nega explicitamente qualquer requisicao sem `aws:SecureTransport`;
+- Versionamento configuravel por variavel, com padrao `Enabled`;
+- Nomenclatura padronizada no formato `<ambiente>-<sistema>-<recurso>-<finalidade>`;
+- Tags obrigatorias aplicadas automaticamente, combinaveis com tags adicionais.
 
-    environment     = "dev"
-    system          = "tcc"
-    region          = "us-east-1"
-    purpose         = "logs"
-    versioning_status = "Enabled"
+## Variaveis
 
-    # Opcional: criptografia com KMS
-    # sse_algorithm = "aws:kms"
-    # kms_key_id    = "arn:aws:kms:us-east-1:111122223333:key/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+| Nome                | Tipo         | Obrigatoria | Descricao                                                                 |
+|---------------------|--------------|-------------|----------------------------------------------------------------------------|
+| `environment`        | `string`     | Sim         | Ambiente de implantacao (`dev`, `hml` ou `prd`).                          |
+| `system`              | `string`     | Sim         | Identificador do sistema, usado no padrao de nomenclatura.                |
+| `region`              | `string`     | Nao         | Regiao AWS onde o recurso sera criado. Padrao: `us-east-1`.               |
+| `additional_tags`     | `map(string)`| Nao         | Tags adicionais mescladas com as tags obrigatorias. Padrao: `{}`.         |
+| `purpose`             | `string`     | Sim         | Finalidade do bucket, usada no padrao de nomenclatura.                    |
+| `versioning_status`   | `string`     | Nao         | Status do versionamento (`Enabled` ou `Suspended`). Padrao: `Enabled`.    |
+| `sse_algorithm`       | `string`     | Nao         | Algoritmo de criptografia server-side (`AES256` ou `aws:kms`). Padrao: `AES256`. |
 
-    additional_tags = {
-      Team = "platform"
-    }
+## Outputs
+
+| Nome           | Descricao                              |
+|----------------|------------------------------------------|
+| `bucket_name`  | Nome do bucket S3 criado.                |
+| `bucket_arn`   | ARN do bucket S3 criado.                 |
+| `bucket_id`    | ID do bucket S3 criado.                  |
+
+## Exemplo de uso
+
+```hcl
+module "s3_logs" {
+  source = "./"
+
+  environment = "dev"
+  system      = "tcc"
+  purpose     = "logs"
+  region      = "us-east-1"
+
+  versioning_status = "Enabled"
+  sse_algorithm     = "AES256"
+
+  additional_tags = {
+    Squad = "plataforma"
   }
-
-- O nome resultante do bucket seguirá o padrão: dev-tcc-s3-logs.
+}
+```

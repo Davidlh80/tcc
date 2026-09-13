@@ -1,57 +1,68 @@
-Blueprint Terraform: IAM Policy AWS
+# IAM Policy — Blueprint Terraform
 
-Descrição
-- Cria uma IAM Policy gerenciada na AWS com configurações seguras por padrão.
-- Permite definir ações permitidas e, opcionalmente, ações negadas.
+Blueprint autonomo para provisionamento de uma IAM Policy na AWS, sem dependencia de padroes organizacionais especificos. As decisoes de nomenclatura, escopo de permissoes e tags seguem boas praticas gerais de mercado, com enfase em menor privilegio.
 
-Arquivos
-- main.tf: Provider, documento da policy e recurso aws_iam_policy.
-- variables.tf: Declaração e validação de variáveis.
-- outputs.tf: Saídas úteis (ARN, nome, ID, JSON da policy, etc).
-- versions.tf: Versões mínimas do Terraform e do provider AWS.
-- README.md: Instruções e exemplos.
+## Recursos criados
 
-Pré-requisitos
-- Terraform >= 1.3.0
-- Provider AWS >= 5.0
-- Credenciais AWS configuradas no ambiente (para aplicar)
+- `aws_iam_policy.this`: IAM Policy gerenciada, com documento de politica construido via `data.aws_iam_policy_document.this`.
 
-Variáveis principais
-- region (string): Região AWS. Padrão: us-east-1
-- policy_name (string): Nome da policy. Padrão: tf-iam-policy
-- policy_description (string): Descrição. Padrão: Managed by Terraform - example IAM policy
-- policy_path (string): Caminho da policy. Padrão: /
-- allowed_actions (list(string)): Ações permitidas. Padrão: ["sts:GetCallerIdentity"]
-- resource_arns (list(string)): Recursos alvo (ou "*"). Padrão: ["*"]
-- deny_actions (list(string)): Ações negadas (opcional). Padrão: []
-- deny_resource_arns (list(string)): Recursos alvo para negação (opcional). Padrão: []
-- tags (map(string)): Tags para a policy. Padrão: {}
+## Decisoes de seguranca
 
-Exemplo de uso
-- Ajuste as variáveis conforme necessário, por exemplo via terraform.tfvars:
-region = "us-east-1"
-policy_name = "example-minimal-policy"
-policy_description = "Policy de exemplo criada por Terraform"
-allowed_actions = [
-  "ec2:DescribeInstances",
-  "s3:ListAllMyBuckets"
-]
-resource_arns = ["*"]
-deny_actions = []
-deny_resource_arns = []
-tags = {
-  Project = "terraform-iam-policy"
-  Owner   = "devops"
+- Nenhum valor padrao permite o wildcard global `"*"` em `actions` ou `resources`; ambos os campos sao validados para rejeitar esse valor, forcando o consumidor do modulo a declarar acoes e recursos explicitos.
+- Nao ha valores sensiveis fixos no codigo; toda configuracao e parametrizada via variaveis.
+- O efeito da statement (`Allow`/`Deny`) e configuravel e validado.
+
+## Uso
+
+```hcl
+module "iam_policy" {
+  source = "./"
+
+  policy_name         = "app-s3-read-only"
+  policy_description  = "Permite leitura de objetos em um bucket especifico"
+  effect              = "Allow"
+  actions             = [
+    "s3:GetObject",
+    "s3:ListBucket",
+  ]
+  resources = [
+    "arn:aws:s3:::exemplo-bucket",
+    "arn:aws:s3:::exemplo-bucket/*",
+  ]
+
+  tags = {
+    Environment = "dev"
+    ManagedBy   = "terraform"
+  }
 }
+```
 
-Comandos
-- Formatar: terraform fmt
-- Validar: terraform validate
-- Inicializar (sem backend remoto): terraform init -backend=false
-- Plano: terraform plan
-- Aplicar: terraform apply
+## Inputs
 
-Notas
-- O exemplo padrão permite apenas sts:GetCallerIdentity em todos os recursos, útil para validação de credenciais.
-- Para aumentar privilégio, adicione ações e restrinja resource_arns quando possível.
-- Os blocos de negação são opcionais; se informados, uma declaração explícita Deny será criada.
+| Nome | Descricao | Tipo | Default | Obrigatorio |
+|---|---|---|---|---|
+| aws_region | Regiao AWS utilizada pelo provider | `string` | `"us-east-1"` | nao |
+| policy_name | Nome da IAM Policy | `string` | - | sim |
+| policy_description | Descricao da IAM Policy | `string` | `"Managed by Terraform"` | nao |
+| path | Path da IAM Policy no IAM | `string` | `"/"` | nao |
+| effect | Efeito da statement (`Allow` ou `Deny`) | `string` | `"Allow"` | nao |
+| actions | Lista de acoes IAM cobertas pela policy | `list(string)` | - | sim |
+| resources | Lista de ARNs de recursos alvo da policy | `list(string)` | - | sim |
+| tags | Tags aplicadas a IAM Policy | `map(string)` | `{}` | nao |
+
+## Outputs
+
+| Nome | Descricao |
+|---|---|
+| policy_arn | ARN da IAM Policy criada |
+| policy_id | ID da IAM Policy criada |
+| policy_name | Nome da IAM Policy criada |
+
+## Validacao local
+
+```bash
+terraform init -backend=false
+terraform validate
+```
+
+Nenhuma credencial real e necessaria para `init`/`validate`, pois nao ha data sources ou recursos que exijam chamadas de API na fase de validacao sintatica.

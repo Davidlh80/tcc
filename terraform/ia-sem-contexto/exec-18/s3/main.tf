@@ -1,18 +1,21 @@
-locals {
-  common_tags = merge(
-    {
-      ManagedBy       = "Terraform"
-      TerraformModule = "s3-bucket-blueprint"
-    },
-    var.tags
-  )
+terraform {
+  required_version = ">= 1.5.0"
+}
+
+provider "aws" {
+  region = var.aws_region
 }
 
 resource "aws_s3_bucket" "this" {
   bucket        = var.bucket_name
   force_destroy = var.force_destroy
 
-  tags = local.common_tags
+  tags = merge(
+    var.tags,
+    {
+      Name = var.bucket_name
+    }
+  )
 }
 
 resource "aws_s3_bucket_ownership_controls" "this" {
@@ -45,35 +48,23 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "this" {
 
   rule {
     apply_server_side_encryption_by_default {
-      sse_algorithm     = var.sse_algorithm
-      kms_master_key_id = var.sse_algorithm == "aws:kms" ? var.kms_key_arn : null
+      sse_algorithm     = var.kms_key_arn != null ? "aws:kms" : "AES256"
+      kms_master_key_id = var.kms_key_arn
     }
-    bucket_key_enabled = var.sse_algorithm == "aws:kms" ? true : false
+    bucket_key_enabled = var.kms_key_arn != null ? true : false
   }
 }
 
-resource "aws_s3_bucket_policy" "tls_enforcement" {
-  count  = var.enable_tls_policy ? 1 : 0
+resource "aws_s3_bucket_lifecycle_configuration" "this" {
+  count  = var.enable_lifecycle_rule ? 1 : 0
   bucket = aws_s3_bucket.this.id
 
-  policy = jsonencode({
-    Version   = "2012-10-17"
-    Statement = [
-      {
-        Sid       = "DenyInsecureTransport"
-        Effect    = "Deny"
-        Principal = "*"
-        Action    = "s3:*"
-        Resource = [
-          aws_s3_bucket.this.arn,
-          "${aws_s3_bucket.this.arn}/*"
-        ]
-        Condition = {
-          Bool = {
-            "aws:SecureTransport" = "false"
-          }
-        }
-      }
-    ]
-  })
+  rule {
+    id     = "expire-noncurrent-versions"
+    status = "Enabled"
+
+    noncurrent_version_expiration {
+      noncurrent_days = var.noncurrent_version_expiration_days
+    }
+  }
 }

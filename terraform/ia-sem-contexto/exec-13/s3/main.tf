@@ -1,22 +1,21 @@
-provider "aws" {
-  region = var.region
+terraform {
+  required_version = ">= 1.5.0"
 }
 
-locals {
-  common_tags = merge(
-    var.tags,
-    {
-      ManagedBy = "terraform"
-    }
-  )
+provider "aws" {
+  region = var.aws_region
 }
 
 resource "aws_s3_bucket" "this" {
-  bucket              = var.bucket_name
-  force_destroy       = var.force_destroy
-  object_lock_enabled = var.object_lock_enabled
+  bucket        = var.bucket_name
+  force_destroy = var.force_destroy
 
-  tags = local.common_tags
+  tags = merge(
+    {
+      Name = var.bucket_name
+    },
+    var.tags
+  )
 }
 
 resource "aws_s3_bucket_ownership_controls" "this" {
@@ -49,59 +48,31 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "this" {
 
   rule {
     apply_server_side_encryption_by_default {
-      sse_algorithm = "AES256"
+      sse_algorithm     = var.kms_key_arn != null ? "aws:kms" : "AES256"
+      kms_master_key_id = var.kms_key_arn
     }
+    bucket_key_enabled = var.kms_key_arn != null ? true : null
   }
 }
 
-# Lifecycle: abort incomplete multipart uploads and optionally expire noncurrent versions
 resource "aws_s3_bucket_lifecycle_configuration" "this" {
+  count  = var.enable_lifecycle_rule ? 1 : 0
   bucket = aws_s3_bucket.this.id
 
   rule {
-    id     = "default-lifecycle"
+    id     = "expire-noncurrent-versions"
     status = "Enabled"
 
-    abort_incomplete_multipart_upload {
-      days_after_initiation = var.abort_multipart_upload_days
-    }
-
-    dynamic "noncurrent_version_expiration" {
-      for_each = var.versioning_enabled ? [1] : []
-      content {
-        noncurrent_days = var.noncurrent_version_expiration_days
-      }
-    }
-  }
-
-  depends_on = [aws_s3_bucket_versioning.this]
-}
-
-data "aws_iam_policy_document" "deny_insecure_transport" {
-  statement {
-    sid     = "DenyInsecureTransport"
-    effect  = "Deny"
-    actions = ["s3:*"]
-
-    principals {
-      type        = "*"
-      identifiers = ["*"]
-    }
-
-    resources = [
-      aws_s3_bucket.this.arn,
-      "${aws_s3_bucket.this.arn}/*"
-    ]
-
-    condition {
-      test     = "Bool"
-      variable = "aws:SecureTransport"
-      values   = ["false"]
+    noncurrent_version_expiration {
+      noncurrent_days = var.noncurrent_version_expiration_days
     }
   }
 }
 
-resource "aws_s3_bucket_policy" "this" {
+resource "aws_s3_bucket_logging" "this" {
+  count  = var.logging_target_bucket != null ? 1 : 0
   bucket = aws_s3_bucket.this.id
-  policy = data.aws_iam_policy_document.deny_insecure_transport.json
+
+  target_bucket = var.logging_target_bucket
+  target_prefix = var.logging_target_prefix
 }

@@ -1,65 +1,75 @@
-Blueprint Terraform: IAM Policy (AWS)
+# IAM Policy - Blueprint Terraform
 
-Descrição
-- Cria uma IAM Policy (Customer Managed) na AWS usando Terraform.
-- Por padrão, quando nenhum statement é informado, cria uma policy mínima com a permissão sts:GetCallerIdentity para facilitar validação e testes sem conceder privilégios elevados.
+Blueprint para provisionamento de uma IAM Policy na AWS, com permissoes definidas por statements configuraveis.
 
-Requisitos
-- Terraform >= 1.3.0
-- Provider AWS >= 5.0
-- Credenciais AWS válidas no ambiente de execução (para apply). Para terraform validate não são necessárias.
+## Recursos criados
 
-Entradas (variables)
-- aws_region (string, default: us-east-1): Região AWS.
-- policy_name (string, default: custom-iam-policy): Nome da policy.
-- policy_description (string, default: Managed by Terraform - Customer managed policy.): Descrição.
-- policy_path (string, default: "/"): Path da policy. Deve ser "/" ou iniciar e terminar com "/".
-- policy_statements (list(object), default: []): Lista de statements. Campos:
-  - effect: "Allow" ou "Deny"
-  - actions: lista de ações (ex.: ["s3:ListBucket"])
-  - resources: lista de ARNs ou "*" (ex.: ["arn:aws:s3:::meu-bucket"])
-  - condition (opcional): lista de condições com campos test, variable, values
-- tags (map(string), default: {}): Tags aplicadas ao recurso.
+- `aws_iam_policy.this`
 
-Saídas (outputs)
-- iam_policy_arn: ARN da policy criada.
-- iam_policy_name: Nome da policy.
-- iam_policy_id: ID exclusivo da policy.
-- iam_policy_default_version_id: Versão padrão da policy.
-- iam_policy_document_json: Documento JSON efetivo gerado.
+## Decisoes de design
 
-Exemplo de uso
-# Definindo uma policy de leitura em S3
-aws_region = "us-east-1"
+- Nenhuma action ou resource usa wildcard (`*`) por padrao; o exemplo default concede apenas `s3:GetObject` e `s3:ListBucket` sobre um bucket especifico, seguindo o principio de menor privilegio.
+- Os statements da policy sao totalmente configuraveis via a variavel `statements`, permitindo compor multiplas permissoes sem alterar o `main.tf`.
+- Nao ha credenciais, ARNs de conta ou identificadores reais fixos no codigo; os valores sensiveis devem ser fornecidos via variaveis no momento do uso.
+- Tags padrao incluem `ManagedBy = "terraform"` para rastreabilidade.
 
-policy_name        = "example-readonly-s3"
-policy_description = "Exemplo de policy de somente leitura no S3"
-policy_path        = "/teamA/"
+## Uso
 
-policy_statements = [
-  {
-    effect    = "Allow"
-    actions   = ["s3:ListAllMyBuckets", "s3:ListBucket"]
-    resources = ["*"]
-  },
-  {
-    effect    = "Allow"
-    actions   = ["s3:GetObject"]
-    resources = ["arn:aws:s3:::meu-bucket/*"]
+```
+module "iam_policy" {
+  source = "./"
+
+  policy_name        = "minha-policy"
+  policy_description = "Policy especifica para o time X"
+
+  statements = [
+    {
+      sid       = "AllowReadSpecificBucket"
+      effect    = "Allow"
+      actions   = ["s3:GetObject", "s3:ListBucket"]
+      resources = [
+        "arn:aws:s3:::meu-bucket",
+        "arn:aws:s3:::meu-bucket/*"
+      ]
+    }
+  ]
+
+  tags = {
+    Environment = "prod"
+    Owner       = "time-x"
   }
-]
-
-tags = {
-  Project = "example"
-  Owner   = "devops"
 }
+```
 
-Como validar localmente
-- terraform init -backend=false
-- terraform validate
-- terraform plan (requer credenciais AWS configuradas)
+## Inputs
 
-Boas práticas
-- Use recursos e ações o mais específicos possível, evitando curingas quando não necessários.
-- Utilize tags para facilitar governança e auditoria.
-- Revise cuidadosamente os statements antes de aplicar em ambientes produtivos.
+| Nome                 | Tipo                | Default                                   | Descricao                                        |
+|----------------------|---------------------|--------------------------------------------|---------------------------------------------------|
+| `aws_region`         | `string`            | `"us-east-1"`                              | Regiao usada pelo provider AWS                     |
+| `policy_name`        | `string`            | `"least-privilege-example-policy"`         | Nome da IAM Policy                                 |
+| `policy_description` | `string`            | Descricao generica                         | Descricao da IAM Policy                            |
+| `policy_path`        | `string`            | `"/"`                                       | Path da IAM Policy                                 |
+| `tags`                | `map(string)`      | `{ ManagedBy = "terraform" }`               | Tags aplicadas ao recurso                          |
+| `statements`          | `list(object(...))`| Statement de exemplo com S3 read-only       | Statements que compoem o documento IAM da policy   |
+
+## Outputs
+
+| Nome          | Descricao                        |
+|---------------|-----------------------------------|
+| `policy_arn`  | ARN da IAM Policy criada          |
+| `policy_id`   | ID da IAM Policy criada           |
+| `policy_name` | Nome da IAM Policy criada         |
+
+## Seguranca
+
+- Revise cada statement antes de aplicar em producao; evite `actions = ["*"]` ou `resources = ["*"]`.
+- Prefira escopar `resources` a ARNs especificos (bucket, role, tabela, etc.) em vez de abranger toda a conta.
+- Anexe a policy somente as roles/usuarios/grupos que realmente precisam das permissoes concedidas (principio de menor privilegio).
+- Valide o JSON gerado com `terraform plan` e, se possivel, com o IAM Access Analyzer antes do deploy.
+
+## Validacao
+
+```
+terraform init -backend=false
+terraform validate
+```

@@ -1,135 +1,125 @@
-variable "region" {
-  description = "Região AWS para o provisionamento."
-  type        = string
-  validation {
-    condition     = length(trimspace(var.region)) > 0
-    error_message = "A variável 'region' não pode ser vazia."
-  }
-}
-
 variable "environment" {
-  description = "Ambiente do recurso (dev, hml, prd)."
+  description = "Ambiente de implantacao do recurso. Valores permitidos: dev, hml, prd."
   type        = string
+
   validation {
     condition     = contains(["dev", "hml", "prd"], var.environment)
-    error_message = "O 'environment' deve ser um dos seguintes: dev, hml, prd."
+    error_message = "O valor de environment deve ser um dos seguintes: dev, hml, prd."
   }
 }
 
 variable "system" {
-  description = "Nome do sistema/aplicação (minúsculo, números e hífens)."
+  description = "Identificador do sistema/produto ao qual o recurso pertence (usado na nomenclatura padrao)."
   type        = string
+
   validation {
-    condition     = can(regex("^[a-z0-9]+(-[a-z0-9]+)*$", var.system))
-    error_message = "O 'system' deve conter apenas letras minúsculas, números e hífens (formato kebab-case)."
+    condition     = length(trimspace(var.system)) > 0
+    error_message = "system nao pode ser vazio."
   }
 }
 
+variable "region" {
+  description = "Regiao AWS onde o recurso sera criado."
+  type        = string
+  default     = "us-east-1"
+}
+
 variable "additional_tags" {
-  description = "Tags adicionais a serem aplicadas ao recurso."
+  description = "Tags adicionais a serem mescladas com as tags obrigatorias da organizacao."
   type        = map(string)
   default     = {}
 }
 
 variable "vpc_id" {
-  description = "ID da VPC onde o Security Group será criado."
+  description = "ID da VPC onde o Security Group sera criado."
   type        = string
+
   validation {
-    condition     = can(regex("^vpc-[0-9a-fA-F]+$", var.vpc_id))
-    error_message = "O 'vpc_id' deve ser um ID de VPC válido (ex.: vpc-xxxxxxxx)."
+    condition     = can(regex("^vpc-[a-z0-9]+$", var.vpc_id))
+    error_message = "vpc_id deve ser um ID de VPC valido (ex: vpc-0123456789abcdef0)."
   }
 }
 
 variable "security_group_name" {
-  description = "Finalidade do Security Group (comporá o nome final)."
+  description = "Finalidade do Security Group, utilizada como sufixo na nomenclatura padrao (ex: web, database, app)."
   type        = string
+
   validation {
-    condition     = can(regex("^[a-z0-9]+(-[a-z0-9]+)*$", var.security_group_name))
-    error_message = "O 'security_group_name' deve conter apenas letras minúsculas, números e hífens (kebab-case)."
+    condition     = length(trimspace(var.security_group_name)) > 0
+    error_message = "security_group_name nao pode ser vazio."
   }
 }
 
 variable "security_group_description" {
-  description = "Descrição do Security Group."
+  description = "Descricao do Security Group, exibida no console AWS."
   type        = string
-  default     = "Security Group gerenciado por Terraform"
+  default     = "Security group gerenciado via Terraform."
+
+  validation {
+    condition     = length(trimspace(var.security_group_description)) > 0
+    error_message = "security_group_description nao pode ser vazio."
+  }
 }
 
 variable "ingress_rules" {
-  description = "Lista de regras de entrada. Cada regra deve conter descrição e respeitar a política de não expor 0.0.0.0/0 exceto para tcp/443."
+  description = "Lista de regras de entrada do Security Group. 0.0.0.0/0 somente e permitido para a porta 443/tcp. Toda regra deve conter descricao."
   type = list(object({
-    description        = string
-    protocol           = string
-    from_port          = number
-    to_port            = number
-    cidr_blocks        = optional(list(string), [])
-    ipv6_cidr_blocks   = optional(list(string), [])
-    prefix_list_ids    = optional(list(string), [])
-    security_groups    = optional(list(string), [])
-    self               = optional(bool, false)
+    description = string
+    from_port   = number
+    to_port     = number
+    protocol    = string
+    cidr_blocks = list(string)
   }))
   default = []
 
   validation {
     condition = alltrue([
-      for r in var.ingress_rules :
-      length(trimspace(r.description)) > 0
+      for rule in var.ingress_rules : length(trimspace(rule.description)) > 0
     ])
-    error_message = "Todas as regras de entrada devem conter 'description' não vazia."
+    error_message = "Toda regra de ingress deve conter uma descricao nao vazia."
   }
 
   validation {
     condition = alltrue([
-      for r in var.ingress_rules :
-      length([for c in r.cidr_blocks : c if c == "0.0.0.0/0"]) == 0
-      || (lower(r.protocol) == "tcp" && r.from_port == 443 && r.to_port == 443)
+      for rule in var.ingress_rules :
+      !contains(rule.cidr_blocks, "0.0.0.0/0") || (rule.from_port == 443 && rule.to_port == 443 && rule.protocol == "tcp")
     ])
-    error_message = "Regras de entrada não podem usar 0.0.0.0/0 exceto exatamente para tcp/443."
+    error_message = "0.0.0.0/0 so e permitido em regras de ingress para a porta 443/tcp."
   }
 }
 
 variable "egress_rules" {
-  description = "Lista de regras de saída. Deve ser explícita (sem liberação irrestrita) e respeitar a política de 0.0.0.0/0 apenas para tcp/443."
+  description = "Lista de regras de saida do Security Group, declaradas explicitamente. 0.0.0.0/0 somente e permitido para a porta 443/tcp. Toda regra deve conter descricao."
   type = list(object({
-    description        = string
-    protocol           = string
-    from_port          = number
-    to_port            = number
-    cidr_blocks        = optional(list(string), [])
-    ipv6_cidr_blocks   = optional(list(string), [])
-    prefix_list_ids    = optional(list(string), [])
-    security_groups    = optional(list(string), [])
-    self               = optional(bool, false)
+    description = string
+    from_port   = number
+    to_port     = number
+    protocol    = string
+    cidr_blocks = list(string)
   }))
-  # Regra segura padrão: egress apenas para HTTPS
+
   default = [
     {
-      description      = "egress-https-only"
-      protocol         = "tcp"
-      from_port        = 443
-      to_port          = 443
-      cidr_blocks      = ["0.0.0.0/0"]
-      ipv6_cidr_blocks = []
-      prefix_list_ids  = []
-      security_groups  = []
-      self             = false
+      description = "Permite trafego de saida HTTPS (443/tcp) para integracoes e atualizacoes externas"
+      from_port   = 443
+      to_port     = 443
+      protocol    = "tcp"
+      cidr_blocks = ["0.0.0.0/0"]
     }
   ]
 
   validation {
     condition = alltrue([
-      for r in var.egress_rules :
-      length(trimspace(r.description)) > 0
+      for rule in var.egress_rules : length(trimspace(rule.description)) > 0
     ])
-    error_message = "Todas as regras de saída devem conter 'description' não vazia."
+    error_message = "Toda regra de egress deve conter uma descricao nao vazia."
   }
 
   validation {
     condition = alltrue([
-      for r in var.egress_rules :
-      length([for c in r.cidr_blocks : c if c == "0.0.0.0/0"]) == 0
-      || (lower(r.protocol) == "tcp" && r.from_port == 443 && r.to_port == 443)
+      for rule in var.egress_rules :
+      !contains(rule.cidr_blocks, "0.0.0.0/0") || (rule.from_port == 443 && rule.to_port == 443 && rule.protocol == "tcp")
     ])
-    error_message = "Regras de saída não podem usar 0.0.0.0/0 exceto exatamente para tcp/443."
+    error_message = "0.0.0.0/0 so e permitido em regras de egress para a porta 443/tcp."
   }
 }
