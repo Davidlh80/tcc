@@ -1,5 +1,5 @@
 output "security_group_name" {
-  description = "Nome completo do Security Group criado."
+  description = "Nome do Security Group criado."
   value       = aws_security_group.this.name
 }
 

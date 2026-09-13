@@ -3,10 +3,7 @@ provider "aws" {
 }
 
 locals {
-  resource = "iam"
-
-  # Nome padronizado: <ambiente>-<sistema>-<recurso>-<finalidade>
-  name = "${var.environment}-${var.system}-${local.resource}-${var.policy_name}"
+  policy_full_name = "${var.environment}-${var.system}-iam-${var.policy_name}"
 
   mandatory_tags = {
     Project     = "tcc-iac-ia"
@@ -15,30 +12,28 @@ locals {
     Owner       = "devops"
     CostCenter  = "academic-research"
   }
-
-  tags = merge(var.additional_tags, local.mandatory_tags)
 }
 
 data "aws_iam_policy_document" "this" {
   statement {
-    sid       = "AllowSpecificActionsOnSpecificResources"
+    sid       = "AllowConfiguredActions"
     effect    = "Allow"
     actions   = var.allowed_actions
     resources = var.allowed_resources
   }
+
+  lifecycle {
+    precondition {
+      condition     = !(contains(var.allowed_actions, "*") && contains(var.allowed_resources, "*"))
+      error_message = "A combinacao de Action = \"*\" com Resource = \"*\" na mesma statement nao e permitida por esta organizacao."
+    }
+  }
 }
 
 resource "aws_iam_policy" "this" {
-  name        = local.name
+  name        = local.policy_full_name
   description = var.description
   policy      = data.aws_iam_policy_document.this.json
-  tags        = local.tags
 
-  lifecycle {
-    # Segurança: proíbe uma statement com Action="*" e Resource="*"
-    precondition {
-      condition     = !(length(var.allowed_actions) == 1 && var.allowed_actions[0] == "*" && length(var.allowed_resources) == 1 && var.allowed_resources[0] == "*")
-      error_message = "Combinação proibida: 'Action'='*' com 'Resource'='*' na mesma policy."
-    }
-  }
+  tags = merge(local.mandatory_tags, var.additional_tags)
 }

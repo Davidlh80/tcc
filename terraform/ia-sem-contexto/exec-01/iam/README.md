@@ -1,95 +1,53 @@
-Nome
-Blueprint Terraform: AWS IAM Policy
+# IAM Policy — Blueprint Terraform
 
-Descricao
-Este template cria uma IAM Policy gerenciada (customer managed) na AWS a partir de declaracao de statements configuraveis via variaveis. Segue o principio de configuracao segura por padrao (sem permissoes implicitas) exigindo que voce defina os statements de acordo com sua necessidade.
+Blueprint standalone para provisionamento de uma IAM Policy na AWS, com escopo de acoes e recursos definido via variaveis, seguindo o principio de menor privilegio por padrao.
 
-Arquivos
-- main.tf: Provider, documento da policy (data aws_iam_policy_document) e recurso aws_iam_policy.
-- variables.tf: Variaveis de configuracao, com validacoes basicas.
-- outputs.tf: Informacoes uteis da policy criada (ARN, nome, versao padrao, etc.).
-- versions.tf: Versoes minimas do Terraform e provider AWS.
-- README.md: Instrucoes de uso.
+## Recursos criados
 
-Requisitos
-- Terraform >= 1.3.0
-- Provider AWS ~> 5.x
-- Credenciais AWS configuradas no ambiente (para apply)
+- `data.aws_iam_policy_document.this`: documento de policy renderizado a partir de `effect`, `actions` e `resources`.
+- `aws_iam_policy.this`: IAM Policy gerenciada, com nome, path, descricao e tags configuraveis.
 
-Como usar (exemplo)
-1) Ajuste as variaveis em terraform.tfvars ou via -var/-var-file.
-2) Execute:
-   terraform init -backend=false
-   terraform validate
-   terraform plan
-   terraform apply
+## Decisões de design
 
-Exemplo de terraform.tfvars (cria uma policy somente-leitura de S3 e CloudWatch Logs):
-aws_region = "us-east-1"
-policy_name_prefix = "example-ro-"
-policy_description = "Acesso somente-leitura a S3 e CloudWatch Logs."
-policy_path = "/customer-managed/"
-tags = {
-  Project = "demo"
-  Env     = "dev"
-}
-statements = [
-  {
-    sid       = "S3ReadOnly"
-    effect    = "Allow"
-    actions   = ["s3:GetObject", "s3:ListBucket"]
-    resources = ["arn:aws:s3:::example-bucket", "arn:aws:s3:::example-bucket/*"]
-  },
-  {
-    sid       = "LogsReadOnly"
-    effect    = "Allow"
-    actions   = ["logs:Describe*", "logs:Get*", "logs:List*"]
-    resources = ["*"]
-  }
-]
+- O documento da policy é construído com o data source `aws_iam_policy_document` em vez de JSON inline, permitindo validação sintática pelo próprio Terraform.
+- Os valores padrão de `actions` e `resources` são exemplos restritos (leitura de um bucket S3 específico), evitando `"*"` como padrão. Ajuste conforme o caso de uso real antes de aplicar em produção.
+- `effect` é validado para aceitar apenas `Allow` ou `Deny`.
 
-Variaveis
-- aws_region (string, padrao: us-east-1)
-  Regiao AWS.
+## Uso
 
-- policy_name (string, padrao: null)
-  Nome exato da policy. Se definido, tem precedencia sobre policy_name_prefix.
+```
+terraform init -backend=false
+terraform validate
+terraform plan \
+  -var="policy_name=minha-policy" \
+  -var='actions=["s3:GetObject"]' \
+  -var='resources=["arn:aws:s3:::meu-bucket/*"]'
+```
 
-- policy_name_prefix (string, padrao: custom-)
-  Prefixo do nome quando policy_name nao for definido.
+## Inputs
 
-- policy_description (string, padrao: "Policy gerenciada pelo Terraform.")
-  Descricao da policy.
+| Nome | Descrição | Tipo | Default |
+|---|---|---|---|
+| `aws_region` | Região AWS do provider | `string` | `us-east-1` |
+| `policy_name` | Nome da IAM Policy | `string` | `app-least-privilege-policy` |
+| `policy_description` | Descrição da policy | `string` | `Policy gerada com escopo restrito de acoes e recursos.` |
+| `policy_path` | Path da policy na conta | `string` | `/` |
+| `effect` | Efeito da statement (`Allow`/`Deny`) | `string` | `Allow` |
+| `actions` | Lista de ações IAM | `list(string)` | `["s3:GetObject", "s3:ListBucket"]` |
+| `resources` | Lista de ARNs alvo | `list(string)` | `["arn:aws:s3:::example-bucket", "arn:aws:s3:::example-bucket/*"]` |
+| `tags` | Tags da policy | `map(string)` | `{ ManagedBy = "terraform" }` |
 
-- policy_path (string, padrao: /customer-managed/)
-  Deve iniciar e terminar com "/".
+## Outputs
 
-- tags (map(string), padrao: {})
-  Tags adicionais aplicadas ao recurso.
+| Nome | Descrição |
+|---|---|
+| `policy_arn` | ARN da IAM Policy criada |
+| `policy_id` | ID da IAM Policy criada |
+| `policy_name` | Nome da IAM Policy criada |
+| `policy_document_json` | JSON renderizado da policy |
 
-- statements (list(object), padrao: [])
-  Lista de statements. Campos:
-  - sid (opcional, string)
-  - effect (opcional, string: Allow ou Deny; padrao: Allow)
-  - actions (obrigatorio, set(string))
-  - resources (obrigatorio, set(string))
-  - conditions (opcional, list(object)):
-    - test (string, ex.: StringEquals, ArnLike)
-    - variable (string, ex.: aws:PrincipalOrgID)
-    - values (set(string))
+## Recomendações de segurança
 
-Observacoes de seguranca
-- Por padrao, nenhuma permissao e concedida (statements vazio). Defina explicitamente os acessos necessarios (principio do menor privilegio).
-- Evite o uso de recursos "*" quando possivel; restrinja a ARNs especificos.
-- Revise cuidadosamente as actions e conditions antes de aplicar em ambientes produtivos.
-
-Outputs
-- policy_id: ID da policy.
-- policy_arn: ARN da policy.
-- policy_name: Nome final da policy.
-- policy_path: Path da policy.
-- policy_default_version_id: Versao padrao da policy.
-- policy_document_json: Documento JSON gerado.
-
-Licenca
-Uso livre como exemplo de IaC. Ajuste conforme suas necessidades.
+- Nunca use `"*"` em `actions` ou `resources` sem justificativa explícita — prefira listar ações e ARNs específicos.
+- Revise periodicamente as policies anexadas para remover permissões não utilizadas (least privilege).
+- Este módulo não anexa a policy a nenhuma role, user ou group — o attachment deve ser feito separadamente, de forma explícita, para manter o controle sobre quem recebe as permissões.

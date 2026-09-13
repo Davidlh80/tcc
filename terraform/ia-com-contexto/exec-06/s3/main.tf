@@ -1,11 +1,7 @@
-provider "aws" {
-  region = var.region
-}
-
 locals {
-  bucket_name = lower("${var.environment}-${var.system}-s3-${var.purpose}")
+  bucket_name = "${var.environment}-${var.system}-s3-${var.purpose}"
 
-  merged_tags = merge(
+  tags = merge(
     {
       Project     = "tcc-iac-ia"
       Environment = var.environment
@@ -21,14 +17,24 @@ resource "aws_s3_bucket" "this" {
   bucket        = local.bucket_name
   force_destroy = var.force_destroy
 
-  tags = local.merged_tags
+  tags = local.tags
 }
 
-resource "aws_s3_bucket_ownership_controls" "this" {
+resource "aws_s3_bucket_versioning" "this" {
+  bucket = aws_s3_bucket.this.id
+
+  versioning_configuration {
+    status = var.versioning_status
+  }
+}
+
+resource "aws_s3_bucket_server_side_encryption_configuration" "this" {
   bucket = aws_s3_bucket.this.id
 
   rule {
-    object_ownership = "BucketOwnerEnforced"
+    apply_server_side_encryption_by_default {
+      sse_algorithm = var.sse_algorithm
+    }
   }
 }
 
@@ -41,39 +47,22 @@ resource "aws_s3_bucket_public_access_block" "this" {
   restrict_public_buckets = true
 }
 
-resource "aws_s3_bucket_server_side_encryption_configuration" "this" {
-  bucket = aws_s3_bucket.this.id
-
-  rule {
-    apply_server_side_encryption_by_default {
-      sse_algorithm = "AES256"
-    }
-  }
-}
-
-resource "aws_s3_bucket_versioning" "this" {
-  bucket = aws_s3_bucket.this.id
-
-  versioning_configuration {
-    status = var.versioning_status
-  }
-}
-
 data "aws_iam_policy_document" "deny_insecure_transport" {
   statement {
-    sid     = "DenyInsecureTransport"
-    effect  = "Deny"
-    actions = ["s3:*"]
+    sid    = "DenyInsecureTransport"
+    effect = "Deny"
 
-    principals {
-      type        = "*"
-      identifiers = ["*"]
-    }
+    actions = ["s3:*"]
 
     resources = [
       aws_s3_bucket.this.arn,
       "${aws_s3_bucket.this.arn}/*"
     ]
+
+    principals {
+      type        = "*"
+      identifiers = ["*"]
+    }
 
     condition {
       test     = "Bool"
@@ -86,4 +75,6 @@ data "aws_iam_policy_document" "deny_insecure_transport" {
 resource "aws_s3_bucket_policy" "this" {
   bucket = aws_s3_bucket.this.id
   policy = data.aws_iam_policy_document.deny_insecure_transport.json
+
+  depends_on = [aws_s3_bucket_public_access_block.this]
 }

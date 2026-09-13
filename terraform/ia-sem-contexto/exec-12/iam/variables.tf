@@ -1,88 +1,84 @@
 variable "aws_region" {
-  description = "Regiao AWS onde a policy sera criada."
   type        = string
+  description = "Regiao AWS utilizada pelo provider para chamadas de API. IAM e um servico global, mas o provider AWS exige uma regiao configurada."
   default     = "us-east-1"
+}
+
+variable "name" {
+  type        = string
+  description = "Nome da IAM Policy."
 
   validation {
-    condition     = can(regex("^[a-z]{2}-[a-z]+-\\d$", var.aws_region))
-    message       = "Informe uma regiao valida, por exemplo: us-east-1, us-west-2, eu-west-1."
+    condition     = can(regex("^[\\w+=,.@-]{1,128}$", var.name))
+    error_message = "O nome deve ter entre 1 e 128 caracteres e conter apenas letras, numeros e os caracteres + = , . @ _ -."
   }
 }
 
-variable "policy_name" {
-  description = "Nome da IAM Policy."
+variable "path" {
   type        = string
-  default     = "ec2-readonly-policy"
+  description = "Path da IAM Policy."
+  default     = "/"
 
   validation {
-    condition     = can(regex("^[A-Za-z0-9+=,.@_-]{1,128}$", var.policy_name))
-    message       = "O nome da policy deve ter entre 1 e 128 caracteres e usar apenas A-Za-z0-9+=,.@_-."
+    condition     = can(regex("^/$|^/.*/$", var.path))
+    error_message = "O path deve comecar e terminar com '/'."
   }
 }
 
 variable "description" {
+  type        = string
   description = "Descricao da IAM Policy."
-  type        = string
-  default     = "EC2 ReadOnly policy managed by Terraform"
-}
-
-variable "path" {
-  description = "Caminho (path) da IAM Policy. Deve iniciar e terminar com barra (/)."
-  type        = string
-  default     = "/service-control/"
-
-  validation {
-    condition = startswith(var.path, "/") && endswith(var.path, "/")
-    message   = "O path da policy deve iniciar e terminar com '/'. Ex.: /service-control/."
-  }
-  validation {
-    condition = length(var.path) <= 512
-    message   = "O path da policy deve ter no maximo 512 caracteres."
-  }
+  default     = "Gerenciado via Terraform."
 }
 
 variable "tags" {
-  description = "Tags para a IAM Policy."
   type        = map(string)
-  default = {
-    ManagedBy = "Terraform"
-    Purpose   = "Example"
-  }
+  description = "Tags adicionais aplicadas a IAM Policy, alem das tags padrao definidas internamente."
+  default     = {}
 }
 
 variable "statements" {
-  description = "Lista de statements da policy. Cada statement contem effect (Allow|Deny), actions, resources e (opcional) conditions."
+  description = "Lista de statements que compoem o documento da IAM Policy. E obrigatorio declarar explicitamente as actions e resources permitidos; wildcards ('*') em actions ou resources nao sao aceitos em statements com effect = Allow, forcando a definicao de permissoes minimas necessarias."
+
   type = list(object({
-    effect    = string
+    sid       = optional(string)
+    effect    = optional(string, "Allow")
     actions   = list(string)
     resources = list(string)
-    conditions = optional(list(object({
+    condition = optional(list(object({
       test     = string
       variable = string
       values   = list(string)
-    })))
+    })), [])
   }))
-  default = [
-    {
-      effect    = "Allow"
-      actions   = ["ec2:Describe*"]
-      resources = ["*"]
-      conditions = []
-    }
-  ]
 
   validation {
-    condition = length(var.statements) > 0
-    message   = "Pelo menos um statement deve ser fornecido."
+    condition     = length(var.statements) > 0
+    error_message = "E necessario informar ao menos um statement para a IAM Policy."
   }
 
   validation {
-    condition = alltrue([for s in var.statements : length(s.actions) > 0 && length(s.resources) > 0])
-    message   = "Cada statement deve definir ao menos uma action e um resource."
+    condition     = alltrue([for s in var.statements : contains(["Allow", "Deny"], s.effect)])
+    error_message = "O campo 'effect' de cada statement deve ser 'Allow' ou 'Deny'."
   }
 
   validation {
-    condition = alltrue([for s in var.statements : contains(["allow", "deny"], lower(s.effect))])
-    message   = "O campo effect de cada statement deve ser Allow ou Deny."
+    condition     = alltrue([for s in var.statements : length(s.actions) > 0])
+    error_message = "Cada statement deve conter ao menos uma action."
+  }
+
+  validation {
+    condition     = alltrue([for s in var.statements : length(s.resources) > 0])
+    error_message = "Cada statement deve conter ao menos um resource."
+  }
+
+  validation {
+    condition     = alltrue([for s in var.statements : s.effect != "Allow" || !contains(s.actions, "*")])
+    error_message = "Wildcard '*' em actions nao e permitido para statements com effect = Allow."
+  }
+
+  validation {
+    condition     = alltrue([for s in var.statements : s.effect != "Allow" || !contains(s.resources, "*")])
+    error_message = "Wildcard '*' em resources nao e permitido para statements com effect = Allow."
   }
 }

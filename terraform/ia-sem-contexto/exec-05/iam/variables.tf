@@ -1,112 +1,81 @@
-variable "aws_region" {
-  description = "Região AWS para o provider."
+variable "region" {
+  description = "Regiao AWS onde o provider ira operar."
   type        = string
   default     = "us-east-1"
-
-  validation {
-    condition     = can(regex("^[a-z]{2}-[a-z]+-\\d$", var.aws_region))
-    error_message = "aws_region deve estar no formato de região AWS válida, por exemplo: us-east-1."
-  }
 }
 
 variable "policy_name" {
-  description = "Nome da IAM Policy a ser criada."
+  description = "Nome da IAM Policy. Deve conter apenas caracteres permitidos pela AWS (alfanumericos e + = , . @ _ -) e ate 128 caracteres."
   type        = string
-  default     = "readonly-s3-policy"
 
   validation {
     condition     = can(regex("^[\\w+=,.@-]{1,128}$", var.policy_name))
-    error_message = "policy_name deve ter entre 1 e 128 caracteres e conter apenas letras, números e os caracteres: _+=,.@-"
+    error_message = "policy_name deve ter entre 1 e 128 caracteres validos para nomes de IAM Policy (letras, numeros e os simbolos + = , . @ _ -)."
   }
 }
 
 variable "policy_description" {
-  description = "Descrição da IAM Policy. Se não definido, será gerada uma descrição padrão."
+  description = "Descricao da IAM Policy."
   type        = string
-  default     = null
+  default     = "Gerenciada via Terraform."
 }
 
 variable "policy_path" {
-  description = "Caminho (path) da IAM Policy. Deve começar e terminar com '/'."
+  description = "Path da IAM Policy. Deve iniciar e terminar com '/'."
   type        = string
-  default     = "/customer-managed/"
+  default     = "/"
 
   validation {
-    condition     = startswith(var.policy_path, "/") && endswith(var.policy_path, "/")
-    error_message = "policy_path deve começar e terminar com '/'."
+    condition     = can(regex("^/.*/$", var.policy_path))
+    error_message = "policy_path deve iniciar e terminar com '/'."
   }
 }
 
-variable "allowed_actions" {
-  description = "Lista de ações AWS a serem permitidas (por exemplo, s3:GetObject)."
+variable "effect" {
+  description = "Efeito da statement da policy: Allow ou Deny."
+  type        = string
+  default     = "Allow"
+
+  validation {
+    condition     = contains(["Allow", "Deny"], var.effect)
+    error_message = "effect deve ser \"Allow\" ou \"Deny\"."
+  }
+}
+
+variable "actions" {
+  description = "Lista de acoes IAM permitidas/negadas pela policy (ex.: [\"s3:GetObject\", \"s3:PutObject\"])."
   type        = list(string)
-  default     = ["s3:GetObject", "s3:ListBucket"]
 
   validation {
-    condition = var.allow_wildcard_actions || alltrue([
-      for a in var.allowed_actions :
-      !can(regex("^\\*$", a)) && !can(regex(":[*]$", a))
-    ])
-    error_message = "allowed_actions não pode conter '*' ou 'service:*' a menos que allow_wildcard_actions=true."
+    condition     = length(var.actions) > 0
+    error_message = "actions deve conter pelo menos um elemento."
   }
 }
 
-variable "policy_resources" {
-  description = "Lista de ARNs de recursos aos quais as ações serão aplicadas."
+variable "resources" {
+  description = "Lista de ARNs de recursos aos quais a policy se aplica. Evite \"*\" salvo necessidade explicita (ver allow_wildcard_resources)."
   type        = list(string)
-  default     = [
-    "arn:aws:s3:::example-bucket",
-    "arn:aws:s3:::example-bucket/*"
-  ]
 
   validation {
-    condition     = var.allow_wildcard_resources || alltrue([for r in var.policy_resources : r != "*" ])
-    error_message = "policy_resources não pode conter apenas '*' a menos que allow_wildcard_resources=true."
+    condition     = length(var.resources) > 0
+    error_message = "resources deve conter pelo menos um elemento."
   }
-}
-
-variable "allowed_regions" {
-  description = "Lista opcional de regiões permitidas via condição aws:RequestedRegion."
-  type        = list(string)
-  default     = []
-
-  validation {
-    condition     = alltrue([for r in var.allowed_regions : can(regex("^[a-z]{2}-[a-z]+-\\d$", r)) ])
-    error_message = "Cada entrada de allowed_regions deve ser uma região AWS válida (ex.: us-east-1)."
-  }
-}
-
-variable "allowed_source_ips" {
-  description = "Lista opcional de CIDRs IPv4 permitidos via condição aws:SourceIp (pode não ser suportado por todos os serviços)."
-  type        = list(string)
-  default     = []
-
-  validation {
-    condition     = alltrue([for c in var.allowed_source_ips : can(cidrhost(c, 0)) ])
-    error_message = "Cada entrada de allowed_source_ips deve ser um CIDR IPv4 válido (ex.: 203.0.113.0/24)."
-  }
-}
-
-variable "enforce_mfa" {
-  description = "Se true, adiciona uma declaração Deny para todas as ações quando MFA não estiver presente."
-  type        = bool
-  default     = true
 }
 
 variable "allow_wildcard_actions" {
-  description = "Permite uso de '*' ou 'service:*' em allowed_actions."
+  description = "Quando true, permite que actions contenha o valor curinga \"*\" (todas as acoes). Padrao false por seguranca."
   type        = bool
   default     = false
 }
 
 variable "allow_wildcard_resources" {
-  description = "Permite uso do recurso '*' em policy_resources."
+  description = "Quando true, permite que resources contenha o valor curinga \"*\" (todos os recursos). Padrao false por seguranca."
   type        = bool
   default     = false
 }
 
 variable "tags" {
-  description = "Tags adicionais para a policy."
+  description = "Tags a serem aplicadas a IAM Policy."
   type        = map(string)
   default     = {}
 }

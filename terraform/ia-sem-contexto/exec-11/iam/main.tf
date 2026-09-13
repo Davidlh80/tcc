@@ -1,37 +1,34 @@
-provider "aws" {
-  region = var.aws_region
+terraform {
+  required_version = ">= 1.5.0"
 }
 
-# Documento da policy construído de forma declarativa
+provider "aws" {
+  region = var.region
+}
+
 data "aws_iam_policy_document" "this" {
   dynamic "statement" {
-    for_each = var.statements
+    for_each = var.policy_statements
+
     content {
-      sid     = try(statement.value.sid, null)
-      effect  = upper(try(statement.value.effect, "Allow"))
-
-      actions      = try(statement.value.actions, null)
-      not_actions  = try(statement.value.not_actions, null)
-      resources    = try(statement.value.resources, null)
-      not_resources = try(statement.value.not_resources, null)
-
-      dynamic "condition" {
-        for_each = try(statement.value.conditions, [])
-        content {
-          test     = condition.value.test
-          variable = condition.value.variable
-          values   = condition.value.values
-        }
-      }
+      sid       = lookup(statement.value, "sid", null)
+      effect    = statement.value.effect
+      actions   = statement.value.actions
+      resources = statement.value.resources
     }
   }
 }
 
-# Policy gerenciada (Customer Managed Policy)
 resource "aws_iam_policy" "this" {
-  name        = var.policy_name
-  description = var.policy_description
-  path        = var.policy_path
+  name        = var.name
+  path        = var.path
+  description = var.description
   policy      = data.aws_iam_policy_document.this.json
-  tags        = var.tags
+
+  tags = merge(
+    {
+      "ManagedBy" = "Terraform"
+    },
+    var.tags
+  )
 }

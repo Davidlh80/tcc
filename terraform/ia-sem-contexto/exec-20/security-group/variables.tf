@@ -1,154 +1,132 @@
-variable "region" {
-  description = "AWS region to deploy resources into."
+variable "vpc_id" {
+  description = "ID da VPC onde o Security Group sera criado."
   type        = string
-  default     = "us-east-1"
 
   validation {
-    condition     = can(regex("^[a-z]{2}-[a-z]+-\\d$", var.region))
-    error_message = "Region must look like 'us-east-1', 'eu-west-1', etc."
+    condition     = can(regex("^vpc-[a-z0-9]+$", var.vpc_id))
+    error_message = "O valor de vpc_id deve seguir o formato 'vpc-xxxxxxxx'."
   }
 }
 
 variable "name" {
-  description = "Name of the Security Group."
+  description = "Nome do Security Group."
   type        = string
-  default     = "sg-app"
 
   validation {
-    condition     = can(regex("^[A-Za-z0-9-_]+$", var.name)) && length(var.name) <= 255
-    error_message = "Name must contain only letters, numbers, hyphens or underscores and be at most 255 characters."
+    condition     = length(var.name) > 0 && length(var.name) <= 255
+    error_message = "O nome deve ter entre 1 e 255 caracteres."
   }
 }
 
 variable "description" {
-  description = "Description of the Security Group."
+  description = "Descricao do Security Group."
   type        = string
-  default     = "Security Group managed by Terraform"
-}
-
-variable "vpc_id" {
-  description = "ID of the VPC where the Security Group will be created."
-  type        = string
+  default     = "Managed by Terraform"
 
   validation {
-    condition     = length(var.vpc_id) > 4 && substr(var.vpc_id, 0, 4) == "vpc-"
-    error_message = "vpc_id must be a valid VPC ID (e.g., vpc-xxxxxxxx)."
+    condition     = length(var.description) > 0
+    error_message = "A descricao nao pode ser vazia."
   }
 }
 
-variable "allow_ssh_from_cidrs" {
-  description = "List of CIDR blocks allowed to access TCP/22 (SSH)."
-  type        = list(string)
-  default     = []
-
-  validation {
-    condition     = alltrue([for c in var.allow_ssh_from_cidrs : can(cidrhost(c, 0))])
-    error_message = "allow_ssh_from_cidrs must contain valid IPv4 or IPv6 CIDR blocks."
-  }
-}
-
-variable "allow_http_from_cidrs" {
-  description = "List of CIDR blocks allowed to access TCP/80 (HTTP)."
-  type        = list(string)
-  default     = []
-
-  validation {
-    condition     = alltrue([for c in var.allow_http_from_cidrs : can(cidrhost(c, 0))])
-    error_message = "allow_http_from_cidrs must contain valid IPv4 or IPv6 CIDR blocks."
-  }
-}
-
-variable "allow_https_from_cidrs" {
-  description = "List of CIDR blocks allowed to access TCP/443 (HTTPS)."
-  type        = list(string)
-  default     = []
-
-  validation {
-    condition     = alltrue([for c in var.allow_https_from_cidrs : can(cidrhost(c, 0))])
-    error_message = "allow_https_from_cidrs must contain valid IPv4 or IPv6 CIDR blocks."
-  }
-}
-
-variable "additional_ingress_rules" {
-  description = "Additional ingress rules. At least one of cidr_blocks, ipv6_cidr_blocks or prefix_list_ids must be set in each rule."
+variable "ingress_rules" {
+  description = "Lista de regras de entrada do Security Group."
   type = list(object({
-    description      = string
-    protocol         = string
-    from_port        = number
-    to_port          = number
-    cidr_blocks      = optional(list(string), [])
-    ipv6_cidr_blocks = optional(list(string), [])
-    prefix_list_ids  = optional(list(string), [])
+    description = string
+    from_port   = number
+    to_port     = number
+    protocol    = string
+    cidr_blocks = list(string)
   }))
   default = []
 
   validation {
     condition = alltrue([
-      for r in var.additional_ingress_rules :
-      (r.from_port >= 0 && r.from_port <= 65535) &&
-      (r.to_port >= 0 && r.to_port <= 65535) &&
-      (r.to_port >= r.from_port)
+      for rule in var.ingress_rules :
+      rule.from_port >= 0 && rule.from_port <= 65535 &&
+      rule.to_port >= 0 && rule.to_port <= 65535 &&
+      rule.from_port <= rule.to_port
     ])
-    error_message = "Each additional_ingress_rules item must have from_port/to_port within 0-65535 and to_port >= from_port."
+    error_message = "As portas de entrada devem estar entre 0 e 65535, com from_port menor ou igual a to_port."
   }
 
   validation {
     condition = alltrue([
-      for r in var.additional_ingress_rules :
-      (length(r.cidr_blocks) + length(r.ipv6_cidr_blocks) + length(r.prefix_list_ids)) > 0
+      for rule in var.ingress_rules :
+      contains(["tcp", "udp", "icmp", "-1"], rule.protocol)
     ])
-    error_message = "Each additional_ingress_rules item must specify at least one of cidr_blocks, ipv6_cidr_blocks or prefix_list_ids."
+    error_message = "O protocolo de cada regra de entrada deve ser um de: tcp, udp, icmp, -1."
   }
 
   validation {
-    condition = alltrue(flatten([
-      for r in var.additional_ingress_rules : [
-        for c in r.cidr_blocks : can(cidrhost(c, 0))
-      ]
-    ]))
-    error_message = "All IPv4 CIDRs in additional_ingress_rules.cidr_blocks must be valid CIDR blocks."
+    condition = alltrue([
+      for rule in var.ingress_rules :
+      alltrue([
+        for cidr in rule.cidr_blocks : can(cidrhost(cidr, 0))
+      ])
+    ])
+    error_message = "Todos os CIDRs de entrada devem ser blocos IPv4 validos."
   }
 
   validation {
-    condition = alltrue(flatten([
-      for r in var.additional_ingress_rules : [
-        for c in r.ipv6_cidr_blocks : can(cidrhost(c, 0))
-      ]
-    ]))
-    error_message = "All IPv6 CIDRs in additional_ingress_rules.ipv6_cidr_blocks must be valid CIDR blocks."
-  }
-}
-
-variable "allow_all_egress" {
-  description = "If true, create egress rules allowing all protocols to the specified egress CIDRs."
-  type        = bool
-  default     = false
-}
-
-variable "egress_cidr_blocks" {
-  description = "IPv4 CIDR blocks for outbound traffic when allow_all_egress is true."
-  type        = list(string)
-  default     = ["0.0.0.0/0"]
-
-  validation {
-    condition     = alltrue([for c in var.egress_cidr_blocks : can(cidrhost(c, 0))])
-    error_message = "egress_cidr_blocks must contain valid IPv4 CIDR blocks."
+    condition = alltrue([
+      for rule in var.ingress_rules :
+      length(rule.cidr_blocks) > 0
+    ])
+    error_message = "Cada regra de entrada deve conter ao menos um CIDR."
   }
 }
 
-variable "egress_ipv6_cidr_blocks" {
-  description = "IPv6 CIDR blocks for outbound traffic when allow_all_egress is true."
-  type        = list(string)
-  default     = []
+variable "egress_rules" {
+  description = "Lista de regras de saida do Security Group."
+  type = list(object({
+    description = string
+    from_port   = number
+    to_port     = number
+    protocol    = string
+    cidr_blocks = list(string)
+  }))
+  default = [
+    {
+      description = "Permite todo o trafego de saida."
+      from_port   = 0
+      to_port     = 0
+      protocol    = "-1"
+      cidr_blocks = ["0.0.0.0/0"]
+    }
+  ]
 
   validation {
-    condition     = alltrue([for c in var.egress_ipv6_cidr_blocks : can(cidrhost(c, 0))])
-    error_message = "egress_ipv6_cidr_blocks must contain valid IPv6 CIDR blocks."
+    condition = alltrue([
+      for rule in var.egress_rules :
+      rule.from_port >= 0 && rule.from_port <= 65535 &&
+      rule.to_port >= 0 && rule.to_port <= 65535 &&
+      rule.from_port <= rule.to_port
+    ])
+    error_message = "As portas de saida devem estar entre 0 e 65535, com from_port menor ou igual a to_port."
+  }
+
+  validation {
+    condition = alltrue([
+      for rule in var.egress_rules :
+      contains(["tcp", "udp", "icmp", "-1"], rule.protocol)
+    ])
+    error_message = "O protocolo de cada regra de saida deve ser um de: tcp, udp, icmp, -1."
+  }
+
+  validation {
+    condition = alltrue([
+      for rule in var.egress_rules :
+      alltrue([
+        for cidr in rule.cidr_blocks : can(cidrhost(cidr, 0))
+      ])
+    ])
+    error_message = "Todos os CIDRs de saida devem ser blocos IPv4 validos."
   }
 }
 
 variable "tags" {
-  description = "Additional tags to apply to the Security Group."
+  description = "Tags adicionais a serem aplicadas ao Security Group."
   type        = map(string)
   default     = {}
 }

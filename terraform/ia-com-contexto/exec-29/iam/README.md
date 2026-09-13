@@ -1,42 +1,59 @@
-Visão geral do recurso
-Este template provisiona uma IAM Policy seguindo o padrão organizacional:
-- Nome do recurso: <environment>-<system>-iam-<policy_name>
-- Tags obrigatórias aplicadas ao recurso
-- Princípio do menor privilégio: apenas ações e recursos explicitamente informados são permitidos
-- Proibido combinar Action "*" com Resource "*" em uma mesma statement
-- Não anexa policies administrativas gerenciadas
+# IAM Policy
 
-Tabela de variáveis
-- environment (string) [Obrigatória]: Ambiente alvo. Valores permitidos: dev, hml, prd.
-- system (string) [Obrigatória]: Nome do sistema (ex.: tcc). Somente [a-z0-9-].
-- region (string) [Obrigatória]: Região AWS (ex.: us-east-1).
-- additional_tags (map(string)) [Opcional]: Tags adicionais a aplicar no recurso.
-- policy_name (string) [Obrigatória]: Finalidade da policy (ex.: readonly). Comporá o nome final.
-- allowed_actions (list(string)) [Obrigatória]: Ações explícitas que serão permitidas. Ex.: ["s3:GetObject", "s3:ListBucket"]. Não use "*" junto de Resource "*".
-- allowed_resources (list(string)) [Obrigatória]: ARNs de recursos para os quais as ações serão permitidas. Ex.: ["arn:aws:s3:::meu-bucket", "arn:aws:s3:::meu-bucket/*"].
-- description (string) [Opcional]: Descrição da policy. Padrão: "IAM policy managed by Terraform."
+## Visao geral
 
-Tabela de outputs
-- policy_name: Nome da policy IAM criada.
-- policy_arn: ARN da policy IAM criada.
-- policy_id: ID único da policy IAM criada.
+Este template Terraform cria uma IAM Policy (`aws_iam_policy`) seguindo os padroes internos de nomenclatura, tags e seguranca da organizacao.
 
-Exemplo de uso
-module "iam_policy" {
+A policy gerada contem uma unica statement com `Effect: Allow`, restrita exclusivamente as actions e aos recursos informados via variavel. O template impede explicitamente a criacao de uma statement que combine `Action: "*"` com `Resource: "*"`, e nao anexa nem replica policies gerenciadas administrativas (ex.: `AdministratorAccess`).
+
+O nome do recurso segue o padrao `<ambiente>-<sistema>-<recurso>-<finalidade>`, resultando em nomes como `dev-tcc-iam-readonly` ou `prd-tcc-iam-readonly`.
+
+## Variaveis
+
+| Nome | Tipo | Obrigatoria | Descricao |
+|---|---|---|---|
+| `environment` | `string` | Sim | Ambiente de implantacao (`dev`, `hml` ou `prd`). |
+| `system` | `string` | Nao (default: `tcc`) | Nome do sistema ou projeto ao qual o recurso pertence. |
+| `region` | `string` | Nao (default: `us-east-1`) | Regiao AWS onde os recursos serao provisionados. |
+| `additional_tags` | `map(string)` | Nao (default: `{}`) | Tags adicionais mescladas com as tags obrigatorias. |
+| `policy_name` | `string` | Sim | Finalidade da IAM Policy, usada como sufixo no padrao de nomenclatura (ex.: `readonly`). |
+| `policy_description` | `string` | Nao (default: `"IAM Policy gerenciada via Terraform."`) | Descricao da IAM Policy. |
+| `allowed_actions` | `list(string)` | Sim | Lista de actions IAM permitidas (`Effect: Allow`). |
+| `allowed_resources` | `list(string)` | Sim | Lista de ARNs de recursos permitidos (`Effect: Allow`). |
+
+## Outputs
+
+| Nome | Descricao |
+|---|---|
+| `policy_name` | Nome da IAM Policy criada. |
+| `policy_arn` | ARN da IAM Policy criada. |
+| `policy_id` | ID unico da IAM Policy criada. |
+
+## Exemplo de uso
+
+```hcl
+module "iam_policy_readonly" {
   source = "./"
 
-  environment       = "dev"
-  system            = "tcc"
-  region            = "us-east-1"
-  policy_name       = "readonly"
-  description       = "Read-only access to specific S3 resources"
-  allowed_actions   = ["s3:GetObject", "s3:ListBucket"]
+  environment = "dev"
+  system      = "tcc"
+  region      = "us-east-1"
+
+  policy_name        = "readonly"
+  policy_description = "Policy de leitura para buckets S3 especificos."
+
+  allowed_actions = [
+    "s3:GetObject",
+    "s3:ListBucket"
+  ]
+
   allowed_resources = [
-    "arn:aws:s3:::example-bucket",
-    "arn:aws:s3:::example-bucket/*"
+    "arn:aws:s3:::dev-tcc-s3-logs",
+    "arn:aws:s3:::dev-tcc-s3-logs/*"
   ]
 
   additional_tags = {
-    Squad = "core-platform"
+    Squad = "plataforma"
   }
 }
+```

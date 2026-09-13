@@ -2,22 +2,33 @@ provider "aws" {
   region = var.aws_region
 }
 
+locals {
+  tags = merge(
+    {
+      "Name"      = var.name
+      "ManagedBy" = "Terraform"
+    },
+    var.tags
+  )
+}
+
 data "aws_iam_policy_document" "this" {
   dynamic "statement" {
     for_each = var.statements
-    iterator = s
+
     content {
-      effect    = upper(s.value.effect)
-      actions   = s.value.actions
-      resources = s.value.resources
+      sid       = statement.value.sid
+      effect    = statement.value.effect
+      actions   = statement.value.actions
+      resources = statement.value.resources
 
       dynamic "condition" {
-        for_each = coalesce(s.value.conditions, [])
-        iterator = c
+        for_each = statement.value.condition
+
         content {
-          test     = c.value.test
-          variable = c.value.variable
-          values   = c.value.values
+          test     = condition.value.test
+          variable = condition.value.variable
+          values   = condition.value.values
         }
       }
     }
@@ -25,9 +36,10 @@ data "aws_iam_policy_document" "this" {
 }
 
 resource "aws_iam_policy" "this" {
-  name        = var.policy_name
+  name        = var.name
   path        = var.path
   description = var.description
   policy      = data.aws_iam_policy_document.this.json
-  tags        = var.tags
+
+  tags = local.tags
 }

@@ -1,24 +1,13 @@
-provider "aws" {
-  region = var.aws_region
-}
-
-locals {
-  use_kms       = var.kms_key_id != null && var.kms_key_id != ""
-  sse_algorithm = local.use_kms ? "aws:kms" : "AES256"
-
-  tags = merge(
-    {
-      Name      = var.bucket_name
-      ManagedBy = "Terraform"
-    },
-    var.tags
-  )
-}
-
 resource "aws_s3_bucket" "this" {
   bucket        = var.bucket_name
   force_destroy = var.force_destroy
-  tags          = local.tags
+
+  tags = merge(
+    var.tags,
+    {
+      Name = var.bucket_name
+    }
+  )
 }
 
 resource "aws_s3_bucket_ownership_controls" "this" {
@@ -51,76 +40,23 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "this" {
 
   rule {
     apply_server_side_encryption_by_default {
-      sse_algorithm     = local.sse_algorithm
-      kms_master_key_id = local.use_kms ? var.kms_key_id : null
+      sse_algorithm     = var.kms_key_arn != null ? "aws:kms" : "AES256"
+      kms_master_key_id = var.kms_key_arn
     }
-  }
-}
-
-resource "aws_s3_bucket_logging" "this" {
-  count = var.logging_enabled ? 1 : 0
-
-  bucket        = aws_s3_bucket.this.id
-  target_bucket = var.logging_target_bucket
-  target_prefix = var.logging_target_prefix
-
-  lifecycle {
-    precondition {
-      condition     = var.logging_target_bucket != null && var.logging_target_bucket != ""
-      error_message = "logging_target_bucket must be provided when logging_enabled is true."
-    }
+    bucket_key_enabled = var.kms_key_arn != null
   }
 }
 
 resource "aws_s3_bucket_lifecycle_configuration" "this" {
-  count  = var.enable_lifecycle_rules ? 1 : 0
+  count  = var.enable_lifecycle_rule ? 1 : 0
   bucket = aws_s3_bucket.this.id
 
   rule {
-    id     = "default-lifecycle"
+    id     = "expire-noncurrent-versions"
     status = "Enabled"
 
-    filter {}
-
-    abort_incomplete_multipart_upload {
-      days_after_initiation = var.lifecycle_abort_multipart_days
-    }
-
     noncurrent_version_expiration {
-      noncurrent_days = var.lifecycle_noncurrent_version_expiration_days
-    }
-
-    dynamic "expiration" {
-      for_each = var.lifecycle_expiration_days == null ? [] : [1]
-      content {
-        days = var.lifecycle_expiration_days
-      }
+      noncurrent_days = var.noncurrent_version_expiration_days
     }
   }
-}
-
-data "aws_iam_policy_document" "tls_only" {
-  statement {
-    sid     = "DenyInsecureTransport"
-    effect  = "Deny"
-    actions = ["s3:*"]
-    principals {
-      type        = "*"
-      identifiers = ["*"]
-    }
-    resources = [
-      aws_s3_bucket.this.arn,
-      "${aws_s3_bucket.this.arn}/*"
-    ]
-    condition {
-      test     = "Bool"
-      variable = "aws:SecureTransport"
-      values   = ["false"]
-    }
-  }
-}
-
-resource "aws_s3_bucket_policy" "tls_enforce" {
-  bucket = aws_s3_bucket.this.id
-  policy = data.aws_iam_policy_document.tls_only.json
 }

@@ -1,35 +1,24 @@
-provider "aws" {
-  region = var.aws_region
+terraform {
+  required_version = ">= 1.5.0"
+}
 
-  default_tags {
-    tags = merge(
-      {
-        ManagedBy = "terraform"
-      },
-      var.tags
-    )
-  }
+locals {
+  common_tags = merge(
+    {
+      Name      = var.bucket_name
+      ManagedBy = "terraform"
+    },
+    var.tags
+  )
 }
 
 resource "aws_s3_bucket" "this" {
   bucket        = var.bucket_name
   force_destroy = var.force_destroy
 
-  tags = {
-    Name = var.bucket_name
-  }
+  tags = local.common_tags
 }
 
-# Block all forms of public access at the bucket level
-resource "aws_s3_bucket_public_access_block" "this" {
-  bucket                  = aws_s3_bucket.this.id
-  block_public_acls       = true
-  block_public_policy     = true
-  ignore_public_acls      = true
-  restrict_public_buckets = true
-}
-
-# Enforce bucket owner for all objects (ACLs disabled)
 resource "aws_s3_bucket_ownership_controls" "this" {
   bucket = aws_s3_bucket.this.id
 
@@ -38,7 +27,15 @@ resource "aws_s3_bucket_ownership_controls" "this" {
   }
 }
 
-# Versioning (Enabled by default, can be suspended)
+resource "aws_s3_bucket_public_access_block" "this" {
+  bucket = aws_s3_bucket.this.id
+
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
+}
+
 resource "aws_s3_bucket_versioning" "this" {
   bucket = aws_s3_bucket.this.id
 
@@ -47,70 +44,29 @@ resource "aws_s3_bucket_versioning" "this" {
   }
 }
 
-# Default encryption at rest (SSE-S3 AES256)
 resource "aws_s3_bucket_server_side_encryption_configuration" "this" {
   bucket = aws_s3_bucket.this.id
 
   rule {
     apply_server_side_encryption_by_default {
-      sse_algorithm = "AES256"
+      sse_algorithm     = var.kms_key_arn != null ? "aws:kms" : "AES256"
+      kms_master_key_id = var.kms_key_arn
     }
+    bucket_key_enabled = var.kms_key_arn != null
   }
 }
 
-# Lifecycle configuration (optional)
 resource "aws_s3_bucket_lifecycle_configuration" "this" {
-  count  = var.enable_lifecycle ? 1 : 0
+  count = var.enable_lifecycle_rule ? 1 : 0
+
   bucket = aws_s3_bucket.this.id
 
   rule {
-    id     = "abort-incomplete-uploads"
+    id     = "expire-noncurrent-versions"
     status = "Enabled"
-
-    filter {}
-
-    abort_incomplete_multipart_upload {
-      days_after_initiation = var.lifecycle_abort_incomplete_upload_days
-    }
-  }
-
-  rule {
-    id     = "noncurrent-version-expiration"
-    status = "Enabled"
-
-    filter {}
 
     noncurrent_version_expiration {
-      noncurrent_days = var.lifecycle_noncurrent_expiration_days
+      noncurrent_days = var.noncurrent_version_expiration_days
     }
   }
-
-  depends_on = [
-    aws_s3_bucket_versioning.this
-  ]
-}
-
-# Bucket policy to enforce TLS (HTTPS) only
-resource "aws_s3_bucket_policy" "this" {
-  count  = var.enforce_tls ? 1 : 0
-  bucket = aws_s3_bucket.this.id
-
-  policy = jsonencode({
-    Version   = "2012-10-17"
-    Statement = [
-      {
-        Sid       = "EnforceTLS"
-        Effect    = "Deny"
-        Principal = "*"
-        Action    = "s3:*"
-        Resource = [
-          aws_s3_bucket.this.arn,
-          "${aws_s3_bucket.this.arn}/*"
-        ]
-        Condition = {
-          Bool = { "aws:SecureTransport" = "false" }
-        }
-      }
-    ]
-  })
 }

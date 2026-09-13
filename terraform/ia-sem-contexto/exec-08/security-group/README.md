@@ -1,89 +1,79 @@
-Blueprint Terraform — AWS Security Group
+# Security Group
 
-Visão geral
-Este template cria um Security Group na AWS dentro de uma VPC informada por variável, com regras de entrada e saída configuráveis via variáveis. Padrões seguros priorizados: nenhuma regra de ingresso por padrão e egress liberado (customizável).
+Blueprint Terraform para provisionamento de um AWS Security Group dentro de uma VPC existente, com regras de entrada e saida totalmente configuraveis via variaveis.
 
-Requisitos
-- Terraform >= 1.3.0
-- Provider AWS >= 5.0
-- Uma VPC existente (vpc_id)
+## Recursos criados
 
-Arquivos
-- main.tf: definição do provider e do recurso aws_security_group.
-- variables.tf: variáveis de entrada com validações.
-- outputs.tf: saídas úteis (id, arn, nome, vpc_id, regras efetivas).
-- versions.tf: versões mínimas do Terraform e provider.
-- README.md: instruções de uso.
+- `aws_security_group.this`
 
-Variáveis principais
-- aws_region (string): Região AWS. Padrão: us-east-1
-- vpc_id (string): ID da VPC alvo. Obrigatória.
-- name (string|null): Nome fixo do SG. Se nulo, usa name_prefix.
-- name_prefix (string): Prefixo para nome do SG quando name é nulo. Padrão: tf-sg-
-- description (string): Descrição do SG. Padrão: Security Group gerenciado por Terraform
-- revoke_rules_on_delete (bool): Revogar regras em delete. Padrão: true
-- ingress_rules (list(object)): Regras de entrada. Padrão: []
-- egress_rules (list(object)): Regras de saída. Padrão: permite toda saída IPv4 e IPv6.
-- tags (map(string)): Tags adicionais.
+## Uso
 
-Estrutura das regras (ingress_rules e egress_rules)
-Cada item é um objeto com:
-- from_port (number), to_port (number), protocol (string)
-- description (string, opcional)
-- cidr_blocks (list(string), opcional)
-- ipv6_cidr_blocks (list(string), opcional)
-- prefix_list_ids (list(string), opcional)
-- security_groups (list(string), opcional)
-- self (bool, opcional)
+```hcl
+module "security_group" {
+  source = "./"
 
-Observação: pelo menos uma origem/destino deve ser especificada em cada regra (ex.: cidr_blocks, ipv6_cidr_blocks, security_groups ou self = true).
+  vpc_id      = "vpc-0123456789abcdef0"
+  name        = "app-sg"
+  description = "Security group da aplicacao"
 
-Exemplos de uso
-1) SG básico sem ingress (somente egress padrão):
-variables.tfvars (exemplo)
-vpc_id     = "vpc-0123456789abcdef0"
-aws_region = "us-east-1"
+  ingress_rules = [
+    {
+      description = "HTTPS"
+      from_port   = 443
+      to_port     = 443
+      protocol    = "tcp"
+      cidr_blocks = ["10.0.0.0/16"]
+    }
+  ]
 
-2) Permitir SSH do seu IP e HTTP público:
-variables.tfvars (exemplo)
-vpc_id     = "vpc-0123456789abcdef0"
-aws_region = "us-east-1"
-name       = "app-sg"
-ingress_rules = [
-  {
-    description = "SSH da minha origem"
-    from_port   = 22
-    to_port     = 22
-    protocol    = "tcp"
-    cidr_blocks = ["203.0.113.10/32"]
-  },
-  {
-    description = "HTTP público"
-    from_port   = 80
-    to_port     = 80
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
-    ipv6_cidr_blocks = ["::/0"]
+  egress_rules = [
+    {
+      description = "Allow all outbound"
+      from_port   = 0
+      to_port     = 0
+      protocol    = "-1"
+      cidr_blocks = ["0.0.0.0/0"]
+    }
+  ]
+
+  tags = {
+    Environment = "production"
   }
-]
+}
+```
 
-Como executar
-- Exporte suas credenciais AWS por variáveis de ambiente antes de aplicar (ex.: AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_REGION), ou use um método de autenticação suportado pelo provider.
-- Comandos:
-  terraform init -backend=false
-  terraform validate
-  terraform plan -var-file="variables.tfvars"
-  terraform apply -var-file="variables.tfvars"
+## Variaveis
 
-Saídas
-- security_group_id
-- security_group_arn
-- security_group_name
-- security_group_vpc_id
-- security_group_ingress_effective
-- security_group_egress_effective
+| Nome            | Descricao                                    | Tipo          | Default              |
+| --------------- | --------------------------------------------- | ------------- | -------------------- |
+| `vpc_id`        | ID da VPC onde o Security Group sera criado    | `string`      | n/a (obrigatorio)     |
+| `aws_region`    | Regiao AWS onde os recursos serao provisionados | `string`      | `"us-east-1"`         |
+| `name`          | Nome do Security Group                         | `string`      | `"sg-default"`        |
+| `description`   | Descricao do Security Group                    | `string`      | `"Managed by Terraform"` |
+| `ingress_rules` | Lista de regras de entrada                     | `list(object)`| ver `variables.tf`    |
+| `egress_rules`  | Lista de regras de saida                       | `list(object)`| ver `variables.tf`    |
+| `tags`          | Tags adicionais                                | `map(string)` | `{}`                  |
 
-Boas práticas
-- Restrinja ingress ao mínimo necessário e prefira CIDRs específicos (ex.: /32) quando adequado.
-- Use tags para facilitar governança e rastreabilidade.
-- Revise periodicamente as regras para garantir o princípio do menor privilégio.
+## Outputs
+
+| Nome                  | Descricao                                  |
+| --------------------- | ------------------------------------------- |
+| `security_group_id`   | ID do Security Group criado                 |
+| `security_group_arn`  | ARN do Security Group criado                |
+| `security_group_name` | Nome do Security Group criado               |
+| `vpc_id`              | ID da VPC associada                         |
+| `owner_id`            | ID da conta AWS proprietaria do recurso     |
+
+## Boas praticas de seguranca
+
+- Evite CIDRs amplos (`0.0.0.0/0`) em regras de entrada; restrinja as origens ao minimo necessario.
+- Prefira portas especificas em vez de faixas amplas.
+- Revise as regras de saida padrao caso a aplicacao exija restricoes adicionais (ex.: negar saida irrestrita).
+- Utilize tags consistentes para rastreabilidade e auditoria dos recursos.
+
+## Validacao
+
+```
+terraform init -backend=false
+terraform validate
+```

@@ -1,59 +1,69 @@
-Nome
-- Blueprint Terraform para provisionar uma AWS IAM Policy gerenciada opcionalmente anexada a roles, users e groups.
+# IAM Policy - Blueprint Terraform
 
-Recursos criados
-- aws_iam_policy
-- aws_iam_role_policy_attachment (opcional por role)
-- aws_iam_user_policy_attachment (opcional por user)
-- aws_iam_group_policy_attachment (opcional por group)
+Blueprint Terraform para provisionar uma IAM Policy gerenciada na AWS de forma parametrizavel, sem vinculo com padroes organizacionais especificos.
 
-Como usar
-1) Ajuste variáveis no arquivo variables.tf ou via CLI/TFVARS.
-2) Inicialize e valide:
-   - terraform init -backend=false
-   - terraform validate
-3) Planeje e aplique:
-   - terraform plan
-   - terraform apply
+## Recursos criados
 
-Variáveis principais
-- aws_region: Região AWS. Padrão: us-east-1
-- policy_name: Nome da policy. Padrão: example-iam-policy
-- policy_description: Descrição da policy.
-- policy_path: Caminho da policy (deve começar e terminar com /). Padrão: /
-- policy_statements: Lista de statements. Por padrão inclui uma statement de leitura de informações básicas da conta.
-- tags: Mapa de tags para o recurso.
-- attach_to_roles, attach_to_users, attach_to_groups: Listas de nomes de entidades IAM para anexar a policy (opcionais).
+- `aws_iam_policy.this`
+- `data.aws_iam_policy_document.this`
 
-Estrutura dos statements (exemplo)
-policy_statements = [
-  {
-    sid      = "AllowReadS3"
-    effect   = "Allow"
-    actions  = ["s3:GetObject", "s3:ListBucket"]
-    resources = [
-      "arn:aws:s3:::meu-bucket",
-      "arn:aws:s3:::meu-bucket/*"
-    ]
-    conditions = {
-      StringEquals = {
-        "aws:RequestedRegion" = ["us-east-1"]
-      }
+## Caracteristicas de seguranca
+
+- Nenhum valor sensivel fixo no codigo; todos os parametros sao configuraveis via variaveis.
+- Por padrao, statements com acao wildcard total (`"*"`) sao bloqueados por uma `precondition`. Para permitir explicitamente, defina `allow_wildcard_actions = true`.
+- Statement de exemplo padrao segue privilegio minimo (somente uma acao de leitura).
+- Suporte a `condition` blocks do IAM Policy Document para restringir ainda mais o escopo de cada permissao.
+
+## Uso
+
+```hcl
+module "iam_policy" {
+  source = "./"
+
+  policy_name        = "app-readonly-policy"
+  policy_description = "Permite leitura de instancias EC2 para o time de plataforma."
+  policy_path        = "/plataforma/"
+
+  statements = [
+    {
+      sid       = "AllowDescribeEC2"
+      effect    = "Allow"
+      actions   = ["ec2:DescribeInstances", "ec2:DescribeTags"]
+      resources = ["*"]
     }
+  ]
+
+  tags = {
+    Ambiente = "producao"
+    Time     = "plataforma"
   }
-]
+}
+```
 
-Boas práticas incorporadas
-- Variáveis com validações de formato e limites.
-- Política gerada via jsonencode para evitar erros de sintaxe.
-- Anexos a entidades IAM são opcionais e controlados por variáveis.
-- Configurações seguras por padrão (sem credenciais embutidas; sem backend remoto).
+## Inputs
 
-Saída (outputs)
-- policy_arn, policy_name, policy_path, policy_document_json
-- attached_roles, attached_users, attached_groups
-- attachment_count_total
+| Nome                     | Tipo         | Padrao                              | Descricao                                                          |
+|--------------------------|--------------|--------------------------------------|---------------------------------------------------------------------|
+| policy_name              | string       | n/a (obrigatorio)                    | Nome da IAM Policy.                                                 |
+| policy_description       | string       | "Managed by Terraform."             | Descricao da IAM Policy.                                            |
+| policy_path              | string       | "/"                                  | Path da IAM Policy.                                                 |
+| allow_wildcard_actions   | bool         | false                                 | Permite ou nao acoes wildcard total (`"*"`).                        |
+| statements               | list(object) | statement de exemplo (leitura EC2)  | Lista de statements do IAM Policy Document.                         |
+| tags                     | map(string)  | {}                                    | Tags aplicadas ao recurso.                                          |
 
-Notas
-- Cada statement deve conter pelo menos um dos campos actions ou not_actions e pelo menos um dos campos resources ou not_resources.
-- A validação sintática não requer credenciais reais, mas a aplicação sim.
+## Outputs
+
+| Nome                  | Descricao                                  |
+|-----------------------|---------------------------------------------|
+| policy_arn            | ARN da IAM Policy criada.                   |
+| policy_id             | ID da IAM Policy criada.                    |
+| policy_name           | Nome da IAM Policy criada.                  |
+| policy_path           | Path da IAM Policy criada.                  |
+| policy_document_json  | Documento JSON gerado para a policy.        |
+
+## Validacao
+
+```bash
+terraform init -backend=false
+terraform validate
+```

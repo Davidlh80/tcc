@@ -1,20 +1,16 @@
 provider "aws" {
   region = var.aws_region
-
-  # Default tags applied to all resources created by this provider
-  default_tags {
-    tags = var.tags
-  }
 }
 
 data "aws_iam_policy_document" "this" {
   statement {
-    effect    = var.policy_effect
-    actions   = var.policy_actions
-    resources = var.policy_resources
+    sid       = "CustomManagedStatement"
+    effect    = var.effect
+    actions   = var.allowed_actions
+    resources = var.allowed_resources
 
     dynamic "condition" {
-      for_each = var.policy_conditions
+      for_each = var.conditions
       content {
         test     = condition.value.test
         variable = condition.value.variable
@@ -26,8 +22,9 @@ data "aws_iam_policy_document" "this" {
 
 resource "aws_iam_policy" "this" {
   name        = var.policy_name
-  path        = var.policy_path
+  path        = var.path
   description = var.policy_description
   policy      = data.aws_iam_policy_document.this.json
-  tags        = var.tags
+
+  tags = var.tags
 }

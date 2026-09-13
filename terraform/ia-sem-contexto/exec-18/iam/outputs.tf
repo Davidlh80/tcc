@@ -1,24 +1,19 @@
-output "iam_policy_arn" {
+output "policy_arn" {
   description = "ARN da IAM Policy criada."
-  value       = length(aws_iam_policy.this) > 0 ? aws_iam_policy.this[0].arn : null
+  value       = aws_iam_policy.this.arn
 }
 
-output "iam_policy_name" {
+output "policy_id" {
+  description = "ID da IAM Policy criada."
+  value       = aws_iam_policy.this.id
+}
+
+output "policy_name" {
   description = "Nome da IAM Policy criada."
-  value       = length(aws_iam_policy.this) > 0 ? aws_iam_policy.this[0].name : null
+  value       = aws_iam_policy.this.name
 }
 
-output "iam_policy_id" {
-  description = "ID interno (policy_id) atribuído pela AWS."
-  value       = length(aws_iam_policy.this) > 0 ? aws_iam_policy.this[0].policy_id : null
-}
-
-output "iam_policy_path" {
-  description = "Caminho (path) da IAM Policy."
-  value       = length(aws_iam_policy.this) > 0 ? aws_iam_policy.this[0].path : null
-}
-
-output "iam_policy_document_json" {
-  description = "Documento JSON da policy efetivamente utilizado."
-  value       = local.policy_document
+output "policy_document_json" {
+  description = "Documento JSON efetivo da IAM Policy."
+  value       = data.aws_iam_policy_document.this.json
 }

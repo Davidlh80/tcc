@@ -1,61 +1,65 @@
-Nome
-Blueprint Terraform para criar uma IAM Policy na AWS, com opcoes para documento JSON customizado e anexos opcionais a Roles, Users e Groups.
+# IAM Policy — Blueprint Terraform
 
-Recursos criados
-- aws_iam_policy (obrigatorio)
-- aws_iam_role_policy_attachment (opcional, por item)
-- aws_iam_user_policy_attachment (opcional, por item)
-- aws_iam_group_policy_attachment (opcional, por item)
+Modulo Terraform para provisionar uma unica IAM Policy gerenciada pela AWS, com a statement (effect, actions, resources e condicoes) totalmente parametrizada.
 
-Padroes seguros
-- Politica padrao de privilegio minimo permitindo apenas sts:GetCallerIdentity, caso um documento JSON nao seja fornecido.
-- Variaveis com validacoes para evitar erros comuns.
+## Recursos criados
 
-Como usar (exemplo rapido)
-1) Ajuste variaveis no terraform.tfvars (opcional) ou via -var/-var-file.
-2) Inicie e valide:
-   - terraform init -backend=false
-   - terraform validate
-3) Planeje e aplique:
-   - terraform plan
-   - terraform apply
+- `data.aws_iam_policy_document.this`
+- `aws_iam_policy.this`
 
-Exemplos de configuracao
+## Uso
 
-Exemplo A: Usar politica padrao minima
-- Defina somente:
-  aws_region = "us-east-1"
-  policy_name = "my-managed-policy"
+```hcl
+module "iam_policy" {
+  source = "./"
 
-Resultado: Criara uma policy que permite apenas sts:GetCallerIdentity no recurso "*".
+  name        = "app-s3-read-only"
+  description = "Permite leitura de objetos em um bucket especifico"
+  effect      = "Allow"
 
-Exemplo B: Fornecer documento JSON customizado
-- Defina policy_document_json com o JSON completo da policy.
-- Quando policy_document_json for fornecido, as variaveis default_actions e default_resources sao ignoradas.
+  actions = [
+    "s3:GetObject",
+    "s3:ListBucket",
+  ]
 
-Exemplo C: Anexar a entidades IAM existentes
-- Informe listas em attach_to_roles, attach_to_users e/ou attach_to_groups com nomes existentes na conta.
+  resources = [
+    "arn:aws:s3:::meu-bucket-exemplo",
+    "arn:aws:s3:::meu-bucket-exemplo/*",
+  ]
 
-Variaveis principais
-- aws_region: Regiao do provider (default: us-east-1).
-- policy_name: Nome da policy.
-- policy_description: Descricao.
-- policy_path: Caminho (path), ex: "/" ou "/aplicacao/projeto/".
-- tags: Tags aplicadas ao recurso.
-- policy_document_json: JSON completo da policy (opcional).
-- policy_sid: SID do statement padrao quando nao for fornecido JSON.
-- default_actions: Lista de acoes do statement padrao (default: ["sts:GetCallerIdentity"]).
-- default_resources: Lista de recursos do statement padrao (default: ["*"]).
-- attach_to_roles: Conjunto de nomes de roles para anexar (opcional).
-- attach_to_users: Conjunto de nomes de users para anexar (opcional).
-- attach_to_groups: Conjunto de nomes de groups para anexar (opcional).
+  tags = {
+    Ambiente = "producao"
+    Time     = "plataforma"
+  }
+}
+```
 
-Outputs
-- policy_arn, policy_name, policy_path, policy_id, default_version_id
-- effective_policy_document
-- attached_to_roles, attached_to_users, attached_to_groups
+## Inputs
 
-Observacoes
-- Este template nao configura backend remoto.
-- A validacao sintatica nao depende de credenciais reais, mas a aplicacao em conta AWS exigira credenciais com permissoes adequadas.
-- Anexos exigem que as entidades (roles/users/groups) ja existam. Caso contrario, a aplicacao falhara ao anexar. Se nao deseja anexar, deixe as variaveis correspondentes vazias.
+| Nome         | Descricao                                              | Tipo           | Default                 | Obrigatorio |
+|--------------|---------------------------------------------------------|----------------|--------------------------|-------------|
+| name         | Nome da IAM Policy                                       | `string`       | -                         | sim         |
+| description  | Descricao da IAM Policy                                  | `string`       | `"Managed by Terraform"` | nao         |
+| path         | Path da IAM Policy no IAM                                 | `string`       | `"/"`                     | nao         |
+| effect       | Efeito da statement (`Allow` ou `Deny`)                   | `string`       | `"Allow"`                | nao         |
+| sid          | Sid opcional da statement                                 | `string`       | `null`                    | nao         |
+| actions      | Lista de actions IAM cobertas pela policy                 | `list(string)` | -                         | sim         |
+| resources    | Lista de ARNs de recursos aos quais a policy se aplica     | `list(string)` | -                         | sim         |
+| conditions   | Lista opcional de condicoes IAM (test, variable, values)   | `list(object)` | `[]`                      | nao         |
+| tags         | Tags aplicadas a IAM Policy                                | `map(string)`  | `{}`                      | nao         |
+
+## Outputs
+
+| Nome                   | Descricao                                    |
+|------------------------|-----------------------------------------------|
+| policy_arn             | ARN da IAM Policy criada                       |
+| policy_id              | ID da IAM Policy criada                        |
+| policy_name            | Nome da IAM Policy criada                      |
+| policy_document_json   | Documento JSON da policy gerado                |
+
+## Boas praticas de seguranca
+
+- Nao ha defaults para `actions` e `resources`: o consumidor do modulo deve declarar explicitamente o que a policy permite, evitando o uso acidental de wildcards amplos (`"*"`).
+- Prefira sempre ARNs especificos em `resources` e actions granulares em `actions`, seguindo o principio de menor privilegio.
+- Use `conditions` para restringir ainda mais o escopo da policy (ex.: por IP de origem, MFA, tag de recurso, etc.).
+- Revise o `policy_document_json` gerado antes de anexar esta policy a usuarios, grupos ou roles.

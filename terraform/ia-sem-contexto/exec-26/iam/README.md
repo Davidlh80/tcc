@@ -1,57 +1,75 @@
-Blueprint Terraform: AWS IAM Policy
+# IAM Policy — Blueprint Terraform
 
-Descricao
-- Cria uma IAM Policy na AWS.
-- Permite definir a policy via documento JSON bruto (policy_json) ou gerar uma declaracao simples a partir de allowed_actions e resources.
-- Segue configuracoes seguras por padrao, evitando valores sensiveis fixos.
+Blueprint autonomo para provisionar uma IAM Policy gerenciada pelo cliente na AWS, sem vinculo com padroes organizacionais especificos. As decisoes de privilegio, nomenclatura e escopo ficam a cargo de quem consome o modulo, atraves das variaveis de entrada.
 
-Arquivos
-- versions.tf: Requisitos de Terraform e provider.
-- variables.tf: Variaveis de configuracao com validacoes.
-- main.tf: Provider, documento da policy e recurso aws_iam_policy.
-- outputs.tf: Saidas relevantes, incluindo ARN e versao padrao.
-- README.md: Instrucoes de uso.
+## Recursos criados
 
-Como usar
-1) Ajuste as variaveis no arquivo variables.tf conforme necessario ou defina-as por -var / tfvars.
-2) Execute os comandos:
-   - terraform init -backend=false
-   - terraform validate
-   - terraform plan
-   - terraform apply
+- `aws_iam_policy.this`: IAM Policy gerenciada.
+- `data.aws_iam_policy_document.this`: documento de politica com uma unica statement configuravel.
 
-Exemplos de configuracao
+## Postura de seguranca
 
-A) Gerar policy simples via variaveis
-- Defina:
-  policy_name = "my-example-policy"
-  effect = "Allow"
-  allowed_actions = ["ec2:DescribeInstances"]
-  resources = ["*"]
+- Nenhum valor sensivel ou credencial e fixado no codigo.
+- `actions` e `resources` sao obrigatorios e devem conter ao menos um item, incentivando o principio de menor privilegio.
+- O uso do wildcard total `"*"` em `actions` ou `resources` e bloqueado por padrao via `precondition` no recurso. Para permitir explicitamente (assumindo o risco), defina `allow_wildcard_actions = true` e/ou `allow_wildcard_resources = true`.
+- `effect` aceita apenas `Allow` ou `Deny`.
+- Tags sao suportadas para rastreabilidade e governanca (`var.tags`).
 
-B) Fornecer JSON bruto de policy
-- Defina:
-  policy_json = '{"Version":"2012-10-17","Statement":[{"Effect":"Deny","Action":["s3:DeleteBucket"],"Resource":"*"}]}'
-- Quando policy_json e fornecido, as variaveis effect, allowed_actions e resources sao ignoradas para gerar o documento final.
+## Uso
 
-Variaveis principais
-- aws_region: Regiao AWS. Padrao us-east-1.
-- policy_name: Nome da policy.
-- policy_description: Descricao da policy.
-- policy_path: Caminho da policy (ex.: / ou /custom/).
-- effect: Allow ou Deny (usado somente quando policy_json for nulo).
-- allowed_actions: Lista de acoes (quando policy_json for nulo).
-- resources: Lista de ARNs dos recursos (quando policy_json for nulo).
-- policy_json: Documento JSON bruto da policy (opcional).
+```
+module "iam_policy" {
+  source = "./"
 
-Saidas
-- policy_arn: ARN da IAM Policy.
-- policy_name: Nome da policy criada.
-- policy_id: ID interno da policy.
-- default_version_id: Versao padrao da policy.
-- rendered_policy_json: Documento JSON final aplicado.
+  policy_name         = "app-s3-read-only"
+  policy_description  = "Permite leitura de objetos em um bucket especifico"
+  effect              = "Allow"
 
-Notas
-- Nao e configurado backend remoto.
-- Nao ha dependencia de credenciais reais para validacao sintatica.
-- Utilize credenciais adequadas somente em ambientes de execucao reais.
+  actions = [
+    "s3:GetObject",
+    "s3:ListBucket",
+  ]
+
+  resources = [
+    "arn:aws:s3:::meu-bucket-exemplo",
+    "arn:aws:s3:::meu-bucket-exemplo/*",
+  ]
+
+  tags = {
+    Ambiente = "producao"
+    Time     = "plataforma"
+  }
+}
+```
+
+## Inputs
+
+| Nome                       | Tipo           | Padrao                    | Descricao                                                                 |
+|----------------------------|----------------|----------------------------|----------------------------------------------------------------------------|
+| `region`                   | `string`       | `"us-east-1"`              | Regiao AWS usada pelo provider.                                            |
+| `policy_name`               | `string`       | -                           | Nome da IAM Policy.                                                        |
+| `policy_description`        | `string`       | `"Gerenciada via Terraform."` | Descricao da IAM Policy.                                                |
+| `path`                      | `string`       | `"/"`                       | Path da IAM Policy.                                                        |
+| `effect`                    | `string`       | `"Allow"`                   | Efeito da statement (`Allow` ou `Deny`).                                   |
+| `actions`                   | `list(string)` | -                           | Actions IAM da statement.                                                  |
+| `resources`                 | `list(string)` | -                           | ARNs de recursos da statement.                                             |
+| `allow_wildcard_actions`    | `bool`         | `false`                     | Permite explicitamente wildcard total em `actions`.                       |
+| `allow_wildcard_resources`  | `bool`         | `false`                     | Permite explicitamente wildcard total em `resources`.                     |
+| `conditions`                | `list(object)` | `[]`                        | Condicoes IAM opcionais (`test`, `variable`, `values`).                   |
+| `tags`                      | `map(string)`  | `{}`                        | Tags aplicadas ao recurso.                                                 |
+
+## Outputs
+
+| Nome                    | Descricao                                  |
+|-------------------------|---------------------------------------------|
+| `policy_arn`            | ARN da IAM Policy criada.                   |
+| `policy_id`             | ID da IAM Policy criada.                    |
+| `policy_name`           | Nome da IAM Policy criada.                  |
+| `policy_document_json`  | Documento JSON renderizado da policy.       |
+
+## Validacao
+
+```
+terraform init -backend=false
+terraform validate
+```

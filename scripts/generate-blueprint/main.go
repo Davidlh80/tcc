@@ -5,12 +5,18 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
+	"syscall"
 	"time"
+)
 
-	"github.com/openai/openai-go/v3"
-	"github.com/openai/openai-go/v3/responses"
+const (
+	claudeCallTimeout = 150 * time.Second
+	claudeMaxAttempts = 3
+	claudeRetryDelay  = 10 * time.Second
 )
 
 var expectedFiles = []string{
@@ -24,10 +30,11 @@ var expectedFiles = []string{
 func main() {
 	scenario := flag.String("scenario", "ia-com-contexto", "Cenario: ia-com-contexto ou ia-sem-contexto")
 	resource := flag.String("resource", "", "Recurso: s3, iam, security-group ou vazio para os tres")
-	model := flag.String("model", "gpt-5", "Modelo OpenAI usado na geracao")
+	model := flag.String("model", "sonnet", "Modelo Claude usado na geracao (alias como 'sonnet'/'opus' ou nome completo)")
 	executionID := flag.String("execution-id", "", "Execucao especifica no formato exec-01")
 	executionCount := flag.Int("execution-count", 30, "Numero de execucoes independentes a gerar")
 	startExecution := flag.Int("start-execution", 1, "Primeira execucao a gerar")
+	concurrency := flag.Int("concurrency", 6, "Numero de chamadas ao Claude CLI em paralelo")
 	flag.Parse()
 
 	resources := parseResources(*resource)
@@ -45,7 +52,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	if err := generateScenarioExecutions(*scenario, resources, *model, *startExecution, *executionCount); err != nil {
+	if err := generateScenarioExecutions(*scenario, resources, *model, *startExecution, *executionCount, *concurrency); err != nil {
 		fmt.Fprintf(os.Stderr, "erro: %v\n", err)
 		os.Exit(1)
 	}
@@ -73,19 +80,57 @@ func parseResources(raw string) []string {
 	return resources
 }
 
-func generateScenarioExecutions(scenario string, resources []string, model string, startExecution, executionCount int) error {
-	var failures int
+type generationTask struct {
+	executionID string
+	resource    string
+}
+
+func generateScenarioExecutions(scenario string, resources []string, model string, startExecution, executionCount, concurrency int) error {
+	var tasks []generationTask
 
 	for i := 0; i < executionCount; i++ {
 		executionID := fmt.Sprintf("exec-%02d", startExecution+i)
 		for _, resource := range resources {
-			if err := generateBlueprint(scenario, resource, model, executionID); err != nil {
-				failures++
-				fmt.Fprintf(os.Stderr, "falha registrada em %s/%s/%s: %v\n", scenario, executionID, resource, err)
-				continue
-			}
+			tasks = append(tasks, generationTask{executionID: executionID, resource: resource})
 		}
 	}
+
+	if concurrency < 1 {
+		concurrency = 1
+	}
+	if concurrency > len(tasks) {
+		concurrency = len(tasks)
+	}
+
+	taskCh := make(chan generationTask)
+
+	var (
+		wg       sync.WaitGroup
+		mu       sync.Mutex
+		failures int
+	)
+
+	for w := 0; w < concurrency; w++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for t := range taskCh {
+				if err := generateBlueprint(scenario, t.resource, model, t.executionID); err != nil {
+					mu.Lock()
+					failures++
+					mu.Unlock()
+					fmt.Fprintf(os.Stderr, "falha registrada em %s/%s/%s: %v\n", scenario, t.executionID, t.resource, err)
+				}
+			}
+		}()
+	}
+
+	for _, t := range tasks {
+		taskCh <- t
+	}
+	close(taskCh)
+
+	wg.Wait()
 
 	if failures > 0 {
 		return fmt.Errorf("%d execucao(oes) falharam nesta rodada", failures)
@@ -139,7 +184,7 @@ func generateBlueprint(scenario, resource, model, executionID string) error {
 
 	totalStartedAt := time.Now()
 	apiStartedAt := time.Now()
-	generated, err := callOpenAI(model, finalPrompt)
+	generated, err := callClaude(model, finalPrompt)
 	apiFinishedAt := time.Now()
 	if err != nil {
 		return err
@@ -193,21 +238,62 @@ func generateBlueprint(scenario, resource, model, executionID string) error {
 	return nil
 }
 
-func callOpenAI(model, finalPrompt string) (string, error) {
-	client := openai.NewClient()
-	ctx := context.Background()
+func callClaude(model, finalPrompt string) (string, error) {
+	var lastErr error
 
-	response, err := client.Responses.New(ctx, responses.ResponseNewParams{
-		Model: openai.ChatModel(model),
-		Input: responses.ResponseNewParamsInputUnion{
-			OfString: openai.String(finalPrompt),
-		},
-	})
-	if err != nil {
-		return "", fmt.Errorf("falha ao chamar API da OpenAI: %w", err)
+	for attempt := 1; attempt <= claudeMaxAttempts; attempt++ {
+		output, err := callClaudeOnce(model, finalPrompt)
+		if err == nil {
+			return output, nil
+		}
+
+		lastErr = err
+		fmt.Fprintf(os.Stderr, "tentativa %d/%d falhou: %v\n", attempt, claudeMaxAttempts, err)
+
+		if attempt < claudeMaxAttempts {
+			time.Sleep(claudeRetryDelay)
+		}
 	}
 
-	return response.OutputText(), nil
+	return "", lastErr
+}
+
+func callClaudeOnce(model, finalPrompt string) (string, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), claudeCallTimeout)
+	defer cancel()
+
+	cmd := exec.CommandContext(
+		ctx,
+		"claude",
+		"-p",
+		"--model", model,
+		"--output-format", "text",
+		"--disallowedTools", "Write,Edit,Bash,NotebookEdit,Read,Glob,Grep,WebFetch,WebSearch",
+	)
+	cmd.Stdin = strings.NewReader(finalPrompt)
+
+	// claude -p pode gerar processos filhos proprios (subagentes, MCP servers,
+	// etc). Sem isolar num process group e matar o grupo inteiro no timeout,
+	// matar so o processo direto deixa um filho vivo segurando o pipe de
+	// stdout aberto, e cmd.Output() trava para sempre esperando EOF.
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	cmd.Cancel = func() error {
+		return syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
+	}
+	cmd.WaitDelay = 5 * time.Second
+
+	var stderr strings.Builder
+	cmd.Stderr = &stderr
+
+	output, err := cmd.Output()
+	if err != nil {
+		if ctx.Err() == context.DeadlineExceeded {
+			return "", fmt.Errorf("timeout de %s ao chamar Claude Code CLI", claudeCallTimeout)
+		}
+		return "", fmt.Errorf("falha ao chamar Claude Code CLI: %w (stderr: %s)", err, stderr.String())
+	}
+
+	return string(output), nil
 }
 
 func buildMetadata(
@@ -321,9 +407,9 @@ Regras tecnicas:
 - O provider deve ser AWS.
 - Evite valores sensiveis fixos.
 - Use variaveis para valores configuraveis.
-- Inclua validacoes de variaveis quando fizer sentido.
 - Inclua outputs relevantes.
 - Priorize configuracoes seguras por padrao.
+- Antes de usar qualquer funcao nativa do Terraform (string, validacao, colecao, etc.), confira a assinatura oficial dela (quantidade e tipo de parametros) na documentacao da linguagem Terraform. Nao presuma o comportamento de funcoes de outras linguagens de programacao.
 - Mantenha o codigo simples o suficiente para ser validado com terraform init -backend=false e terraform validate.
 - Nao use backend remoto.
 - Nao use valores que dependam de credenciais reais.

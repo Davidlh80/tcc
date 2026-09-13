@@ -3,43 +3,39 @@ provider "aws" {
 }
 
 locals {
-  policy_full_name = "${var.environment}-${var.system}-iam-${var.policy_name}"
+  policy_name = "${var.environment}-${var.system}-iam-${var.policy_name}"
 
-  mandatory_tags = {
-    Project     = "tcc-iac-ia"
-    Environment = var.environment
-    ManagedBy   = "terraform"
-    Owner       = "devops"
-    CostCenter  = "academic-research"
-  }
-
-  tags = merge(var.additional_tags, local.mandatory_tags)
+  tags = merge(
+    {
+      Project     = "tcc-iac-ia"
+      Environment = var.environment
+      ManagedBy   = "terraform"
+      Owner       = "devops"
+      CostCenter  = "academic-research"
+    },
+    var.additional_tags
+  )
 }
 
-data "aws_iam_policy_document" "allow" {
+data "aws_iam_policy_document" "this" {
   statement {
-    sid     = "AllowExplicitActionsOnExplicitResources"
-    effect  = "Allow"
-    actions = var.allowed_actions
+    sid       = "AllowConfiguredActions"
+    effect    = "Allow"
+    actions   = var.allowed_actions
     resources = var.allowed_resources
   }
 }
 
 resource "aws_iam_policy" "this" {
-  name        = local.policy_full_name
+  name        = local.policy_name
   description = var.policy_description
-  path        = var.policy_path
-  policy      = data.aws_iam_policy_document.allow.json
+  policy      = data.aws_iam_policy_document.this.json
   tags        = local.tags
 
   lifecycle {
     precondition {
       condition     = !(contains(var.allowed_actions, "*") && contains(var.allowed_resources, "*"))
-      error_message = "Proibido combinar Action \"*\" com Resource \"*\" na mesma policy statement."
-    }
-    precondition {
-      condition     = length(var.allowed_actions) > 0 && length(var.allowed_resources) > 0
-      error_message = "As variáveis allowed_actions e allowed_resources devem conter ao menos um item."
+      error_message = "A policy nao pode combinar Action \"*\" com Resource \"*\" na mesma statement. Restrinja allowed_actions ou allowed_resources."
     }
   }
 }

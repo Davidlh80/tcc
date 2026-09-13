@@ -1,5 +1,5 @@
 output "policy_name" {
-  description = "Nome final da IAM Policy criada."
+  description = "Nome da IAM Policy criada."
   value       = aws_iam_policy.this.name
 }
 

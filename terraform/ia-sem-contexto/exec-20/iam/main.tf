@@ -1,3 +1,7 @@
+terraform {
+  required_version = ">= 1.5.0"
+}
+
 provider "aws" {
   region = var.aws_region
 }
@@ -5,8 +9,10 @@ provider "aws" {
 data "aws_iam_policy_document" "this" {
   dynamic "statement" {
     for_each = var.statements
+
     content {
-      effect    = upper(statement.value.effect)
+      sid       = statement.value.sid
+      effect    = statement.value.effect
       actions   = statement.value.actions
       resources = statement.value.resources
     }
@@ -14,9 +20,10 @@ data "aws_iam_policy_document" "this" {
 }
 
 resource "aws_iam_policy" "this" {
-  name        = var.name
-  description = var.description
+  name        = var.policy_name
   path        = var.path
+  description = var.policy_description
   policy      = data.aws_iam_policy_document.this.json
-  tags        = var.tags
+
+  tags = var.tags
 }

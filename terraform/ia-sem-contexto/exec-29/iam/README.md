@@ -1,63 +1,46 @@
-Blueprint Terraform — AWS IAM Policy
+# IAM Policy - Blueprint Terraform
 
-Descrição
-- Este template cria uma IAM Policy gerenciada (customer managed policy) na AWS.
-- O documento da policy pode ser gerado a partir de variáveis tipadas (effect, actions, resources e additional_statements) ou definido diretamente via policy_json (que substitui o documento gerado).
+Blueprint autonomo para provisionamento de uma IAM Policy na AWS, gerado sem vinculo a padroes organizacionais especificos.
 
-Pré-requisitos
-- Terraform >= 1.0.0
-- Provider AWS ~> 5.x
-- Credenciais AWS válidas configuradas no ambiente (ex.: variáveis de ambiente AWS ou perfil local). Não são definidas neste template.
+## Recursos criados
 
-Arquivos
-- versions.tf: versões mínimas do Terraform e do provider.
-- variables.tf: variáveis configuráveis com validações.
-- main.tf: provider, documento da policy e recurso aws_iam_policy.
-- outputs.tf: saídas úteis após a criação.
-- README.md: instruções e notas.
+- `aws_iam_policy.this`: IAM Policy com uma statement unica, construida a partir de `data.aws_iam_policy_document.this`.
 
-Como usar
-1) Ajuste as variáveis necessárias, por exemplo:
-- aws_region (padrão: us-east-1)
-- policy_name
-- policy_description
-- path
-- effect, actions, resources
-- additional_statements (lista de declarações extras)
-- OU forneça policy_json com um documento IAM completo em JSON para substituir o documento gerado
-- tags (mapa de chaves/valores)
+## Decisoes de design
 
-2) Execute os comandos:
-- terraform init -backend=false
-- terraform validate
-- terraform plan
-- terraform apply
+- Privilegio minimo por padrao: `actions` e `resources` possuem valores de exemplo restritos (leitura em um bucket S3 especifico), nunca `*`.
+- Wildcards bloqueados: validacoes em `variables.tf` impedem `"*"` em `actions` e `resources`, forcando a definicao explicita de permissoes.
+- Sem anexacao automatica: este blueprint cria apenas a policy (`aws_iam_policy`). O anexamento a roles, usuarios ou grupos fica fora do escopo e deve ser feito por outro modulo/recurso, para evitar acoplamento implicito de privilegios.
+- Sem credenciais reais: o provider AWS usa apenas a variavel `region`, suficiente para `terraform init -backend=false` e `terraform validate`.
 
-Padrões seguros adotados
-- Efeito padrão Allow com ações de leitura não privilegiadas (iam:GetAccountSummary) e resources = ["*"].
-- Possibilidade de usar Deny e restringir por recursos conforme necessidade.
-- Tags padrão incluem ManagedBy=terraform e Component=iam-policy (pode ser mesclado com tags customizadas).
+## Uso
 
-Variáveis principais
-- aws_region: Região AWS (ex.: us-east-1).
-- policy_name: Nome da policy. Respeita o padrão AWS [\\w+=,.@-]{1,128}.
-- path: Caminho da policy. Deve iniciar e terminar com “/”.
-- policy_description: Descrição da policy.
-- effect: Allow ou Deny para a declaração principal.
-- actions: Lista de ações para a declaração principal.
-- resources: Lista de recursos para a declaração principal.
-- additional_statements: Lista de objetos com effect, actions e resources para compor mais declarações.
-- policy_json: JSON completo opcional que, se fornecido, será usado no lugar do documento gerado.
-- tags: Tags adicionais.
+```
+terraform init -backend=false
+terraform validate
+```
 
-Outputs
-- iam_policy_arn: ARN da policy.
-- iam_policy_name: Nome da policy.
-- iam_policy_id: ID da policy.
-- iam_policy_path: Path da policy.
-- iam_policy_document: JSON efetivo da policy.
-- iam_policy_tags: Tags aplicadas.
+Para customizar a policy, ajuste as variaveis `policy_name`, `policy_description`, `effect`, `actions`, `resources`, `path` e `tags` via `terraform.tfvars` ou `-var`.
 
-Notas
-- Este template não configura backend remoto e não depende de credenciais reais para validação sintática.
-- Para produção, personalize actions/resources para o princípio do menor privilégio.
+## Variaveis principais
+
+| Nome                | Descricao                                   | Default                              |
+|---------------------|----------------------------------------------|---------------------------------------|
+| `region`            | Regiao AWS do provider                        | `us-east-1`                          |
+| `policy_name`       | Nome da IAM Policy                             | `example-least-privilege-policy`     |
+| `policy_description`| Descricao da IAM Policy                        | `Managed by Terraform`               |
+| `path`              | Path da policy no IAM                          | `/`                                   |
+| `sid`               | Sid da statement                               | `PolicyStatement`                     |
+| `effect`            | `Allow` ou `Deny`                              | `Allow`                               |
+| `actions`           | Lista de acoes IAM (sem wildcard)              | `["s3:GetObject", "s3:ListBucket"]`  |
+| `resources`         | Lista de ARNs (sem wildcard)                   | `["arn:aws:s3:::example-bucket/*"]`  |
+| `tags`              | Tags da policy                                 | `{}`                                  |
+
+## Outputs
+
+| Nome                    | Descricao                          |
+|-------------------------|--------------------------------------|
+| `policy_arn`             | ARN da IAM Policy criada             |
+| `policy_id`              | ID da IAM Policy criada              |
+| `policy_name`            | Nome da IAM Policy criada            |
+| `policy_document_json`   | Documento JSON gerado para a policy  |

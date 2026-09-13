@@ -1,17 +1,23 @@
-provider "aws" {
-  region = var.region
+terraform {
+  required_version = ">= 1.5.0"
+}
+
+data "aws_caller_identity" "current" {}
+
+locals {
+  common_tags = merge(
+    var.tags,
+    {
+      Name = var.bucket_name
+    }
+  )
 }
 
 resource "aws_s3_bucket" "this" {
   bucket        = var.bucket_name
   force_destroy = var.force_destroy
 
-  tags = merge(
-    {
-      Name = var.bucket_name
-    },
-    var.tags
-  )
+  tags = local.common_tags
 }
 
 resource "aws_s3_bucket_ownership_controls" "this" {
@@ -22,11 +28,20 @@ resource "aws_s3_bucket_ownership_controls" "this" {
   }
 }
 
+resource "aws_s3_bucket_public_access_block" "this" {
+  bucket = aws_s3_bucket.this.id
+
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
+}
+
 resource "aws_s3_bucket_versioning" "this" {
   bucket = aws_s3_bucket.this.id
 
   versioning_configuration {
-    status = var.versioning_enabled ? "Enabled" : "Suspended"
+    status = var.enable_versioning ? "Enabled" : "Suspended"
   }
 }
 
@@ -34,58 +49,40 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "this" {
   bucket = aws_s3_bucket.this.id
 
   rule {
-    bucket_key_enabled = var.sse_bucket_key_enabled
-
     apply_server_side_encryption_by_default {
-      sse_algorithm     = var.sse_algorithm
-      kms_master_key_id = var.sse_algorithm == "aws:kms" ? var.kms_key_arn : null
+      sse_algorithm     = var.kms_key_arn != null ? "aws:kms" : "AES256"
+      kms_master_key_id = var.kms_key_arn != null ? var.kms_key_arn : null
     }
+    bucket_key_enabled = var.kms_key_arn != null ? true : false
   }
-}
-
-resource "aws_s3_bucket_public_access_block" "this" {
-  bucket = aws_s3_bucket.this.id
-
-  block_public_acls       = var.public_access_block.block_public_acls
-  block_public_policy     = var.public_access_block.block_public_policy
-  ignore_public_acls      = var.public_access_block.ignore_public_acls
-  restrict_public_buckets = var.public_access_block.restrict_public_buckets
-}
-
-resource "aws_s3_bucket_logging" "this" {
-  count = var.logging.enabled ? 1 : 0
-
-  bucket        = aws_s3_bucket.this.id
-  target_bucket = var.logging.target_bucket
-  target_prefix = var.logging.target_prefix
 }
 
 resource "aws_s3_bucket_lifecycle_configuration" "this" {
-  count  = var.lifecycle.enabled ? 1 : 0
+  count  = var.enable_lifecycle_rule ? 1 : 0
   bucket = aws_s3_bucket.this.id
 
   rule {
-    id     = "lifecycle-default"
+    id     = "expire-noncurrent-versions"
     status = "Enabled"
 
-    filter {}
-
-    abort_incomplete_multipart_upload {
-      days_after_initiation = var.lifecycle.abort_incomplete_multipart_upload_days
+    filter {
+      prefix = ""
     }
 
     noncurrent_version_expiration {
-      noncurrent_days = var.lifecycle.noncurrent_version_expiration_days
+      noncurrent_days = var.noncurrent_version_expiration_days
+    }
+
+    abort_incomplete_multipart_upload {
+      days_after_initiation = 7
     }
   }
 }
 
-data "aws_partition" "current" {}
+resource "aws_s3_bucket_policy" "deny_insecure_transport" {
+  bucket = aws_s3_bucket.this.id
 
-locals {
-  bucket_arn      = aws_s3_bucket.this.arn
-  bucket_objects  = "${aws_s3_bucket.this.arn}/*"
-  tls_only_policy = {
+  policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
       {
@@ -93,7 +90,10 @@ locals {
         Effect    = "Deny"
         Principal = "*"
         Action    = "s3:*"
-        Resource  = [local.bucket_arn, local.bucket_objects]
+        Resource = [
+          aws_s3_bucket.this.arn,
+          "${aws_s3_bucket.this.arn}/*"
+        ]
         Condition = {
           Bool = {
             "aws:SecureTransport" = "false"
@@ -101,10 +101,5 @@ locals {
         }
       }
     ]
-  }
-}
-
-resource "aws_s3_bucket_policy" "tls_only" {
-  bucket = aws_s3_bucket.this.id
-  policy = jsonencode(local.tls_only_policy)
+  })
 }

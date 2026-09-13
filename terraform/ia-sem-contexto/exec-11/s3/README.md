@@ -1,52 +1,69 @@
-Resumo
-Blueprint Terraform para provisionar um bucket Amazon S3 com configurações seguras por padrão: bloqueio de acesso público, criptografia no lado do servidor, versionamento opcional, política para negar tráfego sem TLS e suporte opcional a logging.
+# Blueprint Terraform — Bucket Amazon S3
 
-Recursos criados
-- aws_s3_bucket
-- aws_s3_bucket_ownership_controls (BucketOwnerEnforced)
-- aws_s3_bucket_public_access_block
-- aws_s3_bucket_versioning
-- aws_s3_bucket_server_side_encryption_configuration
-- aws_s3_bucket_policy (opcional, nega acesso sem TLS)
-- aws_s3_bucket_logging (opcional)
+Blueprint autônoma para provisionamento de um bucket Amazon S3 seguro por padrão, sem vínculo a padrões organizacionais específicos.
 
-Pré-requisitos
-- Terraform >= 1.4
-- Provider AWS ~> 5.x
-- Permissões AWS adequadas para S3 e, se aplicável, para uso da KMS Key
+## Recursos criados
 
-Como usar (exemplo mínimo)
-- Defina as variáveis necessárias, principalmente bucket_name.
-- Execute:
-  terraform init -backend=false
-  terraform validate
-  terraform plan -var 'bucket_name=meu-bucket-exemplo-123'
-  terraform apply -var 'bucket_name=meu-bucket-exemplo-123'
+- `aws_s3_bucket` — bucket S3 principal.
+- `aws_s3_bucket_versioning` — versionamento de objetos (habilitado por padrão).
+- `aws_s3_bucket_server_side_encryption_configuration` — criptografia server-side (SSE-S3 por padrão, SSE-KMS opcional via `kms_key_arn`).
+- `aws_s3_bucket_public_access_block` — bloqueio total de acesso público.
+- `aws_s3_bucket_ownership_controls` — ownership `BucketOwnerEnforced`, desabilitando ACLs.
+- `aws_s3_bucket_logging` — logging de acesso opcional, habilitado ao informar `logging_target_bucket`.
+- `aws_s3_bucket_lifecycle_configuration` — regras de ciclo de vida opcionais via `lifecycle_rules`.
 
-Variáveis principais
-- bucket_name (obrigatória): nome único globalmente.
-- region: padrão us-east-1.
-- versioning_enabled: habilita versionamento (padrão true).
-- sse_algorithm: AES256 (padrão) ou aws:kms.
-- kms_key_id: necessário se sse_algorithm=aws:kms.
-- enable_bucket_key: habilita S3 Bucket Key quando usa KMS (padrão true).
-- force_destroy: destrói mesmo com objetos (padrão false).
-- deny_insecure_transport: cria política que nega acesso sem TLS (padrão true).
-- enable_logging: habilita logging para outro bucket (padrão false).
-- logging_target_bucket: bucket de logs (requerido se enable_logging=true).
-- logging_target_prefix: prefixo para logs (padrão s3-access-logs/).
-- tags: mapa de tags adicionais. As tags também são aplicadas via default_tags no provider com ManagedBy=Terraform.
+## Postura de segurança padrão
 
-Boas práticas embutidas
-- Bloqueio completo de acesso público via Public Access Block.
-- Propriedade do objeto forçada ao dono do bucket (BucketOwnerEnforced), removendo dependência de ACLs.
-- Criptografia no lado do servidor habilitada por padrão (AES256 ou KMS).
-- Política para negar tráfego não criptografado (sem TLS), quando habilitada.
+- Acesso público bloqueado em todas as dimensões (ACLs e políticas).
+- Criptografia server-side sempre habilitada.
+- ACLs desabilitadas em favor de políticas de bucket (ownership enforced).
+- Versionamento habilitado por padrão para proteção contra sobrescrita/exclusão acidental.
+- `force_destroy` desabilitado por padrão para evitar exclusão acidental de dados.
 
-Observações
-- Se utilizar aws:kms, forneça kms_key_id (ARN, ID ou alias) com permissões para o bucket S3.
-- Para habilitar logging, é necessário já existir um bucket de destino e permissões adequadas.
-- Este template não configura backend remoto e não depende de credenciais reais para validação sintática (terraform validate).
+## Uso
 
-Saída (outputs)
-- bucket_name, bucket_id, bucket_arn, bucket_domain_name, bucket_regional_domain_name, versioning_status, encryption_algorithm
+```hcl
+module "bucket" {
+  source      = "./"
+  bucket_name = "meu-bucket-exemplo-123"
+  environment = "prod"
+
+  tags = {
+    Owner = "time-plataforma"
+  }
+}
+```
+
+## Variáveis principais
+
+| Nome | Descrição | Padrão |
+|---|---|---|
+| `aws_region` | Região AWS de provisionamento | `us-east-1` |
+| `bucket_name` | Nome único do bucket | — (obrigatório) |
+| `environment` | Ambiente para fins de tag | `dev` |
+| `force_destroy` | Permite destruir bucket não vazio | `false` |
+| `enable_versioning` | Habilita versionamento | `true` |
+| `kms_key_arn` | ARN de chave KMS para SSE-KMS | `null` |
+| `logging_target_bucket` | Bucket de destino de logs de acesso | `null` |
+| `logging_target_prefix` | Prefixo dos logs de acesso | `log/` |
+| `lifecycle_rules` | Regras de ciclo de vida | `[]` |
+| `tags` | Tags adicionais | `{}` |
+
+## Outputs
+
+| Nome | Descrição |
+|---|---|
+| `bucket_id` | Nome do bucket |
+| `bucket_arn` | ARN do bucket |
+| `bucket_domain_name` | Domínio virtual-hosted-style |
+| `bucket_regional_domain_name` | Domínio regional |
+| `bucket_region` | Região do bucket |
+
+## Validação
+
+```bash
+terraform init -backend=false
+terraform validate
+```
+
+Nenhuma credencial real é necessária para validação sintática, pois a região possui valor padrão e nenhuma chamada de API é feita durante `validate`.

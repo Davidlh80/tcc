@@ -5,7 +5,7 @@ provider "aws" {
 locals {
   resource_name = "${var.environment}-${var.system}-iam-${var.policy_name}"
 
-  required_tags = {
+  default_tags = {
     Project     = "tcc-iac-ia"
     Environment = var.environment
     ManagedBy   = "terraform"
@@ -13,29 +13,29 @@ locals {
     CostCenter  = "academic-research"
   }
 
-  tags = merge(var.additional_tags, local.required_tags)
+  tags = merge(local.default_tags, var.additional_tags)
 }
 
-data "aws_iam_policy_document" "allow" {
+data "aws_iam_policy_document" "this" {
   statement {
-    sid     = "AllowActionsOnDefinedResources"
-    effect  = "Allow"
-    actions = var.allowed_actions
+    sid       = "AllowConfiguredActions"
+    effect    = "Allow"
+    actions   = var.allowed_actions
     resources = var.allowed_resources
+  }
+
+  lifecycle {
+    precondition {
+      condition     = !(contains(var.allowed_actions, "*") && contains(var.allowed_resources, "*"))
+      error_message = "A combinacao de Action \"*\" com Resource \"*\" na mesma statement nao e permitida."
+    }
   }
 }
 
 resource "aws_iam_policy" "this" {
   name        = local.resource_name
-  description = coalesce(var.policy_description, "IAM policy for ${var.system} (${var.environment}) - ${var.policy_name}")
-  path        = var.policy_path
-  policy      = data.aws_iam_policy_document.allow.json
-  tags        = local.tags
+  description = var.policy_description
+  policy      = data.aws_iam_policy_document.this.json
 
-  lifecycle {
-    precondition {
-      condition     = !(contains(var.allowed_actions, "*") && contains(var.allowed_resources, "*"))
-      error_message = "Proibido combinar Action \"*\" com Resource \"*\" na mesma policy statement."
-    }
-  }
+  tags = local.tags
 }

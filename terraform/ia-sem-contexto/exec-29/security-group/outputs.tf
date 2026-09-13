@@ -1,29 +1,24 @@
 output "security_group_id" {
-  description = "ID of the created Security Group."
+  description = "ID do Security Group criado."
   value       = aws_security_group.this.id
 }
 
 output "security_group_arn" {
-  description = "ARN of the created Security Group."
+  description = "ARN do Security Group criado."
   value       = aws_security_group.this.arn
 }
 
 output "security_group_name" {
-  description = "Name of the created Security Group."
+  description = "Nome do Security Group criado."
   value       = aws_security_group.this.name
 }
 
-output "security_group_vpc_id" {
-  description = "VPC ID associated with the Security Group."
+output "vpc_id" {
+  description = "ID da VPC associada ao Security Group."
   value       = aws_security_group.this.vpc_id
 }
 
-output "ingress_rules_count" {
-  description = "Number of managed ingress rules."
-  value       = length(var.ingress_rules)
-}
-
-output "egress_rules_count" {
-  description = "Number of managed egress rules."
-  value       = length(var.egress_rules)
+output "owner_id" {
+  description = "ID da conta AWS proprietaria do Security Group."
+  value       = aws_security_group.this.owner_id
 }

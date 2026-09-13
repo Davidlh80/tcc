@@ -1,33 +1,49 @@
+terraform {
+  required_version = ">= 1.5.0"
+}
+
 provider "aws" {
   region = var.region
 }
 
 locals {
-  policy_full_name = "${var.environment}-${var.system}-iam-${var.policy_name}"
+  name = "${var.environment}-${var.system}-iam-${var.policy_name}"
 
-  mandatory_tags = {
-    Project     = "tcc-iac-ia"
-    Environment = var.environment
-    ManagedBy   = "terraform"
-    Owner       = "devops"
-    CostCenter  = "academic-research"
-  }
+  tags = merge(
+    {
+      Project     = "tcc-iac-ia"
+      Environment = var.environment
+      ManagedBy   = "terraform"
+      Owner       = "devops"
+      CostCenter  = "academic-research"
+    },
+    var.additional_tags
+  )
 
-  tags = merge(var.additional_tags, local.mandatory_tags)
+  has_full_wildcard_action   = contains(var.allowed_actions, "*")
+  has_full_wildcard_resource = contains(var.allowed_resources, "*")
 }
 
-data "aws_iam_policy_document" "allow_configured" {
+data "aws_iam_policy_document" "this" {
   statement {
-    sid     = "AllowConfiguredActions"
-    effect  = "Allow"
-    actions = var.allowed_actions
+    sid       = "AllowConfiguredActions"
+    effect    = "Allow"
+    actions   = var.allowed_actions
     resources = var.allowed_resources
   }
 }
 
 resource "aws_iam_policy" "this" {
-  name        = local.policy_full_name
-  description = coalesce(var.policy_description, "IAM policy for ${var.system} (${var.environment}) allowing only configured actions and resources.")
-  policy      = data.aws_iam_policy_document.allow_configured.json
+  name        = local.name
+  description = var.description
+  path        = "/"
+  policy      = data.aws_iam_policy_document.this.json
   tags        = local.tags
+
+  lifecycle {
+    precondition {
+      condition     = !(local.has_full_wildcard_action && local.has_full_wildcard_resource)
+      error_message = "A statement não pode combinar Action \"*\" com Resource \"*\". Restrinja allowed_actions e/ou allowed_resources."
+    }
+  }
 }

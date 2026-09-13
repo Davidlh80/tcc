@@ -1,84 +1,82 @@
-variable "region" {
-  description = "AWS region to use for the provider."
+variable "aws_region" {
+  description = "Regiao AWS utilizada pelo provider."
   type        = string
-
-  validation {
-    condition     = length(trim(var.region)) > 0
-    error_message = "The region must be a non-empty string (e.g., us-east-1)."
-  }
+  default     = "us-east-1"
 }
 
 variable "policy_name" {
-  description = "Name of the IAM Policy. Must be unique within the account."
+  description = "Nome da IAM Policy."
   type        = string
-  default     = "tf-managed-iam-policy"
+  default     = "example-restricted-policy"
 
   validation {
-    condition     = can(regex("^[A-Za-z0-9+=,.@_-]+$", var.policy_name)) && length(var.policy_name) <= 128
-    error_message = "policy_name must be <= 128 chars and contain only letters, numbers, and +=,.@_- characters."
+    condition     = length(var.policy_name) > 0 && length(var.policy_name) <= 128
+    error_message = "policy_name deve ter entre 1 e 128 caracteres."
+  }
+
+  validation {
+    condition     = can(regex("^[\\w+=,.@-]+$", var.policy_name))
+    error_message = "policy_name contem caracteres invalidos para um nome de IAM Policy."
   }
 }
 
 variable "policy_description" {
-  description = "Description for the IAM Policy."
+  description = "Descricao da IAM Policy."
   type        = string
-  default     = "Managed by Terraform"
+  default     = "IAM Policy gerada com escopo minimo, sem wildcards em actions ou resources."
 }
 
-variable "policy_path" {
-  description = "Path under which to create the IAM Policy."
+variable "path" {
+  description = "Path da IAM Policy no IAM."
   type        = string
   default     = "/"
+}
+
+variable "effect" {
+  description = "Efeito da statement da policy (Allow ou Deny)."
+  type        = string
+  default     = "Allow"
 
   validation {
-    condition     = startswith(var.policy_path, "/") && endswith(var.policy_path, "/")
-    error_message = "policy_path must start and end with '/'. Example: '/service-role/'."
+    condition     = contains(["Allow", "Deny"], var.effect)
+    error_message = "effect deve ser \"Allow\" ou \"Deny\"."
   }
 }
 
-variable "environment" {
-  description = "Environment tag to apply to the IAM Policy."
-  type        = string
-  default     = "dev"
+variable "actions" {
+  description = "Lista de actions IAM permitidas ou negadas pela policy. Wildcard \"*\" nao e permitido por padrao de seguranca."
+  type        = list(string)
+  default     = ["s3:GetObject", "s3:ListBucket"]
 
   validation {
-    condition     = contains(["dev", "staging", "prod", "test", "sandbox"], var.environment)
-    error_message = "environment must be one of: dev, staging, prod, test, sandbox."
+    condition     = length(var.actions) > 0
+    error_message = "actions deve conter pelo menos um item."
+  }
+
+  validation {
+    condition     = !contains(var.actions, "*")
+    error_message = "Uso de wildcard \"*\" em actions nao e permitido. Especifique as actions necessarias."
+  }
+}
+
+variable "resources" {
+  description = "Lista de ARNs de recursos aos quais a policy se aplica. Wildcard \"*\" nao e permitido por padrao de seguranca."
+  type        = list(string)
+  default     = ["arn:aws:s3:::example-bucket", "arn:aws:s3:::example-bucket/*"]
+
+  validation {
+    condition     = length(var.resources) > 0
+    error_message = "resources deve conter pelo menos um item."
+  }
+
+  validation {
+    condition     = !contains(var.resources, "*")
+    error_message = "Uso de wildcard \"*\" em resources nao e permitido. Especifique os ARNs necessarios."
   }
 }
 
 variable "tags" {
-  description = "Additional tags to apply to the IAM Policy."
+  description = "Tags aplicadas a IAM Policy."
   type        = map(string)
   default     = {}
-}
-
-variable "statements" {
-  description = "List of statements to include in the IAM policy document."
-  type = list(object({
-    sid       = string
-    effect    = string
-    actions   = list(string)
-    resources = list(string)
-    conditions = list(object({
-      test     = string
-      variable = string
-      values   = list(string)
-    }))
-  }))
-
-  default = [
-    {
-      sid       = "DefaultListBuckets"
-      effect    = "Allow"
-      actions   = ["s3:ListAllMyBuckets", "s3:GetBucketLocation"]
-      resources = ["*"]
-      conditions = []
-    }
-  ]
-
-  validation {
-    condition     = length(var.statements) > 0
-    error_message = "At least one statement must be provided."
-  }
 }

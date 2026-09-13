@@ -1,76 +1,54 @@
-Nome
-Blueprint Terraform — AWS IAM Policy (Managed Policy)
+# IAM Policy — Terraform Blueprint
 
-Descrição
-Este módulo cria uma IAM Managed Policy na AWS com foco em segurança por padrão (somente leitura em serviços comuns) e permite, opcionalmente, anexá-la a usuários, roles e grupos existentes.
+Blueprint Terraform para provisionamento de uma IAM Policy na AWS, gerada de forma independente, sem vínculo com padrões organizacionais específicos, seguindo boas práticas gerais de mercado de segurança em IAM.
 
-Recursos criados
-- aws_iam_policy
-- aws_iam_user_policy_attachment (opcional)
-- aws_iam_role_policy_attachment (opcional)
-- aws_iam_group_policy_attachment (opcional)
+## Objetivo
 
-Uso rápido
-- Clone ou copie os arquivos para um diretório.
-- Ajuste variáveis conforme necessário em um tfvars ou diretamente via CLI.
+Criar uma `aws_iam_policy` com uma statement construída via `aws_iam_policy_document`, permitindo configurar actions, resources, effect e uma condição opcional de transporte seguro (`aws:SecureTransport`).
 
-Exemplo mínimo
-- Permissão somente leitura básica em EC2/IAM e listagem de buckets S3 (padrão do módulo).
+## Decisões de segurança adotadas
 
-variables.tf principal
-- aws_region: "us-east-1"
-- policy_name: "tf-readonly-policy"
-- policy_path: "/"
-- policy_description: "Managed by Terraform - Read-only baseline policy"
-- actions: ["ec2:Describe*", "s3:ListAllMyBuckets", "iam:Get*", "iam:List*"]
-- resources: ["*"]
-- deny_actions: []
-- deny_resources: ["*"]
-- attach_to_users: []
-- attach_to_roles: []
-- attach_to_groups: []
-- tags: {}
+- **Sem wildcard total**: as variáveis `allowed_actions` e `allowed_resources` possuem validações que rejeitam o valor `"*"`, forçando a definição explícita de actions e recursos.
+- **Least privilege por padrão**: os valores default concedem apenas `s3:GetObject` e `s3:ListBucket` sobre um bucket de exemplo, evitando privilégios administrativos por padrão.
+- **Transporte seguro**: por padrão (`enforce_secure_transport = true`), é adicionada uma condição exigindo `aws:SecureTransport = true`, bloqueando chamadas via HTTP não criptografado quando aplicável ao serviço.
+- **Sem credenciais reais**: o blueprint não depende de credenciais, backends remotos ou dados sensíveis fixos no código.
 
-Exemplo de customização
-- Definir ações específicas e anexar a uma role existente:
-terraform apply -var='policy_name=app-logs-read' -var='actions=["logs:GetLogEvents","logs:FilterLogEvents","logs:DescribeLogStreams","logs:DescribeLogGroups"]' -var='resources=["*"]' -var='attach_to_roles=["my-existing-role"]'
+## Uso
 
-Fluxo de execução
-1) Inicialização local (sem backend remoto):
-   terraform init -backend=false
+```
+terraform init -backend=false
+terraform validate
+terraform plan \
+  -var="policy_name=my-app-read-policy" \
+  -var='allowed_actions=["s3:GetObject","s3:ListBucket"]' \
+  -var='allowed_resources=["arn:aws:s3:::my-bucket","arn:aws:s3:::my-bucket/*"]'
+```
 
-2) Validação estática:
-   terraform validate
+## Variáveis principais
 
-3) Plano:
-   terraform plan -out=plan.tfplan
+| Nome | Descrição | Default |
+|---|---|---|
+| `aws_region` | Região do provider AWS | `us-east-1` |
+| `policy_name` | Nome da IAM Policy | `example-least-privilege-policy` |
+| `policy_description` | Descrição da policy | texto padrão |
+| `path` | Path IAM da policy | `/` |
+| `effect` | `Allow` ou `Deny` | `Allow` |
+| `allowed_actions` | Actions IAM permitidas (sem `*`) | `["s3:GetObject", "s3:ListBucket"]` |
+| `allowed_resources` | ARNs de recursos (sem `*`) | ARNs de bucket de exemplo |
+| `enforce_secure_transport` | Adiciona condição SecureTransport | `true` |
+| `tags` | Tags aplicadas à policy | `{}` |
 
-4) Aplicação:
-   terraform apply plan.tfplan
+## Outputs
 
-5) Destruir (quando necessário):
-   terraform destroy
+| Nome | Descrição |
+|---|---|
+| `policy_arn` | ARN da IAM Policy criada |
+| `policy_id` | ID da IAM Policy criada |
+| `policy_name` | Nome da IAM Policy criada |
+| `policy_document_json` | Documento JSON gerado da policy |
 
-Boas práticas e notas
-- Least privilege: utilize recursos e ações mais específicos quando possível.
-- Condições: este blueprint oferece uma política de Allow e, opcionalmente, uma de Deny. Para cenários complexos (conditions, not_actions, principals), adapte o data.aws_iam_policy_document conforme necessário.
-- Anexos: garantir que usuários, roles e grupos já existam na conta antes de aplicar.
-- Tags: inclua tags relevantes para rastreabilidade (ex.: Owner, CostCenter, Environment).
+## Observações
 
-Saída (outputs)
-- policy_arn: ARN da policy criada.
-- policy_name: Nome da policy.
-- policy_path: Caminho da policy.
-- policy_id: ID único da policy.
-- default_version_id: Versão padrão da policy.
-- policy_document_json: Documento JSON final da policy.
-- attached_users / attached_roles / attached_groups: Entidades às quais a policy foi solicitada para anexo.
-- attachments_count: Soma total dos anexos.
-
-Compatibilidade
-- Terraform >= 1.0
-- Provider AWS >= 4.0 e < 6.0
-
-Limitações conhecidas
-- Não cria usuários/roles/grupos; apenas anexa a existentes.
-- Não utiliza backend remoto (compatível com init -backend=false).
+- Ajuste `allowed_actions` e `allowed_resources` conforme o caso de uso real antes de aplicar em produção.
+- Para anexar esta policy a uma role ou usuário, utilize `aws_iam_role_policy_attachment` ou `aws_iam_user_policy_attachment` referenciando `aws_iam_policy.this.arn` (fora do escopo deste blueprint).
+- Este blueprint não cria roles, grupos ou usuários — apenas o recurso de policy gerenciada.

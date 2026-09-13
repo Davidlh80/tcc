@@ -8,3 +8,13 @@ terraform {
     }
   }
 }
+
+provider "aws" {
+  region = var.aws_region
+}
+
+variable "aws_region" {
+  description = "Regiao AWS onde os recursos serao provisionados."
+  type        = string
+  default     = "us-east-1"
+}

@@ -1,99 +1,83 @@
-variable "aws_region" {
+variable "region" {
   description = "Regiao AWS onde os recursos serao provisionados."
   type        = string
   default     = "us-east-1"
-
-  validation {
-    condition     = can(regex("^[a-z]{2}-[a-z]+-\\d+$", var.aws_region))
-    error_message = "aws_region deve estar no formato esperado, por exemplo: us-east-1."
-  }
 }
 
 variable "vpc_id" {
-  description = "ID da VPC onde o Security Group sera criado."
+  description = "ID da VPC (criada pelo ambiente de teste) onde o Security Group sera criado."
   type        = string
 
   validation {
-    condition     = length(trim(var.vpc_id)) > 4 && startswith(var.vpc_id, "vpc-")
-    error_message = "vpc_id deve ser um ID valido iniciado por 'vpc-'."
+    condition     = can(regex("^vpc-[a-zA-Z0-9]+$", var.vpc_id))
+    error_message = "O valor de vpc_id deve ser um ID de VPC valido, iniciando com \"vpc-\"."
   }
 }
 
-variable "sg_name" {
+variable "name" {
   description = "Nome do Security Group."
   type        = string
-  default     = "secure-sg"
-
-  validation {
-    condition     = length(trim(var.sg_name)) >= 1 && length(var.sg_name) <= 255
-    error_message = "sg_name deve possuir entre 1 e 255 caracteres."
-  }
+  default     = "example-sg"
 }
 
 variable "description" {
   description = "Descricao do Security Group."
   type        = string
-  default     = "Security Group gerenciado via Terraform."
-}
-
-variable "tags" {
-  description = "Tags adicionais a serem aplicadas ao Security Group."
-  type        = map(string)
-  default     = {}
+  default     = "Managed by Terraform"
 }
 
 variable "ingress_rules" {
-  description = "Lista de regras de entrada (ingress). Por padrao, nenhuma regra de entrada e criada."
+  description = "Lista de regras de entrada (ingress) do Security Group. Vazia por padrao (nenhum trafego de entrada liberado)."
   type = list(object({
-    description        = optional(string, null)
-    from_port          = number
-    to_port            = number
-    protocol           = string
-    cidr_blocks        = optional(list(string), [])
-    ipv6_cidr_blocks   = optional(list(string), [])
-    security_group_ids = optional(list(string), [])
+    description = string
+    from_port   = number
+    to_port     = number
+    protocol    = string
+    cidr_blocks = list(string)
   }))
   default = []
 
   validation {
     condition = alltrue([
-      for r in var.ingress_rules :
-      (
-        can(regex("^(tcp|udp|icmp|icmpv6|-1|[0-9]+)$", r.protocol))
-        &&
-        (r.protocol == "-1" || (r.from_port >= 0 && r.from_port <= 65535 && r.to_port >= 0 && r.to_port <= 65535 && r.to_port >= r.from_port))
-        &&
-        (length(r.cidr_blocks) + length(r.ipv6_cidr_blocks) + length(r.security_group_ids) > 0)
-      )
+      for rule in var.ingress_rules : alltrue([
+        for cidr in rule.cidr_blocks : can(cidrhost(cidr, 0))
+      ])
     ])
-    error_message = "Cada regra de ingress deve ter protocolo valido, portas coerentes (ou -1) e pelo menos uma origem (cidr_blocks, ipv6_cidr_blocks ou security_group_ids)."
+    error_message = "Todos os cidr_blocks informados em ingress_rules devem ser blocos CIDR validos."
   }
 }
 
 variable "egress_rules" {
-  description = "Lista de regras de saida (egress). Por padrao, nenhuma regra de saida e criada (tudo bloqueado)."
+  description = "Lista de regras de saida (egress) do Security Group."
   type = list(object({
-    description        = optional(string, null)
-    from_port          = number
-    to_port            = number
-    protocol           = string
-    cidr_blocks        = optional(list(string), [])
-    ipv6_cidr_blocks   = optional(list(string), [])
-    security_group_ids = optional(list(string), [])
+    description = string
+    from_port   = number
+    to_port     = number
+    protocol    = string
+    cidr_blocks = list(string)
   }))
-  default = []
+  default = [
+    {
+      description = "Permite todo o trafego de saida"
+      from_port   = 0
+      to_port     = 0
+      protocol    = "-1"
+      cidr_blocks = ["0.0.0.0/0"]
+    }
+  ]
 
   validation {
     condition = alltrue([
-      for r in var.egress_rules :
-      (
-        can(regex("^(tcp|udp|icmp|icmpv6|-1|[0-9]+)$", r.protocol))
-        &&
-        (r.protocol == "-1" || (r.from_port >= 0 && r.from_port <= 65535 && r.to_port >= 0 && r.to_port <= 65535 && r.to_port >= r.from_port))
-        &&
-        (length(r.cidr_blocks) + length(r.ipv6_cidr_blocks) + length(r.security_group_ids) > 0)
-      )
+      for rule in var.egress_rules : alltrue([
+        for cidr in rule.cidr_blocks : can(cidrhost(cidr, 0))
+      ])
     ])
-    error_message = "Cada regra de egress deve ter protocolo valido, portas coerentes (ou -1) e pelo menos um destino (cidr_blocks, ipv6_cidr_blocks ou security_group_ids)."
+    error_message = "Todos os cidr_blocks informados em egress_rules devem ser blocos CIDR validos."
   }
+}
+
+variable "tags" {
+  description = "Tags adicionais aplicadas ao Security Group."
+  type        = map(string)
+  default     = {}
 }

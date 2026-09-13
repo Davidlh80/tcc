@@ -1,51 +1,44 @@
-1. Visão geral do recurso
-Este template provisiona uma AWS IAM Policy seguindo o padrão organizacional:
-- Nome: <ambiente>-<sistema>-iam-<finalidade> (ex.: prd-tcc-iam-readonly)
-- Tags obrigatórias aplicadas em todos os recursos que suportam tags
-- Princípio do menor privilégio
-- Controles de segurança específicos de IAM:
-  - Proíbe explicitamente statements que combinem Action="*" com Resource="*"
-  - Restringe Effect: Allow apenas às ações e recursos informados por variável
-  - Não anexa nem replica policies administrativas (ex.: AdministratorAccess)
+# IAM Policy — dev-tcc-iam-\<finalidade\>
 
-2. Tabela de variáveis (nome, tipo, obrigatória, descrição)
-| Nome              | Tipo          | Obrigatória | Descrição                                                                                           |
-|-------------------|---------------|-------------|-----------------------------------------------------------------------------------------------------|
-| environment       | string        | Sim         | Ambiente do recurso (dev, hml, prd).                                                                |
-| system            | string        | Sim         | Identificador do sistema/projeto (minúsculo, números e hífens).                                     |
-| region            | string        | Sim         | Região AWS para o provider (ex.: us-east-1).                                                        |
-| additional_tags   | map(string)   | Não         | Tags adicionais (não sobrescrevem as obrigatórias).                                                 |
-| policy_name       | string        | Sim         | Finalidade da política. Usado no nome: <env>-<system>-iam-<policy_name> (ex.: readonly).            |
-| policy_description| string        | Não         | Descrição da IAM Policy.                                                                            |
-| allowed_actions   | list(string)  | Sim         | Lista de ações a permitir (Effect: Allow).                                                          |
-| allowed_resources | list(string)  | Sim         | Lista de ARNs de recursos onde as ações serão permitidas.                                           |
-| policy_path       | string        | Não         | Caminho da policy. Deve iniciar com '/' e ser '/' ou terminar com '/'. Padrão: "/".                 |
+## 1. Visao geral
 
-Observações de segurança:
-- A combinação Action="*" e Resource="*" é rejeitada pela blueprint.
-- Utilize sempre escopos específicos de ação e recurso para aderir ao princípio do menor privilégio.
+Este modulo provisiona uma IAM Policy gerenciada pela AWS seguindo o padrao de nomenclatura `<ambiente>-<sistema>-iam-<finalidade>` da organizacao.
 
-3. Tabela de outputs (nome, descrição)
-| Nome         | Descrição                            |
-|--------------|--------------------------------------|
-| policy_name  | Nome completo da IAM Policy criada.  |
-| policy_arn   | ARN da IAM Policy criada.            |
-| policy_id    | ID único da IAM Policy criada.       |
+A policy e composta por uma unica statement `Allow`, cujas acoes e recursos sao definidos exclusivamente por variaveis, aplicando o principio do menor privilegio. O modulo bloqueia, via `precondition` no ciclo de vida do recurso, qualquer combinacao de `Action: "*"` com `Resource: "*"` na mesma statement. Nenhuma policy gerenciada administrativa (ex.: `AdministratorAccess`) e anexada ou replicada por este modulo, pois ele apenas cria a IAM Policy, sem realizar attachments.
 
-4. Exemplo de uso do módulo/recurso
-provider "aws" {
-  region = "us-east-1"
-}
+## 2. Variaveis
 
+| Nome                 | Tipo         | Obrigatoria | Descricao                                                                                   |
+|----------------------|--------------|-------------|-----------------------------------------------------------------------------------------------|
+| `environment`         | `string`     | Sim         | Ambiente de implantacao (`dev`, `hml` ou `prd`).                                             |
+| `system`               | `string`     | Sim         | Nome do sistema/aplicacao dono do recurso.                                                   |
+| `region`               | `string`     | Nao         | Regiao AWS onde os recursos serao provisionados. Padrao: `us-east-1`.                        |
+| `additional_tags`      | `map(string)`| Nao         | Tags adicionais mescladas com as tags obrigatorias da organizacao. Padrao: `{}`.             |
+| `policy_name`          | `string`     | Sim         | Finalidade da policy, usada como ultimo segmento da nomenclatura padronizada.                |
+| `policy_description`   | `string`     | Nao         | Descricao da IAM Policy.                                                                      |
+| `allowed_actions`      | `list(string)`| Sim        | Lista de acoes IAM permitidas na statement Allow.                                            |
+| `allowed_resources`    | `list(string)`| Sim        | Lista de ARNs de recursos aos quais as acoes permitidas se aplicam.                          |
+
+## 3. Outputs
+
+| Nome          | Descricao                          |
+|---------------|-------------------------------------|
+| `policy_name` | Nome da IAM Policy criada.          |
+| `policy_arn`  | ARN da IAM Policy criada.           |
+| `policy_id`   | ID da IAM Policy criada.            |
+
+## 4. Exemplo de uso
+
+```hcl
 module "iam_policy_readonly" {
   source = "./"
 
-  environment        = "dev"
-  system             = "tcc"
-  region             = "us-east-1"
-  policy_name        = "readonly"
-  policy_description = "Permissões de leitura em objetos de um bucket específico."
-  policy_path        = "/team-a/"
+  environment = "prd"
+  system      = "tcc"
+  region      = "us-east-1"
+  policy_name = "readonly"
+
+  policy_description = "Acesso somente leitura ao bucket de logs da aplicacao."
 
   allowed_actions = [
     "s3:GetObject",
@@ -53,16 +46,12 @@ module "iam_policy_readonly" {
   ]
 
   allowed_resources = [
-    "arn:aws:s3:::example-bucket",
-    "arn:aws:s3:::example-bucket/*"
+    "arn:aws:s3:::prd-tcc-s3-logs",
+    "arn:aws:s3:::prd-tcc-s3-logs/*"
   ]
 
   additional_tags = {
-    Squad = "core-platform"
+    Squad = "plataforma"
   }
 }
-
-Saída esperada:
-- module.iam_policy_readonly.policy_name
-- module.iam_policy_readonly.policy_arn
-- module.iam_policy_readonly.policy_id
+```

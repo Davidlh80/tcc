@@ -1,61 +1,38 @@
-provider "aws" {
-  region = var.region
-}
+resource "aws_security_group" "this" {
+  name        = var.name
+  description = var.description
+  vpc_id      = var.vpc_id
 
-locals {
-  common_tags = merge(
-    {
-      ManagedBy = "Terraform"
-    },
-    var.tags,
+  dynamic "ingress" {
+    for_each = var.ingress_rules
+    content {
+      description = ingress.value.description
+      from_port   = ingress.value.from_port
+      to_port     = ingress.value.to_port
+      protocol    = ingress.value.protocol
+      cidr_blocks = ingress.value.cidr_blocks
+    }
+  }
+
+  dynamic "egress" {
+    for_each = var.egress_rules
+    content {
+      description = egress.value.description
+      from_port   = egress.value.from_port
+      to_port     = egress.value.to_port
+      protocol    = egress.value.protocol
+      cidr_blocks = egress.value.cidr_blocks
+    }
+  }
+
+  tags = merge(
     {
       Name = var.name
-    }
+    },
+    var.tags
   )
-}
 
-resource "aws_security_group" "this" {
-  name                   = var.name
-  description            = var.description
-  vpc_id                 = var.vpc_id
-  revoke_rules_on_delete = true
-  tags                   = local.common_tags
-}
-
-resource "aws_security_group_rule" "ingress" {
-  for_each = {
-    for idx, rule in var.ingress_rules : tostring(idx) => rule
+  lifecycle {
+    create_before_destroy = true
   }
-
-  type              = "ingress"
-  security_group_id = aws_security_group.this.id
-
-  description = coalesce(each.value.description, "Managed ingress")
-  protocol    = lower(each.value.protocol)
-  from_port   = each.value.from_port
-  to_port     = each.value.to_port
-
-  cidr_blocks       = coalesce(each.value.cidr_blocks, [])
-  ipv6_cidr_blocks  = coalesce(each.value.ipv6_cidr_blocks, [])
-  prefix_list_ids   = coalesce(each.value.prefix_list_ids, [])
-  self              = coalesce(each.value.self, false)
-}
-
-resource "aws_security_group_rule" "egress" {
-  for_each = {
-    for idx, rule in var.egress_rules : tostring(idx) => rule
-  }
-
-  type              = "egress"
-  security_group_id = aws_security_group.this.id
-
-  description = coalesce(each.value.description, "Managed egress")
-  protocol    = lower(each.value.protocol)
-  from_port   = each.value.from_port
-  to_port     = each.value.to_port
-
-  cidr_blocks       = coalesce(each.value.cidr_blocks, [])
-  ipv6_cidr_blocks  = coalesce(each.value.ipv6_cidr_blocks, [])
-  prefix_list_ids   = coalesce(each.value.prefix_list_ids, [])
-  self              = coalesce(each.value.self, false)
 }

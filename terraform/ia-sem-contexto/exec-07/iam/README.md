@@ -1,82 +1,69 @@
-Nome
-Terraform AWS IAM Policy
+# IAM Policy — Blueprint Terraform
 
-Descricao
-Blueprint Terraform para criar uma IAM Policy customizada na AWS. Por padrao, aplica:
-- Uma negacao explicita para acessos nao-HTTPS (DenyInsecureTransport)
-- Permissoes de leitura/descricao para servicos comuns (ex.: EC2, S3, CloudWatch, IAM, etc.)
+Blueprint autonomo para provisionar uma IAM Policy gerenciada na AWS, com statements totalmente configuraveis via variavel.
 
-Voce pode substituir o documento da policy fornecendo um JSON proprio via variavel policy_json.
+## Recursos criados
 
-Requisitos
-- Terraform >= 1.3.0
-- Provider AWS >= 5.0
-- Credenciais AWS configuradas no ambiente (ex.: variaveis de ambiente ou perfil local)
+- `aws_iam_policy.this`
+- `data.aws_iam_policy_document.this`
 
-Arquivos
-- versions.tf: Versoes e provider AWS
-- variables.tf: Variaveis configuraveis com validacoes
-- main.tf: Recursos para criar a IAM Policy e anexos opcionais
-- outputs.tf: Outputs principais da policy
-- README.md: Instrucoes de uso
+## Decisoes de design
 
-Como usar (exemplos)
-1) Inicializacao e validacao
-- terraform init -backend=false
-- terraform validate
+- Nenhum contexto organizacional foi assumido; os valores padrao seguem boas praticas gerais de mercado (menor privilegio, sem wildcard em `Action` ou `Resource`).
+- O default de `var.statements` concede apenas `s3:GetObject` e `s3:ListBucket` sobre um bucket de exemplo (`example-bucket`), sem usar `"*"` em recursos ou acoes.
+- Cada statement suporta `sid`, `effect` (default `Allow`), `actions`, `resources` e uma lista opcional de `conditions`, permitindo restringir ainda mais o acesso (ex.: `aws:SourceIp`, `aws:PrincipalTag`) sem alterar o codigo.
+- Tags sao aplicadas por padrao para rastreabilidade (`ManagedBy = "Terraform"`).
+- Nenhuma credencial real e necessaria para `terraform init -backend=false` e `terraform validate`; o provider `aws` usa apenas `var.aws_region`.
 
-2) Criar uma policy com o padrao seguro (deny HTTP + leituras comuns)
-- terraform apply -auto-approve
+## Uso
 
-3) Definir um nome e anexar a uma role existente
-- terraform apply -var "policy_name=ops-readonly" -var "enable_attachments=true" -var 'attach_roles=["my-existing-role"]'
+```
+module "iam_policy" {
+  source = "./"
 
-4) Fornecer um documento JSON customizado (substitui o padrao)
-Crie um arquivo tfvars com:
-policy_name = "minha-policy"
-policy_json = jsonencode({
-  Version = "2012-10-17"
-  Statement = [
+  policy_name        = "app-readonly-policy"
+  policy_description = "Permite leitura de objetos em um bucket especifico"
+
+  statements = [
     {
-      Sid      = "AllowReadS3SpecificBucket"
-      Effect   = "Allow"
-      Action   = ["s3:GetObject", "s3:ListBucket"]
-      Resource = [
-        "arn:aws:s3:::meu-bucket",
-        "arn:aws:s3:::meu-bucket/*"
+      sid       = "ReadAppBucket"
+      actions   = ["s3:GetObject", "s3:ListBucket"]
+      resources = [
+        "arn:aws:s3:::app-bucket",
+        "arn:aws:s3:::app-bucket/*"
       ]
     }
   ]
-})
-Depois:
-- terraform apply -var-file="seus-valores.tfvars"
 
-Variaveis principais
-- aws_region: Regiao AWS (padrao: us-east-1)
-- policy_name: Nome da policy (padrao: custom-iam-policy)
-- policy_description: Descricao da policy
-- policy_path: Path da policy (padrao: /)
-- policy_json: JSON da policy (string). Se vazio/nulo, usa o padrao seguro
-- enable_attachments: Se true, cria anexo para entidades
-- attach_users: Lista de usuarios IAM
-- attach_roles: Lista de roles IAM
-- attach_groups: Lista de grupos IAM
-- tags: Tags adicionais (chaves nao podem iniciar com aws:)
+  tags = {
+    Environment = "production"
+    Owner       = "platform-team"
+  }
+}
+```
 
-Boas praticas e observacoes
-- O padrao inclui um Deny para requisicoes sem HTTPS, fortalecendo a seguranca.
-- Se optar por anexar a policy, garanta que as entidades (usuarios/roles/grupos) existam.
-- Evite curingas amplos em ambientes de producao. Ajuste policy_json para o menor privilegio possivel.
-- Este template nao configura backend remoto.
+## Inputs
 
-Comandos uteis
-- terraform fmt
-- terraform init -backend=false
-- terraform plan
-- terraform apply
-- terraform destroy
+| Nome | Descricao | Tipo | Default |
+|---|---|---|---|
+| aws_region | Regiao AWS do provider | string | "us-east-1" |
+| policy_name | Nome da IAM Policy | string | "example-readonly-policy" |
+| policy_description | Descricao da IAM Policy | string | "Policy gerenciada via Terraform..." |
+| policy_path | Path da IAM Policy | string | "/" |
+| tags | Tags aplicadas ao recurso | map(string) | { ManagedBy = "Terraform" } |
+| statements | Lista de statements do documento de policy | list(object) | ver `variables.tf` |
 
-Saida (outputs) principais
-- policy_arn, policy_id, policy_name, policy_path, policy_default_version_id
-- policy_document_json
-- attachment_name e attachment_entities (quando anexo habilitado)
+## Outputs
+
+| Nome | Descricao |
+|---|---|
+| policy_arn | ARN da IAM Policy criada |
+| policy_id | ID da IAM Policy criada |
+| policy_name | Nome da IAM Policy criada |
+| policy_document | Documento JSON gerado a partir dos statements |
+
+## Consideracoes de seguranca
+
+- Evite adicionar `"*"` em `actions` ou `resources` nos statements; prefira ARNs especificos e acoes minimas necessarias.
+- Utilize `conditions` para restringir ainda mais o alcance da policy (ex.: por IP, VPC endpoint ou tag).
+- Revise o `policy_document` de saida antes de anexar a policy a usuarios, grupos ou roles.

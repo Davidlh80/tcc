@@ -1,68 +1,69 @@
-Blueprint Terraform — Bucket Amazon S3
+# Blueprint Terraform — Bucket Amazon S3
 
-Descrição
-- Cria um bucket S3 com padrões seguros:
-  - Bloqueio total de acesso público (Public Access Block).
-  - Propriedade de objetos forçada ao dono do bucket (BucketOwnerEnforced), sem ACLs.
-  - Criptografia do lado do servidor (SSE) por padrão com AES256 ou KMS.
-  - Versionamento opcional habilitado por padrão.
-  - Política (opcional) para:
-    - Exigir TLS (negar solicitações sem HTTPS).
-    - Rejeitar uploads sem cabeçalho de criptografia apropriado (quando habilitado).
+Blueprint autonomo para provisionamento de um bucket S3 na AWS, com configuracoes seguras por padrao: acesso publico bloqueado, criptografia server-side obrigatoria, versionamento habilitado e propriedade de objetos enforced pelo dono do bucket.
 
-Pré-requisitos
-- Terraform >= 1.3.0
-- Provider AWS >= 5.0
-- Credenciais AWS válidas exportadas no ambiente (somente para apply).
+## Recursos criados
 
-Arquivos
-- main.tf: recursos AWS.
-- variables.tf: entradas configuráveis com validações.
-- outputs.tf: saídas úteis.
-- versions.tf: versões mínimas do Terraform e providers.
+- `aws_s3_bucket` — bucket S3.
+- `aws_s3_bucket_ownership_controls` — forca `BucketOwnerEnforced`, desabilitando ACLs.
+- `aws_s3_bucket_public_access_block` — bloqueia qualquer forma de acesso publico.
+- `aws_s3_bucket_versioning` — controla o versionamento de objetos.
+- `aws_s3_bucket_server_side_encryption_configuration` — criptografia SSE-S3 (AES256) por padrao, ou SSE-KMS se uma chave for informada.
+- `aws_s3_bucket_lifecycle_configuration` — regras de ciclo de vida opcionais (expiracao de objetos atuais e versoes antigas).
 
-Uso rápido
-1) Ajuste variáveis necessárias (principalmente bucket_name). Exemplo de arquivo terraform.tfvars:
-  bucket_name       = "meu-bucket-unico-123456"
-  region            = "us-east-1"
+## Requisitos
+
+- Terraform >= 1.5.0
+- Provider AWS (`hashicorp/aws`) ~> 5.0
+- Credenciais AWS configuradas no ambiente de execucao (nao incluidas neste blueprint)
+
+## Uso
+
+```
+module "s3_bucket" {
+  source      = "./"
+  bucket_name = "meu-bucket-exemplo-123"
+
   tags = {
-    project = "demo"
-    owner   = "devops"
+    Environment = "dev"
+    Owner       = "time-plataforma"
   }
+}
+```
 
-2) Inicialização e validação:
-  terraform init -backend=false
-  terraform validate
-  terraform plan
+## Variaveis principais
 
-3) Aplicação:
-  terraform apply
+| Nome | Descricao | Tipo | Padrao |
+|---|---|---|---|
+| `aws_region` | Regiao AWS de criacao dos recursos | `string` | `us-east-1` |
+| `bucket_name` | Nome globalmente unico do bucket | `string` | — (obrigatorio) |
+| `force_destroy` | Permite exclusao do bucket com objetos | `bool` | `false` |
+| `versioning_enabled` | Habilita versionamento | `bool` | `true` |
+| `kms_key_arn` | ARN de chave KMS para SSE-KMS | `string` | `null` |
+| `tags` | Tags aplicadas ao bucket | `map(string)` | `{}` |
+| `lifecycle_rules` | Regras de ciclo de vida | `list(object)` | `[]` |
 
-Variáveis principais
-- bucket_name (obrigatória): nome globalmente único (3–63 chars, [a-z0-9.-]).
-- region: padrão us-east-1.
-- enable_versioning: padrão true.
-- sse_algorithm: "AES256" (padrão) ou "aws:kms".
-- kms_key_id: obrigatório se sse_algorithm="aws:kms".
-- require_encryption: se true (padrão), política nega PutObject sem cabeçalho de criptografia e com algoritmo diferente do configurado.
-- attach_policy: se true (padrão), anexa política reforçando TLS e criptografia.
-- force_destroy: se true, permite destruir bucket com objetos (padrão false).
-- prevent_destroy: proteção contra destruição acidental (padrão true).
-- tags: mapa de tags aplicadas.
+## Outputs
 
-Decisões de segurança
-- Public Access Block habilitado.
-- Ownership Controls: BucketOwnerEnforced (sem ACLs).
-- Política de TLS: nega requisições sem HTTPS.
-- Criptografia padrão aplicada no bucket. Quando require_encryption=true, uploads sem cabeçalho de criptografia adequado são negados; clientes devem enviar o cabeçalho s3:x-amz-server-side-encryption. Se usar KMS, informe kms_key_id (e o cliente deve enviar s3:x-amz-server-side-encryption-aws-kms-key-id ao fazer upload).
+| Nome | Descricao |
+|---|---|
+| `bucket_id` | Nome do bucket |
+| `bucket_arn` | ARN do bucket |
+| `bucket_domain_name` | Nome de dominio do bucket |
+| `bucket_regional_domain_name` | Nome de dominio regional do bucket |
+| `versioning_status` | Status do versionamento |
+| `encryption_algorithm` | Algoritmo de criptografia aplicado |
 
-Observações
-- O nome do bucket é globalmente único; escolha um nome que não exista.
-- Por padrão, prevent_destroy=true. Para permitir terraform destroy, defina prevent_destroy=false e, se necessário, force_destroy=true.
-- Este template não configura logging, website hosting ou políticas de acesso específicas por usuário/serviço.
+## Seguranca
 
-Saídas
-- bucket_name, bucket_arn, bucket_domain_name, bucket_regional_domain_name, sse_algorithm, versioning_enabled.
+- Acesso publico bloqueado por padrao (`aws_s3_bucket_public_access_block` com todas as flags em `true`).
+- ACLs desabilitadas via `BucketOwnerEnforced`.
+- Criptografia server-side obrigatoria em todos os objetos.
+- Nenhuma credencial ou valor sensivel fixo esta presente neste codigo.
 
-Licença
-- Uso livre no contexto deste experimento.
+## Validacao
+
+```
+terraform init -backend=false
+terraform validate
+```

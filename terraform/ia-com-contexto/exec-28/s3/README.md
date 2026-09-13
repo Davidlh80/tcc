@@ -1,45 +1,51 @@
-Visão geral do recurso
-Este template provisiona um bucket Amazon S3 padronizado e seguro, seguindo as diretrizes organizacionais:
-- Nomenclatura: <ambiente>-<sistema>-s3-<finalidade>
-- Bloqueio total de acesso público (quatro flags do Public Access Block)
-- Criptografia server-side habilitada (SSE-S3/AES256)
-- Bucket policy negando acesso sem uso de aws:SecureTransport
-- Versionamento configurável por variável, padrão Enabled
-- Tags obrigatórias aplicadas a todos os recursos que suportam tags
+# S3 Bucket - dev-tcc-s3-logs
 
-Tabela de variáveis (nome, tipo, obrigatória, descrição)
-| Nome              | Tipo        | Obrigatória | Descrição                                                                 |
-|-------------------|-------------|-------------|---------------------------------------------------------------------------|
-| environment       | string      | Sim         | Ambiente alvo do recurso (dev, hml, prd).                                 |
-| system            | string      | Sim         | Identificador do sistema/aplicação (minúsculas e hifens, ex.: tcc).       |
-| region            | string      | Sim         | Região AWS (ex.: us-east-1).                                              |
-| purpose           | string      | Sim         | Finalidade do recurso (ex.: logs, data, backups).                         |
-| versioning_status | string      | Não         | Status do versionamento do bucket: Enabled (padrão) ou Suspended.         |
-| additional_tags   | map(string) | Não         | Tags adicionais a serem aplicadas aos recursos.                            |
+## 1. Visao geral
 
-Tabela de outputs (nome, descrição)
-| Nome         | Descrição                    |
-|--------------|------------------------------|
-| bucket_name  | Nome do bucket S3 criado.    |
-| bucket_arn   | ARN do bucket S3 criado.     |
-| bucket_id    | ID do bucket S3 criado.      |
+Este template provisiona um bucket Amazon S3 seguindo os padroes internos de nomenclatura, tags e seguranca da organizacao. O recurso e nomeado no formato `<ambiente>-<sistema>-s3-<finalidade>` (ex.: `dev-tcc-s3-logs`) e inclui, por padrao:
 
-Exemplo de uso do módulo/recurso
-module "s3_bucket" {
+- Bloqueio total de acesso publico (as quatro flags do Public Access Block habilitadas);
+- Criptografia server-side (SSE-S3/AES256 por padrao, com opcao de SSE-KMS);
+- Bucket policy que nega explicitamente qualquer requisicao sem `aws:SecureTransport`;
+- Versionamento configuravel por variavel, habilitado (`Enabled`) por padrao;
+- Tags obrigatorias da organizacao aplicadas automaticamente.
+
+## 2. Variaveis
+
+| Nome                | Tipo         | Obrigatoria | Descricao                                                                  |
+|----------------------|--------------|-------------|------------------------------------------------------------------------------|
+| `environment`        | string       | Sim         | Ambiente de implantacao do recurso (`dev`, `hml` ou `prd`).                   |
+| `system`             | string       | Nao         | Nome do sistema ou produto ao qual o recurso pertence. Padrao: `tcc`.         |
+| `region`             | string       | Nao         | Regiao AWS onde o bucket sera provisionado. Padrao: `us-east-1`.              |
+| `purpose`            | string       | Sim         | Finalidade do bucket, usada na composicao do nome (ex.: `logs`, `artifacts`). |
+| `versioning_status`  | string       | Nao         | Status do versionamento do bucket (`Enabled` ou `Suspended`). Padrao: `Enabled`. |
+| `sse_algorithm`      | string       | Nao         | Algoritmo de criptografia server-side (`AES256` ou `aws:kms`). Padrao: `AES256`. |
+| `additional_tags`    | map(string)  | Nao         | Tags adicionais aplicadas ao bucket, alem das tags obrigatorias da organizacao. |
+
+## 3. Outputs
+
+| Nome          | Descricao                                |
+|---------------|--------------------------------------------|
+| `bucket_name` | Nome do bucket S3 criado.                   |
+| `bucket_arn`  | ARN do bucket S3 criado.                    |
+| `bucket_id`   | Identificador (id) do bucket S3 criado.     |
+
+## 4. Exemplo de uso
+
+```hcl
+module "s3_logs" {
   source = "./"
 
-  environment       = "dev"
-  system            = "tcc"
-  region            = "us-east-1"
-  purpose           = "logs"
+  environment = "dev"
+  system      = "tcc"
+  region      = "us-east-1"
+  purpose     = "logs"
+
   versioning_status = "Enabled"
+  sse_algorithm     = "AES256"
 
   additional_tags = {
-    Team = "platform"
+    Squad = "plataforma"
   }
 }
-
-# Comandos
-# terraform init -backend=false
-# terraform validate
-# terraform apply
+```

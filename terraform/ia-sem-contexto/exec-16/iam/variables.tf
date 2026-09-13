@@ -1,82 +1,74 @@
 variable "aws_region" {
-  description = "AWS region to use for the provider."
+  description = "Regiao AWS onde o provider sera configurado."
   type        = string
   default     = "us-east-1"
-
-  validation {
-    condition     = can(regex("^[a-z]{2}(-gov)?-[a-z]+-\\d+$", var.aws_region))
-    error_message = "The aws_region must match the pattern like us-east-1 or us-gov-west-1."
-  }
 }
 
 variable "policy_name" {
-  description = "Name of the IAM Policy."
+  description = "Nome da IAM Policy."
   type        = string
-  default     = "iam-secure-transport-policy"
 
   validation {
-    condition     = can(regex("^[A-Za-z0-9+=,.@_-]{1,128}$", var.policy_name))
-    error_message = "policy_name must be 1-128 characters and contain only A-Za-z0-9+=,.@_-"
+    condition     = length(var.policy_name) > 0 && length(var.policy_name) <= 128
+    error_message = "policy_name deve ter entre 1 e 128 caracteres."
   }
 }
 
 variable "policy_description" {
-  description = "Description of the IAM Policy."
+  description = "Descricao da IAM Policy."
   type        = string
-  default     = "IAM policy that denies requests over insecure transport (non-TLS). You can append additional allow/deny statements via allow_statements."
+  default     = "IAM Policy gerenciada via Terraform."
 }
 
 variable "policy_path" {
-  description = "Path for the IAM Policy."
+  description = "Path da IAM Policy dentro do IAM."
   type        = string
   default     = "/"
+}
+
+variable "policy_effect" {
+  description = "Efeito da statement da policy. Deve ser 'Allow' ou 'Deny'."
+  type        = string
+  default     = "Allow"
 
   validation {
-    condition     = startswith(var.policy_path, "/") && endswith(var.policy_path, "/")
-    error_message = "policy_path must start and end with '/'."
+    condition     = contains(["Allow", "Deny"], var.policy_effect)
+    error_message = "policy_effect deve ser 'Allow' ou 'Deny'."
   }
 }
 
-variable "allow_statements" {
-  description = "Additional policy statements to include (e.g., least-privilege allows)."
-  type = list(object({
-    actions   = list(string)
-    resources = list(string)
-    effect    = optional(string) # Allow or Deny
-    conditions = optional(list(object({
-      test     = string
-      variable = string
-      values   = list(string)
-    })))
-  }))
-  default = []
+variable "policy_actions" {
+  description = "Lista explicita de IAM actions cobertas pela policy. Nao utilize wildcards amplos como '*' ou 'service:*' em ambientes produtivos."
+  type        = list(string)
 
   validation {
-    condition = alltrue([
-      for s in var.allow_statements :
-      length(s.actions) > 0 &&
-      length(s.resources) > 0 &&
-      alltrue([for a in s.actions : length(trim(a)) > 0]) &&
-      alltrue([for r in s.resources : length(trim(r)) > 0]) &&
-      (
-        s.effect == null ||
-        contains(["Allow", "Deny", "ALLOW", "DENY", "allow", "deny"], s.effect)
-      )
-    ])
-    error_message = "Each allow_statement must have non-empty actions/resources and, if provided, effect must be Allow or Deny."
+    condition     = length(var.policy_actions) > 0
+    error_message = "policy_actions deve conter ao menos uma action."
+  }
+
+  validation {
+    condition     = !contains(var.policy_actions, "*")
+    error_message = "policy_actions nao deve conter o wildcard '*' isolado."
+  }
+}
+
+variable "policy_resources" {
+  description = "Lista de ARNs de recursos aos quais a policy se aplica. Evite usar '*' para escopo irrestrito."
+  type        = list(string)
+
+  validation {
+    condition     = length(var.policy_resources) > 0
+    error_message = "policy_resources deve conter ao menos um recurso."
+  }
+
+  validation {
+    condition     = !contains(var.policy_resources, "*")
+    error_message = "policy_resources nao deve conter o wildcard '*' isolado; especifique ARNs concretos."
   }
 }
 
 variable "tags" {
-  description = "Tags to apply to the IAM Policy."
+  description = "Tags aplicadas a IAM Policy."
   type        = map(string)
   default     = {}
-
-  validation {
-    condition = alltrue([
-      for k, v in var.tags :
-      length(trim(k)) > 0 && length(k) <= 128 && length(v) <= 256
-    ])
-    error_message = "Tag keys must be non-empty (<=128 chars) and values must be <=256 chars."
-  }
 }

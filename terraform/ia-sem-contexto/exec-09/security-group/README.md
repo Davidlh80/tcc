@@ -1,97 +1,35 @@
-Blueprint Terraform — AWS Security Group
+# Security Group (AWS) via Terraform
 
-Descrição
-- Provisiona um Security Group na AWS dentro de uma VPC específica.
-- Padrões seguros: sem regras de ingress por padrão; egress liberado para IPv4 e IPv6.
-- Totalmente configurável via variáveis.
+Blueprint para provisionamento de um Security Group na AWS, com a VPC de destino configurável por variável. Não cria nem depende da VPC padrão da conta — o `vpc_id` deve apontar para uma VPC já existente (por exemplo, uma VPC de teste criada pelo próprio ambiente).
 
-Arquivos
-- main.tf: Provider, recurso aws_security_group e lógica de regras dinâmicas.
-- variables.tf: Variáveis de configuração com validações.
-- outputs.tf: Saídas úteis.
-- versions.tf: Versões mínimas do Terraform e provider AWS.
-- README.md: Instruções de uso.
+## Comportamento padrão
 
-Pré-requisitos
-- Terraform >= 1.5.0
-- Provider AWS ~> 5.x
-- Credenciais AWS configuradas no ambiente (ex.: variáveis de ambiente ou perfil do AWS CLI)
+- Nenhuma regra de entrada é criada por padrão (`ingress_rules = []`), seguindo o princípio de menor privilégio.
+- Uma regra de saída liberando todo o tráfego (`0.0.0.0/0`) é criada por padrão, podendo ser substituída via `egress_rules`.
+- O nome do Security Group é gerado a partir de `name_prefix`, evitando colisões de nome em criações concorrentes.
 
-Como usar
-1) Ajuste as variáveis conforme necessário (via -var, .tfvars ou variáveis de ambiente).
-2) Execute:
-   terraform init -backend=false
-   terraform validate
-   terraform plan -var 'vpc_id=vpc-xxxxxxxx'
-   terraform apply -var 'vpc_id=vpc-xxxxxxxx'
+## Inputs
 
-Variáveis principais
-- aws_region (string): Região AWS. Padrão: us-east-1
-- vpc_id (string): ID da VPC onde o SG será criado. Obrigatória.
-- name (string): Nome do SG. Padrão: tf-sg
-- description (string): Descrição do SG. Padrão: Security Group gerenciado por Terraform
-- tags (map(string)): Tags adicionais. Padrão: {}
-- ingress_rules (list(object)): Regras de entrada. Padrão: []
-- egress_rules (list(object)): Regras de saída. Padrão: permite todo tráfego para 0.0.0.0/0 e ::/0
+- region (string, opcional, padrão "us-east-1"): região AWS onde o recurso será criado.
+- vpc_id (string, obrigatório): ID da VPC existente onde o Security Group será provisionado. Deve seguir o padrão "vpc-xxxxxxxx".
+- name_prefix (string, opcional, padrão "app"): prefixo usado para nomear o Security Group.
+- description (string, opcional): descrição do Security Group.
+- ingress_rules (list(object), opcional, padrão []): lista de regras de entrada. Cada item define description, from_port, to_port, protocol e cidr_blocks.
+- egress_rules (list(object), opcional): lista de regras de saída, com a mesma estrutura de ingress_rules. Por padrão libera todo o tráfego de saída.
+- tags (map(string), opcional, padrão {}): tags adicionais aplicadas ao recurso.
 
-Formato das regras (ingress_rules e egress_rules)
-Cada item da lista é um objeto com os campos:
-- description (string, opcional)
-- from_port (number)
-- to_port (number)
-- protocol (string): um de -1, tcp, udp, icmp, icmpv6
-- cidr_blocks (list(string), opcional)
-- ipv6_cidr_blocks (list(string), opcional)
-- prefix_list_ids (list(string), opcional)
-- self (bool, opcional)
+## Outputs
 
-Exemplos
+- security_group_id: ID do Security Group criado.
+- security_group_arn: ARN do Security Group criado.
+- security_group_name: nome efetivo do Security Group.
+- vpc_id: ID da VPC associada ao Security Group.
+- owner_id: ID da conta AWS proprietária do recurso.
 
-Exemplo 1: Somente SSH IPv4 de um bloco específico
-vars:
-  vpc_id = "vpc-0123456789abcdef0"
-  name   = "example-ssh"
-  ingress_rules = [
-    {
-      description = "SSH de admin"
-      from_port   = 22
-      to_port     = 22
-      protocol    = "tcp"
-      cidr_blocks = ["203.0.113.0/24"]
-    }
-  ]
+## Exemplo de uso
 
-Exemplo 2: HTTP/HTTPS públicos e saída padrão
-vars:
-  vpc_id = "vpc-0123456789abcdef0"
-  name   = "web-sg"
-  ingress_rules = [
-    {
-      description = "HTTP"
-      from_port   = 80
-      to_port     = 80
-      protocol    = "tcp"
-      cidr_blocks = ["0.0.0.0/0", "::/0"]
-    },
-    {
-      description = "HTTPS"
-      from_port   = 443
-      to_port     = 443
-      protocol    = "tcp"
-      cidr_blocks = ["0.0.0.0/0", "::/0"]
-    }
-  ]
+Defina vpc_id apontando para a VPC de teste e, se necessário, informe ingress_rules com as portas e origens desejadas, como uma regra HTTPS (porta 443) liberada apenas para um bloco CIDR específico da rede interna, em vez de 0.0.0.0/0, para manter um padrão seguro.
 
-Boas práticas
-- Mantenha ingress o mais restritivo possível (evite 0.0.0.0/0 a menos que necessário).
-- Use IPv6 apenas quando necessário e com regras específicas.
-- Versione um tfvars por ambiente para padronizar entradas.
+## Validação
 
-Outputs
-- security_group_id
-- security_group_arn
-- security_group_name
-- security_group_vpc_id
-- security_group_tags
-- ingress_rules_input
-- egress_rules_input
+Este módulo foi projetado para ser validado sem credenciais reais e sem backend remoto, através dos comandos terraform init -backend=false e terraform validate.

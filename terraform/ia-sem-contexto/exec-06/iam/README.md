@@ -1,84 +1,59 @@
-# Terraform AWS IAM Policy
+# IAM Policy — Blueprint Terraform
 
-Blueprint Terraform para criar uma IAM Policy gerenciada na AWS com configurações seguras por padrão e alta flexibilidade via variáveis.
+Blueprint Terraform para provisionamento de uma IAM Policy gerenciada na AWS, seguindo o principio de menor privilegio por padrao.
 
-Arquivos:
-- main.tf
-- variables.tf
-- outputs.tf
-- versions.tf
-- README.md
+## Recursos criados
 
-Requisitos:
-- Terraform >= 1.3.0
-- Provider AWS >= 5.0
-- Credenciais AWS válidas (por exemplo via `AWS_PROFILE`, `AWS_ACCESS_KEY_ID`/`AWS_SECRET_ACCESS_KEY`, ou `~/.aws/credentials`)
+- `aws_iam_policy.this`: IAM Policy gerenciada, com documento gerado dinamicamente a partir da variavel `statements`.
+- `data.aws_iam_policy_document.this`: documento JSON da politica, construido via `dynamic "statement"` a partir da lista de statements informada.
 
-Recursos criados:
-- aws_iam_policy (policy gerenciada)
+## Uso
 
-Inputs principais:
-- aws_region: Região AWS (padrão: us-east-1)
-- aws_profile: Perfil de credenciais (opcional)
-- policy_name: Nome da policy
-- policy_description: Descrição da policy
-- policy_path: Path da policy
-- tags: Mapa de tags
-- statements: Lista de statements (Least-Privilege recomendado)
+```hcl
+module "iam_policy" {
+  source = "./"
 
-Outputs:
-- iam_policy_arn
-- iam_policy_name
-- iam_policy_id
-- iam_policy_path
-- iam_policy_tags
-- iam_policy_document_json
+  policy_name        = "app-read-only-policy"
+  policy_description = "Permite leitura de objetos em um bucket especifico."
 
-Uso básico:
-1) Ajuste variáveis em terraform.tfvars (opcional) ou via CLI.
-2) Comandos:
-   - terraform init -backend=false
-   - terraform validate
-   - terraform plan
-   - terraform apply
+  statements = [
+    {
+      sid       = "AllowAppS3Read"
+      effect    = "Allow"
+      actions   = ["s3:GetObject", "s3:ListBucket"]
+      resources = ["arn:aws:s3:::minha-app-bucket", "arn:aws:s3:::minha-app-bucket/*"]
+    }
+  ]
 
-Exemplo de configuração (terraform.tfvars):
-aws_region  = "us-east-1"
-policy_name = "s3-readonly-with-mfa"
-
-tags = {
-  Environment = "dev"
-  Owner       = "team-example"
-}
-
-# Exemplo: leitura restrita a um bucket S3, exigindo MFA para GetObject
-statements = [
-  {
-    sid     = "AllowListBucket"
-    effect  = "Allow"
-    actions = ["s3:ListBucket"]
-    resources = [
-      "arn:aws:s3:::my-example-bucket"
-    ]
-  },
-  {
-    sid     = "AllowGetObjectWithMFA"
-    effect  = "Allow"
-    actions = ["s3:GetObject"]
-    resources = [
-      "arn:aws:s3:::my-example-bucket/*"
-    ]
-    conditions = [
-      {
-        test     = "Bool"
-        variable = "aws:MultiFactorAuthPresent"
-        values   = ["true"]
-      }
-    ]
+  tags = {
+    Environment = "producao"
+    ManagedBy   = "terraform"
   }
-]
+}
+```
 
-Notas:
-- A configuração padrão cria uma policy mínima permitindo apenas sts:GetCallerIdentity em "*", útil para validação e segurança.
-- Adapte os statements conforme sua necessidade, mantendo o princípio de menor privilégio.
-- Evite incluir Principals; policies gerenciadas por IAM não suportam o bloco principal (aplica-se a políticas baseadas em recurso).
+## Inputs
+
+| Nome                  | Descricao                                                        | Tipo           | Default                                  |
+|-----------------------|-------------------------------------------------------------------|----------------|-------------------------------------------|
+| aws_region            | Regiao AWS utilizada pelo provider                                | string         | `"us-east-1"`                             |
+| policy_name           | Nome da IAM Policy                                                | string         | `"example-least-privilege-policy"`        |
+| policy_description    | Descricao da IAM Policy                                          | string         | ver `variables.tf`                        |
+| policy_path           | Path da IAM Policy                                               | string         | `"/"`                                     |
+| statements            | Lista de statements (sid, effect, actions, resources) da politica| list(object)   | ver `variables.tf`                        |
+| tags                  | Tags aplicadas ao recurso                                        | map(string)    | `{ ManagedBy = "terraform" }`              |
+
+## Outputs
+
+| Nome         | Descricao                          |
+|--------------|--------------------------------------|
+| policy_arn   | ARN da IAM Policy criada             |
+| policy_id    | ID da IAM Policy criada              |
+| policy_name  | Nome da IAM Policy criada            |
+
+## Boas praticas de seguranca aplicadas
+
+- Nenhuma action ou resource com wildcard (`*`) e definida por padrao; o exemplo padrao restringe acesso a um unico bucket S3.
+- Cada statement exige `effect`, `actions` e `resources` explicitos e nao vazios, validados via `validation` blocks.
+- Sem uso de backend remoto ou credenciais reais — compativel com `terraform init -backend=false` e `terraform validate`.
+- Recomenda-se sempre revisar as `actions` e `resources` fornecidos antes de aplicar em ambientes produtivos, restringindo ao minimo necessario (least privilege).

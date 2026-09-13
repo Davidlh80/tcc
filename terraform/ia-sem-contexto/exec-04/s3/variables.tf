@@ -1,90 +1,62 @@
-variable "aws_region" {
-  description = "Região AWS onde os recursos serão criados."
-  type        = string
-  default     = "us-east-1"
-
-  validation {
-    condition     = length(var.aws_region) > 0
-    error_message = "aws_region não pode ser vazio."
-  }
-}
-
-variable "aws_profile" {
-  description = "Profile do AWS CLI (opcional). Se não definido, segue a cadeia de credenciais padrão."
-  type        = string
-  default     = null
-}
-
 variable "bucket_name" {
-  description = "Nome do bucket S3 (globally unique). Use apenas letras minúsculas, números e hífens."
+  description = "Nome globalmente unico do bucket S3."
   type        = string
 
   validation {
-    condition     = can(regex("^[a-z0-9][a-z0-9-]*[a-z0-9]$", var.bucket_name)) && length(var.bucket_name) >= 3 && length(var.bucket_name) <= 63
-    error_message = "bucket_name deve conter de 3 a 63 caracteres, apenas letras minúsculas, números e hífens, começando e terminando com alfanumérico."
+    condition     = can(regex("^[a-z0-9.-]{3,63}$", var.bucket_name))
+    error_message = "O nome do bucket deve ter entre 3 e 63 caracteres e conter apenas letras minusculas, numeros, pontos e hifens."
   }
-}
-
-variable "environment" {
-  description = "Valor para a tag Environment."
-  type        = string
-  default     = "dev"
-
-  validation {
-    condition     = can(regex("^[a-z0-9-]+$", var.environment))
-    error_message = "environment deve conter apenas letras minúsculas, números e hífens."
-  }
-}
-
-variable "tags" {
-  description = "Mapa de tags adicionais para aplicar aos recursos."
-  type        = map(string)
-  default     = {}
-}
-
-variable "enable_versioning" {
-  description = "Habilita o versionamento do bucket."
-  type        = bool
-  default     = true
 }
 
 variable "force_destroy" {
-  description = "Permite destruir o bucket mesmo se não estiver vazio."
+  description = "Permite exclusao do bucket mesmo se contiver objetos. Use com cautela."
   type        = bool
   default     = false
 }
 
-variable "block_public_access" {
-  description = "Bloqueia todas as formas de acesso público ao bucket."
+variable "enable_versioning" {
+  description = "Habilita versionamento de objetos no bucket."
   type        = bool
   default     = true
 }
 
-variable "sse_algorithm" {
-  description = "Algoritmo de criptografia do lado do servidor. Valores válidos: AES256 ou aws:kms."
-  type        = string
-  default     = "AES256"
-
-  validation {
-    condition     = contains(["AES256", "aws:kms"], var.sse_algorithm)
-    error_message = "sse_algorithm deve ser AES256 ou aws:kms."
-  }
-}
-
-variable "kms_key_id" {
-  description = "ID/ARN da KMS Key quando sse_algorithm = aws:kms. Se não informado, usa a chave gerenciada pela AWS (alias/aws/s3)."
+variable "kms_key_arn" {
+  description = "ARN de uma chave KMS para criptografia SSE-KMS. Se nulo, usa AES256 (SSE-S3)."
   type        = string
   default     = null
 }
 
-variable "bucket_key_enabled" {
-  description = "Habilita S3 Bucket Keys para reduzir chamadas ao KMS quando aws:kms for utilizado."
+variable "enable_lifecycle_rule" {
+  description = "Habilita regra de ciclo de vida para expirar versoes antigas e abortar multipart uploads incompletos."
   type        = bool
   default     = true
 }
 
-variable "attach_ssl_tls_policy" {
-  description = "Anexa uma bucket policy que nega tráfego sem TLS."
-  type        = bool
-  default     = true
+variable "noncurrent_version_expiration_days" {
+  description = "Numero de dias apos os quais versoes nao-atuais de objetos sao expiradas."
+  type        = number
+  default     = 90
+
+  validation {
+    condition     = var.noncurrent_version_expiration_days > 0
+    error_message = "O valor deve ser maior que zero."
+  }
+}
+
+variable "logging_target_bucket" {
+  description = "Nome do bucket de destino para logs de acesso do S3. Se nulo, logging nao e habilitado."
+  type        = string
+  default     = null
+}
+
+variable "logging_target_prefix" {
+  description = "Prefixo aplicado aos logs de acesso enviados ao bucket de destino."
+  type        = string
+  default     = "s3-access-logs/"
+}
+
+variable "tags" {
+  description = "Mapa de tags aplicadas ao bucket."
+  type        = map(string)
+  default     = {}
 }

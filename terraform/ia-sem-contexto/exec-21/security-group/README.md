@@ -1,95 +1,62 @@
-AWS Security Group — Terraform Blueprint
+# Security Group (AWS)
 
-Descrição
-- Cria um Security Group em uma VPC específica usando o provider AWS.
-- Regras configuráveis para ingress e egress via variáveis.
-- Padrões seguros: nenhum ingress por padrão; egress padrão permitindo todo tráfego de saída (pode ser ajustado).
-- Sem backend remoto, adequado para validação local.
+Blueprint Terraform para provisionamento de um Security Group na AWS, associado a uma VPC informada via variavel.
 
-Arquivos
-- main.tf: definição do Security Group e regras dinâmicas.
-- variables.tf: variáveis de entrada com validações.
-- outputs.tf: saídas úteis do recurso criado.
-- versions.tf: requisitos de versão do Terraform e provider AWS.
-- README.md: instruções de uso.
+## Recursos criados
 
-Pré-requisitos
-- Terraform 1.3.0 ou superior.
-- Provider AWS (~> 5.x).
-- Credenciais AWS configuradas no ambiente para aplicar (não necessárias para validação sintática).
+- `aws_security_group.this`
 
-Variáveis principais
-- region: Região AWS (padrão: us-east-1).
-- vpc_id: ID da VPC alvo (obrigatório).
-- sg_name: Nome do Security Group (padrão: secure-sg).
-- sg_description: Descrição (padrão: Security Group gerenciado pelo Terraform).
-- tags: Tags adicionais (mapa string -> string).
-- ingress_rules: Lista de regras de entrada (vazia por padrão).
-- egress_rules: Lista de regras de saída (por padrão, permite tudo para IPv4 e IPv6).
+## Requisitos
 
-Formato das regras
-Cada item de ingress_rules e egress_rules:
-- description: string opcional.
-- from_port: número (0–65535).
-- to_port: número (>= from_port, <= 65535).
-- protocol: tcp, udp, icmp, icmpv6, -1 (all).
-- cidr_blocks: lista de CIDRs IPv4.
-- ipv6_cidr_blocks: lista de CIDRs IPv6.
-- security_groups: lista de IDs de SG (origem em ingress, destino em egress).
-- prefix_list_ids: lista de Prefix Lists (usado em egress).
-- self: bool (apenas aplicável a ingress; ignorado em egress).
+- Terraform >= 1.5.0
+- Provider AWS >= 5.0
 
-Observações
-- Regras sem nenhuma origem/destino definido são ignoradas automaticamente.
-- Se usar protocolo -1, use from_port/to_port = 0 conforme recomendado pela AWS.
-- O atributo self só é aplicado a regras de ingress.
+## Variaveis principais
 
-Exemplos de uso
-1) Security Group sem ingress (somente egress default):
-- Defina vpc_id e aplique.
+| Nome            | Descricao                                              | Tipo          | Default          |
+|-----------------|---------------------------------------------------------|---------------|------------------|
+| `aws_region`    | Regiao AWS                                               | `string`      | `"us-east-1"`    |
+| `vpc_id`        | ID da VPC onde o Security Group sera criado (obrigatorio)| `string`      | -                |
+| `name`          | Nome do Security Group                                   | `string`      | `"app-sg"`       |
+| `description`   | Descricao do Security Group                              | `string`      | -                |
+| `ingress_rules` | Lista de regras de entrada                                | `list(object)`| `[]`             |
+| `egress_rules`  | Lista de regras de saida                                  | `list(object)`| Allow all outbound |
+| `tags`          | Tags adicionais                                           | `map(string)` | `{}`             |
 
-2) Permitir SSH de um CIDR específico e HTTPS de outro:
-- Defina em terraform.tfvars (exemplo):
-vpc_id = "vpc-1234567890abcdef0"
-sg_name = "app-sg"
-ingress_rules = [
-  {
-    description  = "SSH de admin"
-    from_port    = 22
-    to_port      = 22
-    protocol     = "tcp"
-    cidr_blocks  = ["203.0.113.0/24"]
-  },
-  {
-    description      = "HTTPS público"
-    from_port        = 443
-    to_port          = 443
-    protocol         = "tcp"
-    cidr_blocks      = ["0.0.0.0/0"]
-    ipv6_cidr_blocks = ["::/0"]
+## Seguranca por padrao
+
+- Nenhuma regra de entrada e criada por padrao (`ingress_rules = []`), seguindo o principio de menor privilegio.
+- Cabe ao consumidor do modulo definir explicitamente as portas e origens (CIDRs) necessarias, evitando exposicoes amplas como `0.0.0.0/0` em portas sensiveis.
+- A regra de saida padrao permite todo o trafego (`egress_rules`), podendo ser restringida conforme necessidade.
+
+## Exemplo de uso
+
+```
+module "sg" {
+  source = "./"
+
+  vpc_id = "vpc-xxxxxxxx"
+  name   = "web-sg"
+
+  ingress_rules = [
+    {
+      description = "HTTPS from corporate network"
+      from_port   = 443
+      to_port     = 443
+      protocol    = "tcp"
+      cidr_blocks = ["203.0.113.0/24"]
+    }
+  ]
+
+  tags = {
+    Environment = "dev"
   }
-]
-tags = {
-  environment = "test"
-  project     = "sg-blueprint"
 }
+```
 
-Comandos úteis
-- terraform fmt
-- terraform init -backend=false
-- terraform validate
-- terraform plan -var="vpc_id=vpc-1234567890abcdef0"
-- terraform apply -var-file="terraform.tfvars"
+## Outputs
 
-Saídas
-- security_group_id: ID do SG.
-- security_group_arn: ARN do SG.
-- security_group_name: Nome do SG.
-- security_group_vpc_id: VPC associada.
-- ingress_rules_applied: Quantidade de regras de ingress aplicadas.
-- egress_rules_applied: Quantidade de regras de egress aplicadas.
-
-Boas práticas
-- Restringir ingress ao mínimo necessário (por CIDR e portas específicas).
-- Ajustar egress_rules para saída mínima necessária quando aplicável.
-- Versionar e revisar alterações em regras de SG (controle de mudanças).
+- `security_group_id`
+- `security_group_arn`
+- `security_group_name`
+- `security_group_vpc_id`

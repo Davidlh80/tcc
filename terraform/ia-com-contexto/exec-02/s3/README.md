@@ -1,45 +1,54 @@
-Visão geral do recurso
-- Este template provisiona um bucket Amazon S3 seguindo o padrão organizacional:
-  - Nome no formato <environment>-<system>-s3-<purpose>;
-  - Bloqueio total de acesso público (quatro flags do Public Access Block);
-  - Criptografia server-side habilitada por padrão com SSE-S3 (AES256), opcionalmente KMS;
-  - Policy que nega qualquer requisição sem aws:SecureTransport (exige HTTPS);
-  - Versionamento configurável via variável, padrão Enabled;
-  - Tags obrigatórias aplicadas a todos os recursos com suporte a tags.
+# S3 Bucket - Blueprint Terraform
 
-Tabela de variáveis (nome, tipo, obrigatória, descrição)
-- environment | string | sim | Ambiente alvo do recurso. Valores permitidos: dev, hml, prd.
-- system | string | sim | Identificador do sistema/aplicação. Apenas [a-z0-9-], sem iniciar/terminar com hífen.
-- purpose | string | sim | Finalidade do recurso (ex.: logs, assets, backups). Apenas [a-z0-9-].
-- region | string | sim | Região AWS (ex.: us-east-1).
-- versioning_status | string | não (padrão: Enabled) | Status do versionamento: Enabled ou Suspended.
-- sse_algorithm | string | não (padrão: AES256) | Algoritmo de SSE: AES256 (SSE-S3) ou aws:kms.
-- kms_key_id | string | condicional | ARN/ID da KMS Key quando sse_algorithm = aws:kms.
-- force_destroy | bool | não (padrão: false) | Se true, permite destruir o bucket mesmo contendo objetos.
-- additional_tags | map(string) | não (padrão: {}) | Tags adicionais mescladas às tags padrão.
+## 1. Visao geral do recurso
 
-Tabela de outputs (nome, descrição)
-- bucket_name | Nome do bucket S3 criado.
-- bucket_arn | ARN do bucket S3 criado.
-- bucket_id | ID do bucket (igual ao nome).
+Este blueprint provisiona um bucket Amazon S3 aderente aos padroes organizacionais de nomenclatura, tags, seguranca e governanca. O bucket e criado com:
 
-Exemplo de uso do módulo/recurso
-module "s3_bucket" {
-  source = "./"
+- nome padronizado no formato `<ambiente>-<sistema>-s3-<finalidade>`;
+- bloqueio total de acesso publico (quatro flags do Public Access Block habilitadas);
+- criptografia server-side por padrao com algoritmo AES256 (SSE-S3);
+- bucket policy que nega explicitamente qualquer requisicao sem `aws:SecureTransport`;
+- versionamento configuravel por variavel, com padrao `Enabled`;
+- tags obrigatorias da organizacao aplicadas automaticamente.
 
-  environment       = "dev"
-  system            = "tcc"
-  purpose           = "logs"
-  region            = "us-east-1"
+## 2. Variaveis
 
-  # Opcional
+| Nome                | Tipo         | Obrigatoria | Descricao                                                                          |
+|---------------------|--------------|-------------|-------------------------------------------------------------------------------------|
+| `environment`       | string       | Sim         | Ambiente de implantacao do recurso. Valores permitidos: `dev`, `hml`, `prd`.        |
+| `system`            | string       | Sim         | Nome do sistema ou aplicacao proprietaria do recurso.                              |
+| `region`            | string       | Nao         | Regiao AWS onde o bucket sera provisionado. Padrao: `us-east-1`.                   |
+| `purpose`           | string       | Sim         | Finalidade do bucket, usada na nomenclatura padronizada (ex.: `logs`).             |
+| `versioning_status` | string       | Nao         | Status do versionamento do bucket (`Enabled` ou `Suspended`). Padrao: `Enabled`.   |
+| `additional_tags`   | map(string)  | Nao         | Tags adicionais mescladas com as tags obrigatorias da organizacao. Padrao: `{}`.   |
+
+## 3. Outputs
+
+| Nome          | Descricao                                |
+|---------------|--------------------------------------------|
+| `bucket_name` | Nome do bucket S3 criado.                  |
+| `bucket_arn`  | ARN do bucket S3 criado.                   |
+| `bucket_id`   | Identificador (ID) do bucket S3 criado.    |
+
+## 4. Exemplo de uso
+
+```hcl
+module "s3_logs" {
+  source = "./modulos/s3"
+
+  environment = "dev"
+  system      = "tcc"
+  region      = "us-east-1"
+  purpose     = "logs"
+
   versioning_status = "Enabled"
-  sse_algorithm     = "AES256"
-  # Se usar KMS:
-  # sse_algorithm = "aws:kms"
-  # kms_key_id     = "arn:aws:kms:us-east-1:111122223333:key/abcd-ef01-2345-6789-abcdef012345"
 
   additional_tags = {
-    Application = "my-app"
+    Squad = "plataforma"
   }
 }
+
+output "bucket_arn" {
+  value = module.s3_logs.bucket_arn
+}
+```

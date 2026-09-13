@@ -1,42 +1,48 @@
-Visão geral do recurso
-Este template provisiona um bucket Amazon S3 conforme o padrão organizacional:
-- Nome seguindo <ambiente>-<sistema>-<recurso>-<finalidade> (ex.: dev-tcc-s3-logs).
-- Bloqueio total de acesso público (quatro flags do Public Access Block).
-- Criptografia server-side habilitada (SSE-S3 / AES256).
-- Policy que nega qualquer requisição sem aws:SecureTransport (somente HTTPS).
-- Versionamento configurável via variável, padrão Enabled.
-- Tags obrigatórias aplicadas e possibilidade de tags adicionais.
+# S3 Bucket
 
-Tabela de variáveis
-| Nome              | Tipo        | Obrigatória | Descrição |
-|-------------------|-------------|-------------|-----------|
-| region            | string      | Sim         | Região AWS onde os recursos serão provisionados (ex.: us-east-1). |
-| environment       | string      | Sim         | Ambiente alvo (dev, hml, prd). |
-| system            | string      | Sim         | Identificador do sistema/aplicação (minúsculas, números e hífens). |
-| purpose           | string      | Sim         | Finalidade do bucket (ex.: logs, assets, backups). |
-| versioning_status | string      | Não (padrão: Enabled) | Status do versionamento do bucket S3: Enabled ou Suspended. |
-| additional_tags   | map(string) | Não         | Tags adicionais a serem aplicadas aos recursos (sobrescrevem chaves iguais). |
+## Visão geral
 
-Tabela de outputs
-| Nome         | Descrição |
-|--------------|-----------|
-| bucket_name  | Nome do bucket S3 criado. |
-| bucket_arn   | ARN do bucket S3 criado. |
-| bucket_id    | ID do bucket S3 (igual ao nome). |
+Este módulo provisiona um bucket Amazon S3 seguindo os padrões internos de nomenclatura, tags e segurança da organização. O bucket é criado com bloqueio total de acesso público (quatro flags do Public Access Block habilitadas), criptografia server-side padrão (AES256, configurável para aws:kms), negação explícita de requisições sem TLS (`aws:SecureTransport`) via bucket policy, e versionamento controlável por variável (padrão `Enabled`).
 
-Exemplo de uso
-module "s3_bucket" {
-  source = "./"
+O nome do bucket segue o padrão `<ambiente>-<sistema>-<recurso>-<finalidade>`, por exemplo: `dev-tcc-s3-logs`.
 
-  region      = "us-east-1"
+## Variáveis
+
+| Nome                | Tipo         | Obrigatória | Descrição                                                                 |
+|---------------------|--------------|-------------|----------------------------------------------------------------------------|
+| `environment`        | `string`     | Sim         | Ambiente de implantação (`dev`, `hml`, `prd`).                              |
+| `system`              | `string`     | Sim         | Nome do sistema ou aplicação proprietária do recurso.                      |
+| `region`              | `string`     | Não         | Região AWS onde o bucket será criado. Padrão: `us-east-1`.                 |
+| `purpose`             | `string`     | Sim         | Finalidade do bucket, usada na composição do nome (ex.: `logs`, `backups`).|
+| `additional_tags`     | `map(string)`| Não         | Tags adicionais mescladas com as tags obrigatórias. Padrão: `{}`.          |
+| `versioning_status`   | `string`     | Não         | Status do versionamento (`Enabled` ou `Suspended`). Padrão: `Enabled`.     |
+| `sse_algorithm`       | `string`     | Não         | Algoritmo de criptografia server-side (`AES256` ou `aws:kms`). Padrão: `AES256`. |
+| `kms_key_id`          | `string`     | Não         | ARN da chave KMS, usado apenas quando `sse_algorithm` for `aws:kms`.       |
+
+## Outputs
+
+| Nome           | Descrição                          |
+|-----------------|--------------------------------------|
+| `bucket_name`   | Nome do bucket S3 criado.           |
+| `bucket_arn`    | ARN do bucket S3 criado.            |
+| `bucket_id`     | ID do bucket S3 criado.             |
+
+## Exemplo de uso
+
+```hcl
+module "s3_logs" {
+  source = "./modules/s3"
+
   environment = "dev"
   system      = "tcc"
+  region      = "us-east-1"
   purpose     = "logs"
 
   versioning_status = "Enabled"
+  sse_algorithm     = "AES256"
 
   additional_tags = {
-    Application = "sample-app"
-    Squad       = "platform"
+    Squad = "plataforma"
   }
 }
+```

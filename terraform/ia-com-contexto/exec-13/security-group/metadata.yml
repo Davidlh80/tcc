@@ -1,0 +1,12 @@
+scenario: ia-com-contexto
+execution_id: exec-13
+resource: security-group
+model: "sonnet"
+prompt_file: "prompts/ia-com-contexto/prompt-security-group.md"
+context_file: "contexto/contexto-organizacional.md"
+started_at: "2026-09-12T14:21:58.302797-03:00"
+finished_at: "2026-09-12T14:22:47.828281-03:00"
+api_duration_ms: 49524
+total_duration_ms: 49525
+generated_at: "2026-09-12T14:22:47.828281-03:00"
+generation_tool: "scripts/generate-blueprint"

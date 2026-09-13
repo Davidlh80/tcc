@@ -1,61 +1,65 @@
-Blueprint Terraform para criação de um bucket Amazon S3 com configurações seguras por padrão.
+# Blueprint Terraform — Amazon S3 Bucket
 
-Recursos provisionados:
-- Bucket S3 com tags
-- Controle de propriedade (BucketOwnerEnforced) para desativar ACLs
-- Bloqueio de acesso público (todas as flags ativadas por padrão)
-- Versionamento (habilitado por padrão)
-- Criptografia do lado do servidor (SSE-S3 AES256 por padrão, opcional KMS)
-- Política que nega acesso sem TLS
-- Regras de ciclo de vida (abortar multipart após X dias, expirar versões não correntes e delete markers órfãos)
+Blueprint autônomo, sem vínculo com padrões organizacionais específicos, para provisionamento de um bucket Amazon S3 seguro por padrão.
 
-Pré-requisitos:
-- Terraform 1.3+ instalado
-- Provider AWS ~> 5.x
-- Credenciais AWS válidas exportadas no ambiente (por exemplo, AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY) ou usando perfil do AWS CLI
-- Escolher uma região AWS e um nome de bucket globalmente único
+## Recursos criados
 
-Como usar:
-1) Ajuste variáveis conforme necessário (por exemplo, em terraform.tfvars):
-region = "us-east-1"
-bucket_name = "meu-bucket-unico-global-123"
-tags = {
-  ambiente = "dev"
-  projeto  = "exemplo"
+- `aws_s3_bucket` — bucket S3 principal.
+- `aws_s3_bucket_ownership_controls` — força `BucketOwnerEnforced`, desabilitando ACLs.
+- `aws_s3_bucket_public_access_block` — bloqueia acesso público (ACLs e políticas), habilitado por padrão.
+- `aws_s3_bucket_versioning` — versionamento de objetos, habilitado por padrão.
+- `aws_s3_bucket_server_side_encryption_configuration` — criptografia server-side padrão (AES256 ou aws:kms), com `bucket_key_enabled = true`.
+
+## Decisões de segurança padrão
+
+- Acesso público totalmente bloqueado (`block_public_access = true`).
+- ACLs desabilitadas via `BucketOwnerEnforced` (o proprietário do bucket é sempre o dono dos objetos).
+- Criptografia server-side habilitada por padrão com AES256; suporte a KMS via variável.
+- Versionamento habilitado por padrão para proteção contra sobrescrita/exclusão acidental.
+- `force_destroy = false` por padrão, evitando exclusão acidental de dados em produção.
+
+## Uso
+
+```
+module "s3_bucket" {
+  source      = "./"
+  bucket_name = "meu-bucket-exemplo-12345"
+  environment = "prod"
+
+  tags = {
+    Owner = "time-plataforma"
+  }
 }
+```
 
-2) Inicialize e valide:
+## Inputs
+
+| Nome                  | Descrição                                                        | Tipo          | Default       |
+|-----------------------|-------------------------------------------------------------------|---------------|---------------|
+| aws_region            | Região AWS de provisionamento                                     | string        | "us-east-1"   |
+| bucket_name           | Nome globalmente único do bucket                                  | string        | (obrigatório) |
+| environment           | Nome do ambiente, usado em tags                                   | string        | "dev"         |
+| tags                  | Tags adicionais                                                   | map(string)   | {}            |
+| force_destroy         | Permite destruir bucket com objetos                               | bool          | false         |
+| enable_versioning     | Habilita versionamento                                             | bool          | true          |
+| block_public_access   | Bloqueia acesso público                                            | bool          | true          |
+| sse_algorithm         | Algoritmo de criptografia padrão (AES256 ou aws:kms)              | string        | "AES256"      |
+| kms_key_arn           | ARN da chave KMS (usado apenas se sse_algorithm = "aws:kms")      | string        | null          |
+
+## Outputs
+
+| Nome                          | Descrição                                  |
+|-------------------------------|---------------------------------------------|
+| bucket_id                     | Nome (ID) do bucket criado                  |
+| bucket_arn                    | ARN do bucket criado                         |
+| bucket_domain_name            | Domain name padrão do bucket                 |
+| bucket_regional_domain_name   | Domain name regional do bucket               |
+
+## Validação
+
+```
 terraform init -backend=false
 terraform validate
+```
 
-3) Visualize o plano:
-terraform plan
-
-4) Aplique:
-terraform apply
-
-Principais variáveis:
-- region (string, default: us-east-1): Região AWS.
-- bucket_name (string, obrigatório): Nome globalmente único do bucket.
-- force_destroy (bool, default: false): Se true, destrói o bucket com objetos.
-- enable_versioning (bool, default: true): Habilita versionamento.
-- sse_algorithm (string, default: AES256): AES256 ou aws:kms.
-- kms_key_id (string, default: null): ID/ARN da chave KMS (se usar aws:kms, opcional).
-- abort_incomplete_multipart_days (number, default: 7): Aborta uploads multipart incompletos após X dias.
-- noncurrent_version_expiration_days (number, default: 90): Expira versões não correntes após X dias (0 para desabilitar).
-- expire_delete_markers (bool, default: true): Remove delete markers órfãos.
-- block_public_acls, block_public_policy, ignore_public_acls, restrict_public_buckets (bools, default: true): Controles de acesso público.
-- tags (map(string), default: {}): Tags adicionais.
-
-Outputs:
-- bucket_id: Nome/ID do bucket.
-- bucket_arn: ARN do bucket.
-- bucket_domain_name: Endpoint global do bucket.
-- bucket_regional_domain_name: Endpoint regional do bucket.
-- versioning_status: Status do versionamento.
-- sse_algorithm: Algoritmo de criptografia aplicado.
-
-Notas:
-- O nome do bucket deve ser globalmente único na AWS.
-- Por padrão, o acesso público é bloqueado e o tráfego sem TLS é negado.
-- Para usar KMS gerenciado pelo cliente, defina sse_algorithm = "aws:kms" e opcionalmente kms_key_id com a CMK desejada; se kms_key_id não for informado, a chave gerenciada pela AWS para S3 será usada.
+Este blueprint não utiliza backend remoto e não depende de credenciais reais para validação sintática.

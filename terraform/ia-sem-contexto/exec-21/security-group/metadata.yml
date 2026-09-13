@@ -1,11 +1,11 @@
 scenario: ia-sem-contexto
 execution_id: exec-21
 resource: security-group
-model: "gpt-5"
+model: "sonnet"
 prompt_file: "prompts/ia-sem-contexto/prompt-security-group.md"
-started_at: "2026-09-07T21:49:44.3914622-03:00"
-finished_at: "2026-09-07T21:51:35.5523593-03:00"
-api_duration_ms: 111152
-total_duration_ms: 111160
-generated_at: "2026-09-07T21:51:35.5523593-03:00"
+started_at: "2026-09-13T10:54:04.509493-03:00"
+finished_at: "2026-09-13T10:54:33.227841-03:00"
+api_duration_ms: 28716
+total_duration_ms: 28718
+generated_at: "2026-09-13T10:54:33.227841-03:00"
 generation_tool: "scripts/generate-blueprint"

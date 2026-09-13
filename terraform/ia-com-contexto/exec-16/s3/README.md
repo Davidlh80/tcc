@@ -1,38 +1,50 @@
-Visão geral do recurso
-- Este template provisiona um bucket Amazon S3 seguindo o padrão organizacional:
-  - Nomenclatura: <environment>-<system>-s3-<purpose>
-  - Segurança: bloqueio total de acesso público (quatro flags), criptografia SSE-S3 (AES256), e bucket policy negando requisições sem aws:SecureTransport.
-  - Governança: tags obrigatórias aplicadas e versionamento configurável (padrão Enabled).
+# S3 Bucket
 
-Tabela de variáveis (nome, tipo, obrigatória, descrição)
-- environment (string, obrigatório): Ambiente alvo. Valores permitidos: dev, hml, prd.
-- system (string, obrigatório): Nome do sistema (minúsculas, dígitos e hífens). Ex.: tcc.
-- region (string, obrigatório): Região AWS para criação dos recursos. Ex.: us-east-1.
-- purpose (string, obrigatório): Finalidade do bucket (minúsculas, dígitos e hífens). Ex.: logs, assets, backups.
-- additional_tags (map(string), opcional): Tags adicionais a serem aplicadas aos recursos. Padrão: {}.
-- versioning_status (string, opcional): Status do versionamento do bucket. Valores: Enabled, Suspended. Padrão: Enabled.
-- sse_algorithm (string, opcional): Algoritmo de criptografia SSE. Conforme política, apenas AES256 é aceito. Padrão: AES256.
-- force_destroy (bool, opcional): Se true, permite destruir o bucket mesmo contendo objetos. Padrão: false.
+## Visao geral
 
-Tabela de outputs (nome, descrição)
-- bucket_name: Nome do bucket S3 criado.
-- bucket_arn: ARN do bucket S3.
-- bucket_id: ID do bucket S3 (normalmente igual ao nome).
+Este template provisiona um bucket Amazon S3 seguindo os padroes organizacionais de nomenclatura, tags e seguranca. O bucket e criado com:
 
-Exemplo de uso do módulo/recurso
-module "s3_bucket" {
+- bloqueio total de acesso publico (quatro flags do Public Access Block ativadas);
+- criptografia server-side por padrao com o algoritmo AES256 (SSE-S3);
+- bucket policy que nega explicitamente qualquer requisicao sem `aws:SecureTransport`;
+- versionamento configuravel por variavel, com padrao `Enabled`;
+- nome composto no padrao `<ambiente>-<sistema>-<recurso>-<finalidade>` (ex.: `dev-tcc-s3-logs`);
+- tags obrigatorias aplicadas automaticamente e combinadas com tags adicionais informadas pelo consumidor.
+
+## Variaveis
+
+| Nome                | Tipo          | Obrigatoria | Descricao                                                                 |
+|---------------------|---------------|-------------|----------------------------------------------------------------------------|
+| `environment`        | `string`      | Sim         | Ambiente de implantacao (`dev`, `hml` ou `prd`).                           |
+| `system`              | `string`      | Sim         | Identificador do sistema/produto ao qual o recurso pertence.               |
+| `region`              | `string`      | Sim         | Regiao AWS onde o recurso sera provisionado.                                |
+| `purpose`             | `string`      | Sim         | Finalidade do bucket, usada na composicao do nome (ex.: `logs`).           |
+| `versioning_status`   | `string`      | Nao         | Estado do versionamento (`Enabled` ou `Suspended`). Padrao: `Enabled`.     |
+| `additional_tags`     | `map(string)` | Nao         | Tags adicionais mescladas com as tags obrigatorias. Padrao: `{}`.          |
+
+## Outputs
+
+| Nome          | Descricao                          |
+|---------------|-------------------------------------|
+| `bucket_name` | Nome do bucket S3 criado.           |
+| `bucket_arn`  | ARN do bucket S3 criado.            |
+| `bucket_id`   | ID do bucket S3 criado.             |
+
+## Exemplo de uso
+
+```hcl
+module "s3_logs" {
   source = "./"
 
-  environment      = "dev"
-  system           = "tcc"
-  region           = "us-east-1"
-  purpose          = "logs"
+  environment = "dev"
+  system      = "tcc"
+  region      = "us-east-1"
+  purpose     = "logs"
+
   versioning_status = "Enabled"
 
-  # Opcional
   additional_tags = {
-    Team = "platform"
+    Squad = "plataforma"
   }
-  force_destroy  = false
-  sse_algorithm  = "AES256"
 }
+```

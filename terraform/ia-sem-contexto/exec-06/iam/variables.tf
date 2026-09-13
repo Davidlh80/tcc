@@ -1,118 +1,74 @@
 variable "aws_region" {
-  description = "Região AWS a ser utilizada pelo provider."
+  description = "Regiao AWS utilizada pelo provider."
   type        = string
   default     = "us-east-1"
 }
 
-variable "aws_profile" {
-  description = "Perfil AWS do arquivo de credenciais (opcional)."
-  type        = string
-  default     = null
-}
-
 variable "policy_name" {
-  description = "Nome da IAM Policy a ser criada."
+  description = "Nome da IAM Policy."
   type        = string
-  default     = "example-sts-getcalleridentity"
-
-  validation {
-    condition     = length(var.policy_name) >= 1 && length(var.policy_name) <= 128
-    error_message = "policy_name deve ter entre 1 e 128 caracteres."
-  }
-
-  validation {
-    condition     = can(regex("^[A-Za-z0-9+=,.@_-]+$", var.policy_name))
-    error_message = "policy_name possui caracteres inválidos. Permitidos: letras, números, e os símbolos +=,.@_-"
-  }
+  default     = "example-least-privilege-policy"
 }
 
 variable "policy_description" {
-  description = "Descrição da IAM Policy."
+  description = "Descricao da IAM Policy."
   type        = string
-  default     = "Policy gerenciada por Terraform."
-
-  validation {
-    condition     = length(var.policy_description) <= 1000
-    error_message = "policy_description deve ter até 1000 caracteres."
-  }
+  default     = "Politica IAM gerenciada via Terraform, seguindo o principio de menor privilegio."
 }
 
 variable "policy_path" {
-  description = "Caminho (path) da IAM Policy. Deve começar e terminar com '/'."
+  description = "Path da IAM Policy dentro da conta AWS. Deve iniciar e terminar com '/'."
   type        = string
   default     = "/"
 
   validation {
-    condition     = var.policy_path == "/" || can(regex("^/.*/$", var.policy_path))
-    error_message = "policy_path deve ser '/' ou iniciar e terminar com '/'. Ex: '/', '/app/', '/team/security/'."
-  }
-}
-
-variable "tags" {
-  description = "Tags a serem aplicadas à IAM Policy."
-  type        = map(string)
-  default     = {}
-
-  validation {
-    condition     = alltrue([for k, v in var.tags : length(trim(k)) > 0 && length(trim(v)) > 0])
-    error_message = "Todas as chaves e valores de tags devem ser strings não vazias."
+    condition     = can(regex("^/.*/$|^/$", var.policy_path))
+    error_message = "policy_path deve iniciar e terminar com '/'."
   }
 }
 
 variable "statements" {
-  description = <<EOT
-Lista de statements da policy. Cada statement suporta:
-- sid (opcional): string
-- effect: 'Allow' ou 'Deny'
-- actions (opcional): lista de ações
-- not_actions (opcional): lista de ações negadas (use alternativamente a 'actions')
-- resources (opcional): lista de ARNs de recursos
-- not_resources (opcional): lista de ARNs excluídos (use alternativamente a 'resources')
-- conditions (opcional): lista de condições com { test, variable, values }
-Pelo menos um entre actions/not_actions e um entre resources/not_resources devem ser informados por statement.
-EOT
+  description = "Lista de statements que compoem o documento JSON da IAM Policy."
   type = list(object({
-    sid           = optional(string)
-    effect        = string
-    actions       = optional(list(string))
-    not_actions   = optional(list(string))
-    resources     = optional(list(string))
-    not_resources = optional(list(string))
-    conditions = optional(list(object({
-      test     = string
-      variable = string
-      values   = list(string)
-    })))
+    sid       = string
+    effect    = string
+    actions   = list(string)
+    resources = list(string)
   }))
-
-  # Default seguro e mínimo para permitir validação sem depender de recursos reais
   default = [
     {
-      sid       = "AllowCallerIdentity"
+      sid       = "AllowExampleS3ReadAccess"
       effect    = "Allow"
-      actions   = ["sts:GetCallerIdentity"]
-      resources = ["*"]
+      actions   = ["s3:GetObject", "s3:ListBucket"]
+      resources = ["arn:aws:s3:::example-bucket", "arn:aws:s3:::example-bucket/*"]
     }
   ]
 
   validation {
+    condition     = length(var.statements) > 0
+    error_message = "É necessário informar ao menos um statement."
+  }
+
+  validation {
     condition     = alltrue([for s in var.statements : contains(["Allow", "Deny"], s.effect)])
-    error_message = "Cada statement.effect deve ser 'Allow' ou 'Deny'."
+    error_message = "O campo 'effect' de cada statement deve ser 'Allow' ou 'Deny'."
   }
 
   validation {
-    condition = alltrue([
-      for s in var.statements :
-      (try(length(s.actions), 0) > 0) || (try(length(s.not_actions), 0) > 0)
-    ])
-    error_message = "Cada statement deve conter 'actions' ou 'not_actions' com ao menos um item."
+    condition     = alltrue([for s in var.statements : length(s.actions) > 0])
+    error_message = "Cada statement deve conter ao menos uma action."
   }
 
   validation {
-    condition = alltrue([
-      for s in var.statements :
-      (try(length(s.resources), 0) > 0) || (try(length(s.not_resources), 0) > 0)
-    ])
-    error_message = "Cada statement deve conter 'resources' ou 'not_resources' com ao menos um item."
+    condition     = alltrue([for s in var.statements : length(s.resources) > 0])
+    error_message = "Cada statement deve conter ao menos um resource."
+  }
+}
+
+variable "tags" {
+  description = "Tags aplicadas a IAM Policy."
+  type        = map(string)
+  default = {
+    ManagedBy = "terraform"
   }
 }

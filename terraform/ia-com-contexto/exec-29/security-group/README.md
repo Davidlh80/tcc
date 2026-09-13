@@ -1,75 +1,76 @@
-Visão geral do recurso
-Este template provisiona um Security Group na AWS seguindo o padrão organizacional:
-- Nomenclatura: <environment>-<system>-sg-<security_group_name>
-- Tags obrigatórias aplicadas a todos os recursos
-- Regras de segurança:
-  - Proibição de 0.0.0.0/0 em qualquer porta além de 443/tcp
-  - Descrição obrigatória em toda regra de entrada e de saída
-  - Egress declarado explicitamente (obrigatório ao menos uma regra), sem liberação irrestrita por padrão
-- Variáveis expostas para configuração de VPC, regras de ingress/egress e metadados
+# Security Group
 
-Tabela de variáveis (nome, tipo, obrigatória, descrição)
-- environment | string | sim | Ambiente do recurso. Valores: dev, hml, prd.
-- system | string | sim | Nome do sistema/produto, em minúsculas com hífens (padrão corporativo).
-- region | string | sim | Região AWS (ex.: us-east-1).
-- additional_tags | map(string) | não | Tags adicionais aplicadas além das obrigatórias.
-- vpc_id | string | sim | ID da VPC alvo (ex.: vpc-xxxxxxxx).
-- security_group_name | string | sim | Finalidade/nome lógico do SG (usado na composição do nome).
-- ingress_rules | list(object) | não | Regras de entrada. Default: []. Campos: description (string), from_port (number), to_port (number), protocol (string), cidr_blocks (list(string), opcional), ipv6_cidr_blocks (list(string), opcional), security_group_ids (list(string), opcional), self (bool, opcional). Restrições: descrição obrigatória; ao menos uma origem/destino por regra; se usar 0.0.0.0/0 deve ser exclusivamente tcp:443.
-- egress_rules | list(object) | sim | Regras de saída. Campos: description (string), from_port (number), to_port (number), protocol (string), cidr_blocks (list(string), opcional), ipv6_cidr_blocks (list(string), opcional), security_group_ids (list(string), opcional), self (bool, opcional). Restrições: ao menos uma regra (egress explícito); descrição obrigatória; ao menos um destino por regra; se usar 0.0.0.0/0 deve ser exclusivamente tcp:443.
+## Visao geral do recurso
 
-Tabela de outputs (nome, descrição)
-- security_group_name | Nome final do Security Group criado.
-- security_group_arn | ARN do Security Group.
-- security_group_id | ID do Security Group.
+Este modulo provisiona um AWS Security Group seguindo os padroes organizacionais de nomenclatura, tags e governanca de Infraestrutura como Codigo.
 
-Exemplo de uso do módulo/recurso
+O recurso e criado na VPC informada por variavel e aplica as seguintes regras de seguranca:
+
+- o CIDR `0.0.0.0/0` e proibido em qualquer porta diferente de `443/tcp`;
+- toda regra de entrada e de saida exige uma descricao obrigatoria;
+- as regras de egress sao declaradas explicitamente, sem liberacao irrestrita por padrao (apenas `443/tcp` e liberado por padrao);
+- as regras de entrada e saida sao totalmente configuraveis por variavel;
+- nenhuma regra de entrada e criada por padrao, seguindo o principio do menor privilegio.
+
+O nome do recurso segue o padrao `<ambiente>-<sistema>-<recurso>-<finalidade>`, por exemplo `hml-tcc-sg-web`.
+
+## Tabela de variaveis
+
+| Nome                  | Tipo                  | Obrigatoria | Descricao                                                                                          |
+|-----------------------|-----------------------|-------------|------------------------------------------------------------------------------------------------------|
+| `environment`         | `string`              | Sim         | Ambiente de implantacao (`dev`, `hml` ou `prd`).                                                      |
+| `system`              | `string`              | Nao         | Nome do sistema ou aplicacao ao qual o recurso pertence. Padrao: `tcc`.                               |
+| `region`              | `string`              | Nao         | Regiao AWS onde o recurso sera provisionado. Padrao: `us-east-1`.                                     |
+| `additional_tags`     | `map(string)`         | Nao         | Tags adicionais mescladas as tags obrigatorias. Padrao: `{}`.                                          |
+| `security_group_name` | `string`              | Sim         | Finalidade do Security Group, utilizada na composicao do nome (ex.: `web`, `database`, `bastion`).    |
+| `description`         | `string`              | Sim         | Descricao do Security Group.                                                                           |
+| `vpc_id`              | `string`              | Sim         | ID da VPC onde o Security Group sera criado.                                                          |
+| `ingress_rules`       | `list(object({...}))` | Nao         | Lista de regras de entrada, cada uma com `description`, `from_port`, `to_port`, `protocol` e `cidr_blocks`. Padrao: `[]`. |
+| `egress_rules`        | `list(object({...}))` | Nao         | Lista de regras de saida, cada uma com `description`, `from_port`, `to_port`, `protocol` e `cidr_blocks`. Padrao: regra unica liberando `443/tcp`. |
+
+## Tabela de outputs
+
+| Nome                    | Descricao                              |
+|-------------------------|------------------------------------------|
+| `security_group_name`   | Nome do Security Group criado.           |
+| `security_group_arn`    | ARN do Security Group criado.            |
+| `security_group_id`     | ID do Security Group criado.             |
+
+## Exemplo de uso
+
+```hcl
 module "sg_web" {
   source = "./"
 
   environment          = "hml"
   system               = "tcc"
   region               = "us-east-1"
-  vpc_id               = "vpc-0123456789abcdef0"
   security_group_name  = "web"
-
-  additional_tags = {
-    Squad = "platform"
-  }
+  description          = "Security Group para o servico web hml-tcc."
+  vpc_id               = "vpc-0123456789abcdef0"
 
   ingress_rules = [
     {
-      description        = "Permite HTTPS público"
-      from_port          = 443
-      to_port            = 443
-      protocol           = "tcp"
-      cidr_blocks        = ["0.0.0.0/0"]
-      ipv6_cidr_blocks   = []
-      security_group_ids = []
-      self               = false
-    },
-    {
-      description        = "Permite HTTP interno do ALB"
-      from_port          = 80
-      to_port            = 80
-      protocol           = "tcp"
-      cidr_blocks        = ["10.0.0.0/16"]
-      ipv6_cidr_blocks   = []
-      security_group_ids = []
-      self               = false
+      description = "Permite trafego HTTPS de entrada da internet."
+      from_port   = 443
+      to_port     = 443
+      protocol    = "tcp"
+      cidr_blocks = ["0.0.0.0/0"]
     }
   ]
 
   egress_rules = [
     {
-      description        = "Saída HTTPS para dependências externas"
-      from_port          = 443
-      to_port            = 443
-      protocol           = "tcp"
-      cidr_blocks        = ["0.0.0.0/0"]
-      ipv6_cidr_blocks   = []
-      security_group_ids = []
-      self               = false
+      description = "Permite trafego de saida HTTPS."
+      from_port   = 443
+      to_port     = 443
+      protocol    = "tcp"
+      cidr_blocks = ["0.0.0.0/0"]
     }
   ]
+
+  additional_tags = {
+    Squad = "plataforma"
+  }
 }
+```

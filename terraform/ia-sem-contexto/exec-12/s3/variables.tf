@@ -1,111 +1,62 @@
-variable "region" {
-  description = "Região AWS onde o bucket será criado."
+variable "aws_region" {
+  description = "Região AWS onde o bucket S3 será provisionado."
   type        = string
   default     = "us-east-1"
-
-  validation {
-    condition     = trim(var.region) != ""
-    error_message = "A região não pode ser vazia."
-  }
 }
 
 variable "bucket_name" {
-  description = "Nome do bucket S3 (deve ser globalmente único)."
+  description = "Nome globalmente único do bucket S3 (minúsculas, números, pontos e hífens; 3 a 63 caracteres)."
   type        = string
 
   validation {
-    condition = length(var.bucket_name) >= 3 &&
-    length(var.bucket_name) <= 63 &&
-    can(regex("^[a-z0-9][a-z0-9.-]*[a-z0-9]$", var.bucket_name)) &&
-    !can(regex("[A-Z_]", var.bucket_name)) &&
-    !can(regex("^\\d+\\.\\d+\\.\\d+\\.\\d+$", var.bucket_name))
-    error_message = "bucket_name deve ter entre 3 e 63 caracteres, usar apenas letras minúsculas, números, hifens e pontos, não parecer um IP e não começar/terminar com separador."
+    condition     = can(regex("^[a-z0-9.-]{3,63}$", var.bucket_name))
+    error_message = "bucket_name deve conter apenas letras minúsculas, números, pontos e hífens, com 3 a 63 caracteres."
   }
 }
 
+variable "environment" {
+  description = "Nome do ambiente (ex.: dev, staging, prod), usado em tags."
+  type        = string
+  default     = "dev"
+}
+
+variable "tags" {
+  description = "Tags adicionais a serem aplicadas ao bucket."
+  type        = map(string)
+  default     = {}
+}
+
 variable "force_destroy" {
-  description = "Se true, remove o bucket mesmo contendo objetos."
+  description = "Permite destruir o bucket mesmo que contenha objetos. Recomendado manter false em produção."
   type        = bool
   default     = false
 }
 
 variable "enable_versioning" {
-  description = "Habilita versionamento de objetos no bucket."
+  description = "Habilita o versionamento de objetos no bucket."
+  type        = bool
+  default     = true
+}
+
+variable "block_public_access" {
+  description = "Bloqueia todo acesso público ao bucket (ACLs e políticas públicas). Recomendado manter true."
   type        = bool
   default     = true
 }
 
 variable "sse_algorithm" {
-  description = "Algoritmo de criptografia do lado do servidor (AES256 ou aws:kms)."
+  description = "Algoritmo de criptografia server-side padrão do bucket: AES256 ou aws:kms."
   type        = string
   default     = "AES256"
 
   validation {
     condition     = contains(["AES256", "aws:kms"], var.sse_algorithm)
-    error_message = "sse_algorithm deve ser AES256 ou aws:kms."
+    error_message = "sse_algorithm deve ser 'AES256' ou 'aws:kms'."
   }
 }
 
-variable "kms_key_id" {
-  description = "ID/ARN da CMK KMS para criptografia (opcional, usado quando sse_algorithm=aws:kms)."
+variable "kms_key_arn" {
+  description = "ARN da chave KMS usada para criptografia quando sse_algorithm for 'aws:kms'. Ignorado caso contrário."
   type        = string
   default     = null
-}
-
-variable "abort_incomplete_multipart_days" {
-  description = "Dias para abortar uploads multipart incompletos."
-  type        = number
-  default     = 7
-
-  validation {
-    condition     = var.abort_incomplete_multipart_days >= 1 && var.abort_incomplete_multipart_days <= 365
-    error_message = "abort_incomplete_multipart_days deve estar entre 1 e 365."
-  }
-}
-
-variable "noncurrent_version_expiration_days" {
-  description = "Dias para expirar versões não correntes (0 para desabilitar)."
-  type        = number
-  default     = 90
-
-  validation {
-    condition     = var.noncurrent_version_expiration_days >= 0
-    error_message = "noncurrent_version_expiration_days deve ser >= 0."
-  }
-}
-
-variable "expire_delete_markers" {
-  description = "Remove automaticamente delete markers órfãos."
-  type        = bool
-  default     = true
-}
-
-variable "block_public_acls" {
-  description = "Bloqueia ACLs públicas."
-  type        = bool
-  default     = true
-}
-
-variable "block_public_policy" {
-  description = "Bloqueia políticas públicas."
-  type        = bool
-  default     = true
-}
-
-variable "ignore_public_acls" {
-  description = "Ignora ACLs públicas em objetos."
-  type        = bool
-  default     = true
-}
-
-variable "restrict_public_buckets" {
-  description = "Restringe acesso público ao bucket."
-  type        = bool
-  default     = true
-}
-
-variable "tags" {
-  description = "Mapa de tags adicionais para aplicar ao bucket."
-  type        = map(string)
-  default     = {}
 }

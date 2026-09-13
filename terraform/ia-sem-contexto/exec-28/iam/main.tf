@@ -1,24 +1,27 @@
-locals {
-  default_tags = {
-    ManagedBy = "Terraform"
-  }
+terraform {
+  required_version = ">= 1.3.0"
+}
 
-  final_policy_json = var.policy_json != null ? var.policy_json : data.aws_iam_policy_document.this.json
+provider "aws" {
+  region = var.aws_region
 }
 
 data "aws_iam_policy_document" "this" {
-  statement {
-    sid     = "DefaultAllow"
-    effect  = "Allow"
-    actions = var.actions
-    resources = var.resources
+  dynamic "statement" {
+    for_each = var.policy_statements
+    content {
+      sid       = try(statement.value.sid, null)
+      effect    = try(statement.value.effect, "Allow")
+      actions   = statement.value.actions
+      resources = statement.value.resources
+    }
   }
 }
 
 resource "aws_iam_policy" "this" {
   name        = var.policy_name
-  path        = var.policy_path
   description = var.policy_description
-  policy      = local.final_policy_json
-  tags        = merge(local.default_tags, var.tags)
+  path        = var.path
+  policy      = data.aws_iam_policy_document.this.json
+  tags        = var.tags
 }

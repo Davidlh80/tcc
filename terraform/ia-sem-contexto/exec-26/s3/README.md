@@ -1,50 +1,68 @@
-# Blueprint Terraform — Amazon S3 Bucket
+# Blueprint Terraform — Bucket Amazon S3
 
-Este template cria um bucket S3 com padroes de seguranca elevados:
-- Bloqueio de acesso publico habilitado por padrao.
-- Criptografia do lado do servidor (SSE-S3 AES256 por padrao, opcional KMS).
-- Versionamento habilitado por padrao.
-- Politica para negar trafego nao seguro (HTTP) por padrao.
+Provisiona um bucket Amazon S3 com configuracoes seguras por padrao: bloqueio total de acesso publico, criptografia server-side habilitada, versionamento habilitado e ownership controls forcando `BucketOwnerEnforced` (desabilita ACLs).
 
-Arquivos incluidos:
-- main.tf
-- variables.tf
-- outputs.tf
-- versions.tf
+## Recursos criados
 
-Requisitos:
-- Terraform >= 1.4.0
-- Provider AWS >= 5.0
-- Credenciais AWS exportadas no ambiente (caso execute terraform apply)
+- `aws_s3_bucket.this`
+- `aws_s3_bucket_versioning.this`
+- `aws_s3_bucket_server_side_encryption_configuration.this`
+- `aws_s3_bucket_public_access_block.this`
+- `aws_s3_bucket_ownership_controls.this`
 
-Como usar (exemplo):
-1) Ajuste as variaveis necessarias, principalmente bucket_name.
-2) Comandos:
-   - terraform init -backend=false
-   - terraform validate
-   - terraform plan -var 'bucket_name=meu-bucket-exemplo-123' -out=tfplan
-   - terraform apply tfplan
+## Uso
 
-Variaveis principais:
-- bucket_name (obrigatoria): nome globalmente unico.
-- aws_region (opcional): padrao us-east-1.
-- enable_versioning (bool): padrao true.
-- force_destroy (bool): padrao false.
-- sse_algorithm (string): AES256 ou aws:kms. Padrao AES256.
-- kms_key_id (string): obrigatoria quando sse_algorithm = aws:kms.
-- bucket_key_enabled (bool): padrao true quando usar KMS.
-- attach_deny_insecure_transport_policy (bool): padrao true.
-- block_public_acls, block_public_policy, ignore_public_acls, restrict_public_buckets: todos padrao true.
-- log_bucket_name (string): bucket existente para logs de acesso. Deixe vazio para desabilitar.
-- log_prefix (string): padrao s3-access-logs/.
-- tags (map(string)): tags padrao, inclui ManagedBy=Terraform.
+```hcl
+module "s3_bucket" {
+  source      = "./"
+  bucket_name = "meu-bucket-exemplo-unico"
 
-Outputs:
-- bucket_name
-- bucket_arn
-- region
+  tags = {
+    ambiente = "producao"
+    time     = "plataforma"
+  }
+}
+```
 
-Observacoes:
-- O logging de acesso requer que o bucket de destino exista e permita recebimento de logs do S3.
-- Quando usar KMS, informe kms_key_id (ARN ou ID/alias) acessivel ao S3 e ao chamador.
-- Evite nomes de bucket ja utilizados globalmente.
+## Requisitos
+
+| Nome | Versao |
+|------|--------|
+| terraform | >= 1.5.0 |
+| aws | ~> 5.0 |
+
+## Variaveis
+
+| Nome | Descricao | Tipo | Default | Obrigatorio |
+|------|-----------|------|---------|-------------|
+| bucket_name | Nome globalmente unico do bucket S3 | string | n/a | sim |
+| force_destroy | Permite destruir o bucket mesmo com objetos | bool | false | nao |
+| enable_versioning | Habilita versionamento de objetos | bool | true | nao |
+| sse_algorithm | Algoritmo de criptografia (AES256 ou aws:kms) | string | "AES256" | nao |
+| kms_key_arn | ARN da chave KMS quando sse_algorithm = aws:kms | string | null | nao |
+| block_public_access | Bloqueia acesso publico ao bucket | bool | true | nao |
+| tags | Tags adicionais do bucket | map(string) | {} | nao |
+
+## Outputs
+
+| Nome | Descricao |
+|------|-----------|
+| bucket_id | Nome (ID) do bucket criado |
+| bucket_arn | ARN do bucket criado |
+| bucket_domain_name | Nome de dominio do bucket |
+| bucket_regional_domain_name | Nome de dominio regional do bucket |
+| bucket_region | Regiao AWS do bucket |
+
+## Seguranca
+
+- Acesso publico bloqueado por padrao via `aws_s3_bucket_public_access_block`.
+- ACLs desabilitadas via `BucketOwnerEnforced`, forcando controle de acesso somente por politicas IAM/bucket policy.
+- Criptografia server-side habilitada por padrao (`AES256`), com suporte opcional a `aws:kms`.
+- Versionamento habilitado por padrao para protecao contra sobrescrita/exclusao acidental de objetos.
+
+## Validacao
+
+```bash
+terraform init -backend=false
+terraform validate
+```

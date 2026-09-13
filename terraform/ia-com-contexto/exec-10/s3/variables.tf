@@ -1,62 +1,53 @@
 variable "environment" {
-  description = "Ambiente onde o bucket sera criado. Valores permitidos: dev, hml, prd."
+  description = "Ambiente de implantacao do recurso."
   type        = string
 
   validation {
     condition     = contains(["dev", "hml", "prd"], var.environment)
-    error_message = "O ambiente deve ser um dos valores: dev, hml ou prd."
+    error_message = "O valor de environment deve ser um dos seguintes: dev, hml, prd."
   }
 }
 
 variable "system" {
-  description = "Identificador do sistema (minusculo, numeros e hifens). Usado no padrao <environment>-<system>-s3-<purpose>."
+  description = "Nome do sistema/projeto ao qual o recurso pertence, usado na nomenclatura padrao."
   type        = string
+  default     = "tcc"
 
   validation {
-    condition     = can(regex("^[a-z0-9-]+$", var.system)) && length(var.system) > 0
-    error_message = "O sistema deve conter apenas letras minusculas, numeros e hifens."
-  }
-}
-
-variable "purpose" {
-  description = "Finalidade do bucket (minusculo, numeros e hifens). Usado no padrao <environment>-<system>-s3-<purpose>."
-  type        = string
-
-  validation {
-    condition     = can(regex("^[a-z0-9-]+$", var.purpose)) && length(var.purpose) > 0
-    error_message = "A finalidade deve conter apenas letras minusculas, numeros e hifens."
+    condition     = can(regex("^[a-z0-9]+$", var.system))
+    error_message = "O valor de system deve conter apenas letras minusculas e numeros."
   }
 }
 
 variable "region" {
-  description = "Regiao AWS para o provider."
+  description = "Regiao AWS onde o recurso sera criado."
   type        = string
-
-  validation {
-    condition     = length(var.region) > 0
-    error_message = "A regiao nao pode ser vazia."
-  }
+  default     = "us-east-1"
 }
 
 variable "additional_tags" {
-  description = "Mapa de tags adicionais a serem aplicadas aos recursos. Em caso de conflito, as tags obrigatorias prevalecem."
+  description = "Tags adicionais a serem mescladas com as tags obrigatorias da organizacao."
   type        = map(string)
   default     = {}
 }
 
+variable "purpose" {
+  description = "Finalidade do bucket, usada na nomenclatura padrao <ambiente>-<sistema>-<recurso>-<finalidade>."
+  type        = string
+
+  validation {
+    condition     = can(regex("^[a-z0-9-]+$", var.purpose))
+    error_message = "O valor de purpose deve conter apenas letras minusculas, numeros e hifens."
+  }
+}
+
 variable "versioning_status" {
-  description = "Estado do versionamento do bucket. Valores permitidos: Enabled ou Suspended. Padrao: Enabled."
+  description = "Status do versionamento do bucket S3."
   type        = string
   default     = "Enabled"
 
   validation {
     condition     = contains(["Enabled", "Suspended"], var.versioning_status)
-    error_message = "versioning_status deve ser Enabled ou Suspended."
+    error_message = "O valor de versioning_status deve ser Enabled ou Suspended."
   }
-}
-
-variable "force_destroy" {
-  description = "Se true, permite destruir o bucket mesmo com objetos (use com cautela). Padrao: false."
-  type        = bool
-  default     = false
 }

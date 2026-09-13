@@ -1,64 +1,53 @@
 variable "aws_region" {
-  description = "Região AWS a ser utilizada pelo provider."
+  description = "Regiao AWS onde a policy sera provisionada (IAM e global, mas o provider exige uma regiao)."
   type        = string
   default     = "us-east-1"
-  validation {
-    condition     = can(regex("^[a-z]{2}-[a-z]+-\\d$", var.aws_region))
-    error_message = "A região deve seguir o padrão ex: us-east-1, eu-west-1, sa-east-1."
-  }
 }
 
 variable "policy_name" {
-  description = "Nome da IAM Policy gerenciada pelo cliente."
+  description = "Nome da IAM Policy."
   type        = string
-  default     = "custom-iam-policy"
-  validation {
-    condition     = can(regex("^[A-Za-z0-9+=,.@_-]{1,128}$", var.policy_name))
-    error_message = "O nome deve ter de 1 a 128 caracteres e pode conter letras, números e os caracteres: +=,.@_-"
-  }
+  default     = "least-privilege-example-policy"
 }
 
 variable "policy_description" {
-  description = "Descrição da IAM Policy."
+  description = "Descricao da IAM Policy."
   type        = string
-  default     = "Managed by Terraform - Customer managed policy."
+  default     = "Policy de exemplo com permissoes minimas, gerada como blueprint Terraform."
 }
 
 variable "policy_path" {
-  description = "Caminho (path) da policy. Deve ser '/' ou começar e terminar com '/'."
+  description = "Path da IAM Policy dentro da conta AWS."
   type        = string
   default     = "/"
-  validation {
-    condition     = var.policy_path == "/" || can(regex("^/.+/$", var.policy_path))
-    error_message = "O path deve ser '/' ou iniciar e terminar com '/'. Ex.: '/', '/service-role/', '/teamA/'."
-  }
-}
-
-variable "policy_statements" {
-  description = "Lista de statements da policy. Quando vazio, uma política mínima de leitura de identidade (sts:GetCallerIdentity) será criada por padrão."
-  type = list(object({
-    effect    = string
-    actions   = list(string)
-    resources = list(string)
-    condition = optional(list(object({
-      test     = string
-      variable = string
-      values   = list(string)
-    })), [])
-  }))
-  default = []
-
-  validation {
-    condition = length(var.policy_statements) == 0 || alltrue([
-      for s in var.policy_statements :
-      contains(["Allow", "Deny"], s.effect) && length(s.actions) > 0 && length(s.resources) > 0
-    ])
-    error_message = "Cada statement deve ter effect 'Allow' ou 'Deny' e listas não vazias para actions e resources."
-  }
 }
 
 variable "tags" {
-  description = "Tags a serem aplicadas à policy e propagadas via default_tags do provider."
+  description = "Tags aplicadas a IAM Policy."
   type        = map(string)
-  default     = {}
+  default = {
+    ManagedBy = "terraform"
+  }
+}
+
+variable "statements" {
+  description = "Lista de statements IAM (sid, effect, actions, resources) que compoem o documento da policy. Evite usar '*' em actions ou resources em ambientes produtivos."
+  type = list(object({
+    sid       = string
+    effect    = string
+    actions   = list(string)
+    resources = list(string)
+  }))
+
+  default = [
+    {
+      sid       = "AllowS3ReadOnlyExample"
+      effect    = "Allow"
+      actions   = ["s3:GetObject", "s3:ListBucket"]
+      resources = [
+        "arn:aws:s3:::REPLACE_WITH_BUCKET_NAME",
+        "arn:aws:s3:::REPLACE_WITH_BUCKET_NAME/*"
+      ]
+    }
+  ]
 }

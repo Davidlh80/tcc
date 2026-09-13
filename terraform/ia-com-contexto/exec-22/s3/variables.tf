@@ -1,56 +1,56 @@
 variable "environment" {
-  description = "Ambiente de deploy. Valores permitidos: dev, hml, prd."
+  description = "Ambiente de implantacao do recurso. Valores permitidos: dev, hml, prd."
   type        = string
 
   validation {
     condition     = contains(["dev", "hml", "prd"], var.environment)
-    error_message = "O environment deve ser um dos valores: dev, hml, prd."
+    error_message = "O valor de environment deve ser um dos seguintes: dev, hml, prd."
   }
 }
 
 variable "system" {
-  description = "Identificador do sistema/produto. Use apenas letras minúsculas, números e hífens."
+  description = "Identificador do sistema ou produto ao qual o recurso pertence."
   type        = string
 
   validation {
-    condition     = can(regex("^[a-z0-9-]+$", var.system)) && length(var.system) > 0 && length(var.system) <= 30
-    error_message = "O system deve conter apenas [a-z0-9-] e ter entre 1 e 30 caracteres."
-  }
-}
-
-variable "purpose" {
-  description = "Finalidade do bucket (ex.: logs, assets, backups). Use apenas letras minúsculas, números e hífens."
-  type        = string
-
-  validation {
-    condition     = can(regex("^[a-z0-9-]+$", var.purpose)) && length(var.purpose) > 0 && length(var.purpose) <= 30
-    error_message = "O purpose deve conter apenas [a-z0-9-] e ter entre 1 e 30 caracteres."
+    condition     = can(regex("^[a-z0-9]+(-[a-z0-9]+)*$", var.system))
+    error_message = "O valor de system deve conter apenas letras minusculas, numeros e hifens."
   }
 }
 
 variable "region" {
-  description = "Região AWS para o deploy (ex.: us-east-1)."
+  description = "Regiao AWS onde os recursos serao provisionados."
   type        = string
 
   validation {
-    condition     = can(regex("^[a-z]{2}-[a-z]+-\\d$", var.region))
-    error_message = "A região deve seguir o padrão, por exemplo: us-east-1."
+    condition     = can(regex("^[a-z]{2}-[a-z]+-[0-9]$", var.region))
+    error_message = "O valor de region deve seguir o formato de regiao AWS, ex.: us-east-1."
   }
 }
 
 variable "additional_tags" {
-  description = "Tags adicionais a serem aplicadas em todos os recursos com suporte a tags."
+  description = "Tags adicionais a serem mescladas com as tags obrigatorias da organizacao."
   type        = map(string)
   default     = {}
 }
 
+variable "purpose" {
+  description = "Finalidade do bucket, utilizada na composicao do nome do recurso (ex.: logs, backups)."
+  type        = string
+
+  validation {
+    condition     = can(regex("^[a-z0-9]+(-[a-z0-9]+)*$", var.purpose))
+    error_message = "O valor de purpose deve conter apenas letras minusculas, numeros e hifens."
+  }
+}
+
 variable "versioning_status" {
-  description = "Status do versionamento do bucket. Valores permitidos: Enabled ou Suspended."
+  description = "Status do versionamento do bucket. Valores permitidos: Enabled, Suspended."
   type        = string
   default     = "Enabled"
 
   validation {
     condition     = contains(["Enabled", "Suspended"], var.versioning_status)
-    error_message = "versioning_status deve ser Enabled ou Suspended."
+    error_message = "O valor de versioning_status deve ser Enabled ou Suspended."
   }
 }

@@ -1,40 +1,57 @@
-locals {
-  resource_type = "s3"
+terraform {
+  required_version = ">= 1.5.0"
 
-  bucket_name = "${var.environment}-${var.system}-${local.resource_type}-${var.purpose}"
-
-  mandatory_tags = {
-    Project     = "tcc-iac-ia"
-    Environment = var.environment
-    ManagedBy   = "terraform"
-    Owner       = "devops"
-    CostCenter  = "academic-research"
+  required_providers {
+    aws = {
+      source  = "hashicorp/aws"
+      version = "~> 5.0"
+    }
   }
-
-  tags = merge(local.mandatory_tags, var.additional_tags)
 }
 
 provider "aws" {
   region = var.region
 }
 
+locals {
+  bucket_name = "${var.environment}-${var.system}-s3-${var.purpose}"
+
+  tags = merge(
+    {
+      Project     = "tcc-iac-ia"
+      Environment = var.environment
+      ManagedBy   = "terraform"
+      Owner       = "devops"
+      CostCenter  = "academic-research"
+    },
+    var.additional_tags
+  )
+}
+
 resource "aws_s3_bucket" "this" {
-  bucket        = local.bucket_name
-  force_destroy = var.force_destroy
+  bucket = local.bucket_name
 
   tags = local.tags
 }
 
-# Enforce bucket owner and disable ACLs for stronger security posture
-resource "aws_s3_bucket_ownership_controls" "this" {
+resource "aws_s3_bucket_versioning" "this" {
   bucket = aws_s3_bucket.this.id
 
-  rule {
-    object_ownership = "BucketOwnerEnforced"
+  versioning_configuration {
+    status = var.versioning_status
   }
 }
 
-# Block all public access (all four flags)
+resource "aws_s3_bucket_server_side_encryption_configuration" "this" {
+  bucket = aws_s3_bucket.this.id
+
+  rule {
+    apply_server_side_encryption_by_default {
+      sse_algorithm = var.sse_algorithm
+    }
+  }
+}
+
 resource "aws_s3_bucket_public_access_block" "this" {
   bucket = aws_s3_bucket.this.id
 
@@ -44,36 +61,13 @@ resource "aws_s3_bucket_public_access_block" "this" {
   restrict_public_buckets = true
 }
 
-# Server-side encryption (SSE-S3 AES256 by default; optional KMS)
-resource "aws_s3_bucket_server_side_encryption_configuration" "this" {
-  bucket = aws_s3_bucket.this.id
-
-  rule {
-    apply_server_side_encryption_by_default {
-      sse_algorithm     = var.sse_algorithm
-      kms_master_key_id = var.sse_algorithm == "aws:kms" ? var.kms_key_id : null
-    }
-    bucket_key_enabled = var.sse_algorithm == "aws:kms" ? true : null
-  }
-}
-
-# Versioning configuration (Enabled by default)
-resource "aws_s3_bucket_versioning" "this" {
-  bucket = aws_s3_bucket.this.id
-
-  versioning_configuration {
-    status = var.versioning_status
-  }
-}
-
-# Deny any request without TLS (aws:SecureTransport = false)
 data "aws_iam_policy_document" "deny_insecure_transport" {
   statement {
     sid    = "DenyInsecureTransport"
     effect = "Deny"
 
     principals {
-      type        = "*"
+      type        = "AWS"
       identifiers = ["*"]
     }
 
@@ -95,4 +89,6 @@ data "aws_iam_policy_document" "deny_insecure_transport" {
 resource "aws_s3_bucket_policy" "this" {
   bucket = aws_s3_bucket.this.id
   policy = data.aws_iam_policy_document.deny_insecure_transport.json
+
+  depends_on = [aws_s3_bucket_public_access_block.this]
 }

@@ -1,9 +1,4 @@
-provider "aws" {
-  region = var.region
-}
-
 locals {
-  # Nome padronizado: <environment>-<system>-sg-<security_group_name>
   security_group_full_name = "${var.environment}-${var.system}-sg-${var.security_group_name}"
 
   mandatory_tags = {
@@ -14,18 +9,13 @@ locals {
     CostCenter  = "academic-research"
   }
 
-  common_tags = merge(local.mandatory_tags, var.additional_tags)
-
-  # Mapas para for_each com chaves estáveis
-  ingress_rules_map = {
-    for idx, r in var.ingress_rules :
-    format("%03d-%s-%s-%d-%d", idx, r.protocol, replace(lower(trim(r.description)), " ", "-"), r.from_port, r.to_port) => r
-  }
-
-  egress_rules_map = {
-    for idx, r in var.egress_rules :
-    format("%03d-%s-%s-%d-%d", idx, r.protocol, replace(lower(trim(r.description)), " ", "-"), r.from_port, r.to_port) => r
-  }
+  tags = merge(
+    local.mandatory_tags,
+    var.additional_tags,
+    {
+      Name = local.security_group_full_name
+    }
+  )
 }
 
 resource "aws_security_group" "this" {
@@ -33,39 +23,31 @@ resource "aws_security_group" "this" {
   description = var.security_group_description
   vpc_id      = var.vpc_id
 
-  # Egress explícito e restritivo por padrão (sem liberação irrestrita)
-  # Mantido vazio; regras de saída são gerenciadas via aws_security_group_rule.egress
-  egress = []
+  dynamic "ingress" {
+    for_each = var.ingress_rules
+    content {
+      description = ingress.value.description
+      from_port   = ingress.value.from_port
+      to_port     = ingress.value.to_port
+      protocol    = ingress.value.protocol
+      cidr_blocks = ingress.value.cidr_blocks
+    }
+  }
 
-  revoke_rules_on_delete = true
+  dynamic "egress" {
+    for_each = var.egress_rules
+    content {
+      description = egress.value.description
+      from_port   = egress.value.from_port
+      to_port     = egress.value.to_port
+      protocol    = egress.value.protocol
+      cidr_blocks = egress.value.cidr_blocks
+    }
+  }
 
-  tags = local.common_tags
-}
+  tags = local.tags
 
-resource "aws_security_group_rule" "ingress" {
-  for_each = local.ingress_rules_map
-
-  type              = "ingress"
-  security_group_id = aws_security_group.this.id
-
-  description = each.value.description
-  protocol    = each.value.protocol
-  from_port   = each.value.from_port
-  to_port     = each.value.to_port
-
-  cidr_blocks = each.value.cidr_blocks
-}
-
-resource "aws_security_group_rule" "egress" {
-  for_each = local.egress_rules_map
-
-  type              = "egress"
-  security_group_id = aws_security_group.this.id
-
-  description = each.value.description
-  protocol    = each.value.protocol
-  from_port   = each.value.from_port
-  to_port     = each.value.to_port
-
-  cidr_blocks = each.value.cidr_blocks
+  lifecycle {
+    create_before_destroy = true
+  }
 }

@@ -1,46 +1,39 @@
-provider "aws" {
-  region = var.region
-}
-
-locals {
-  # Sanitize and bound the name to a safe set of characters and length <= 255
-  clean_name = substr(replace(var.name, "/[^a-zA-Z0-9-_. ]/", "-"), 0, 255)
-}
-
 resource "aws_security_group" "this" {
-  name                   = local.clean_name
-  description            = var.description
-  vpc_id                 = var.vpc_id
-  revoke_rules_on_delete = var.revoke_rules_on_delete
+  name        = var.name
+  description = var.description
+  vpc_id      = var.vpc_id
 
   dynamic "ingress" {
     for_each = var.ingress_rules
     content {
-      description      = ingress.value.description
-      from_port        = ingress.value.from_port
-      to_port          = ingress.value.to_port
-      protocol         = ingress.value.protocol
-      cidr_blocks      = ingress.value.ipv4_cidr_blocks
-      ipv6_cidr_blocks = ingress.value.ipv6_cidr_blocks
+      description = ingress.value.description
+      from_port   = ingress.value.from_port
+      to_port     = ingress.value.to_port
+      protocol    = ingress.value.protocol
+      cidr_blocks = ingress.value.cidr_blocks
     }
   }
 
   dynamic "egress" {
     for_each = var.egress_rules
     content {
-      description      = egress.value.description
-      from_port        = egress.value.from_port
-      to_port          = egress.value.to_port
-      protocol         = egress.value.protocol
-      cidr_blocks      = egress.value.ipv4_cidr_blocks
-      ipv6_cidr_blocks = egress.value.ipv6_cidr_blocks
+      description = egress.value.description
+      from_port   = egress.value.from_port
+      to_port     = egress.value.to_port
+      protocol    = egress.value.protocol
+      cidr_blocks = egress.value.cidr_blocks
     }
   }
 
   tags = merge(
     {
-      Name = local.clean_name
+      Name      = var.name
+      ManagedBy = "terraform"
     },
     var.tags
   )
+
+  lifecycle {
+    create_before_destroy = true
+  }
 }

@@ -1,71 +1,90 @@
-variable "region" {
-  description = "Região AWS onde os recursos serão gerenciados."
+variable "aws_region" {
+  description = "Regiao AWS onde a policy sera provisionada (IAM e global, mas o provider exige uma regiao)."
   type        = string
   default     = "us-east-1"
-
-  validation {
-    condition     = length(var.region) > 0
-    description   = "A região não pode ser vazia."
-  }
 }
 
-variable "policy_name_prefix" {
-  description = "Prefixo para o nome da IAM Policy. O provedor completará com um sufixo único."
+variable "policy_name" {
+  description = "Nome da IAM Policy."
   type        = string
-  default     = "tf-managed-"
 
   validation {
-    condition     = can(regex("^[A-Za-z0-9+=,.@_-]{1,64}$", var.policy_name_prefix))
-    description   = "O prefixo deve usar apenas caracteres permitidos pela AWS: A-Za-z0-9+=,.@_- e ter até 64 caracteres."
+    condition     = can(regex("^[\\w+=,.@-]{1,128}$", var.policy_name))
+    error_message = "O nome da policy deve ter entre 1 e 128 caracteres validos para IAM (letras, numeros e os simbolos + = , . @ _ -)."
   }
 }
 
-variable "path" {
-  description = "Caminho (path) da IAM Policy. Deve começar e terminar com '/'."
+variable "policy_description" {
+  description = "Descricao da IAM Policy."
+  type        = string
+  default     = "Gerenciada via Terraform."
+}
+
+variable "policy_path" {
+  description = "Path da IAM Policy. Deve iniciar e terminar com '/'."
   type        = string
   default     = "/"
 
   validation {
-    condition     = startswith(var.path, "/") && endswith(var.path, "/")
-    description   = "O path deve começar e terminar com '/'. Ex.: '/', '/service/', '/app/prod/'."
+    condition     = can(regex("^/.*/$|^/$", var.policy_path))
+    error_message = "O path deve iniciar e terminar com '/'."
   }
 }
 
-variable "description" {
-  description = "Descrição da IAM Policy."
+variable "statement_sid" {
+  description = "Identificador (SID) da statement da policy."
   type        = string
-  default     = "Managed IAM Policy criada por Terraform."
+  default     = "Statement1"
 }
 
-variable "statements" {
-  description = "Lista de statements para compor o documento de policy IAM."
+variable "effect" {
+  description = "Efeito da statement: Allow ou Deny."
+  type        = string
+  default     = "Allow"
+
+  validation {
+    condition     = contains(["Allow", "Deny"], var.effect)
+    error_message = "O valor de effect deve ser 'Allow' ou 'Deny'."
+  }
+}
+
+variable "actions" {
+  description = "Lista de actions IAM que a policy permite ou nega. Evite wildcard total ('*') e prefira acoes explicitas no formato 'servico:Acao'."
+  type        = list(string)
+
+  validation {
+    condition     = length(var.actions) > 0
+    error_message = "Informe ao menos uma action."
+  }
+
+  validation {
+    condition     = alltrue([for a in var.actions : can(regex("^[a-zA-Z0-9-]+:[a-zA-Z0-9*]+$", a))])
+    error_message = "Cada action deve seguir o formato 'servico:Acao', por exemplo 's3:GetObject'."
+  }
+}
+
+variable "resources" {
+  description = "Lista de ARNs (ou padroes de ARN) aos quais a policy se aplica. Evite '*' irrestrito; prefira ARNs especificos."
+  type        = list(string)
+
+  validation {
+    condition     = length(var.resources) > 0
+    error_message = "Informe ao menos um resource."
+  }
+}
+
+variable "conditions" {
+  description = "Lista opcional de condicoes IAM (test, variable, values) aplicadas a statement, util para restringir ainda mais o escopo da policy."
   type = list(object({
-    sid        = optional(string)
-    effect     = string
-    actions    = set(string)
-    resources  = set(string)
-    conditions = optional(map(any), {})
+    test     = string
+    variable = string
+    values   = list(string)
   }))
   default = []
-
-  validation {
-    condition     = alltrue([for s in var.statements : contains(["Allow", "Deny"], s.effect)])
-    description   = "Cada statement.effect deve ser 'Allow' ou 'Deny'."
-  }
-
-  validation {
-    condition     = alltrue([for s in var.statements : length(s.actions) > 0 && length(s.resources) > 0])
-    description   = "Cada statement deve possuir ao menos uma action e um resource."
-  }
 }
 
 variable "tags" {
-  description = "Tags a serem aplicadas à IAM Policy."
+  description = "Tags aplicadas a IAM Policy."
   type        = map(string)
   default     = {}
-
-  validation {
-    condition     = alltrue([for k, v in var.tags : length(trim(k)) > 0 && length(trim(v)) >= 0])
-    description   = "Chaves de tags não podem ser vazias."
-  }
 }

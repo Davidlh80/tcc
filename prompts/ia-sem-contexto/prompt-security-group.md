@@ -1,18 +1,22 @@
 # Prompt Security Group — IA sem contexto organizacional
 
-## Papel da execução
+## Papel
 
-Sou um especialista em Terraform e AWS. Devo gerar um template Terraform de forma autônoma, sem consultar contexto organizacional externo, documentação interna ou reaproveitar respostas anteriores.
+Você é um especialista em Terraform e AWS atuando de forma autônoma, sem vínculo com os padrões internos de nenhuma organização específica.
 
-Esta é uma execução independente do experimento. Ignore qualquer geração anterior e trate este prompt como a única fonte de requisitos para esta execução.
+## Contexto
 
-## Objetivo
+Execução isolada de um experimento — ignore gerações anteriores. Nenhum contexto organizacional foi fornecido; decida com base apenas no seu conhecimento geral de mercado sobre Terraform e AWS.
 
-Criar uma blueprint Terraform para provisionar um Security Group na AWS.
+Recurso desta execução: Security Group.
 
-## Arquivos obrigatórios
+## Ação
 
-A resposta deve permitir a criação dos seguintes arquivos:
+Gere uma blueprint Terraform completa para provisionar um Security Group na AWS, com o ID da VPC configurável por variável (o Security Group será testado dentro de uma VPC criada pelo próprio ambiente de teste, não pela VPC padrão da conta). Regras de entrada e saída, portas, origens (CIDRs), nomenclatura, tags, variáveis, outputs e organização interna dos arquivos ficam inteiramente ao seu critério.
+
+## Formato de saída
+
+Retorne exatamente estes cinco arquivos, sem arquivos adicionais:
 
 - `main.tf`
 - `variables.tf`
@@ -20,22 +24,9 @@ A resposta deve permitir a criação dos seguintes arquivos:
 - `versions.tf`
 - `README.md`
 
-## Necessidades técnicas do experimento
+## Restrições e avisos
 
-Estas condições existem apenas para que o template consiga ser validado pelo pipeline do experimento, não representam orientação de segurança ou padronização:
-
-- criar um Security Group utilizando o provider AWS;
-- permitir que o ID da VPC seja informado por variável (o Security Group será testado dentro de uma VPC criada pelo próprio ambiente de teste, não pela VPC padrão da conta);
-- utilizar variáveis para os demais valores que você julgar configuráveis;
-- declarar em `outputs.tf` os outputs que você julgar relevantes;
-- ser compatível com `terraform fmt`, `terraform init -backend=false` e `terraform validate`;
-- evitar backend remoto;
-- evitar dependência de credenciais reais para validação sintática.
-
-## Decisões da execução
-
-Regras de entrada e saída, portas, origens (CIDRs), nomenclatura, tags, variáveis, outputs e organização interna dos arquivos ficam inteiramente a seu critério. Decida com base apenas no seu conhecimento geral sobre Terraform e AWS, como faria ao atender um pedido informal e pouco detalhado.
-
-## Restrições da execução
-
-Não utilize padrões organizacionais, nomenclaturas internas, documentos de contexto, checklists de segurança específicos de empresa ou exemplos externos a este prompt. O objetivo desta execução é representar a geração por IA sem contexto organizacional e sem requisitos adicionais além dos estritamente necessários para o recurso existir e ser validável pelo pipeline.
+- Use variáveis para os valores que julgar configuráveis; declare em `outputs.tf` os outputs que julgar relevantes.
+- O código deve ser compatível com `terraform fmt`, `terraform init -backend=false` e `terraform validate`.
+- Não use backend remoto nem dependa de credenciais reais para validação sintática.
+- Retorne somente o conteúdo dos arquivos solicitados, sem explicações fora deles.

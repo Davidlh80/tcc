@@ -1,11 +1,9 @@
-provider "aws" {
-  region = var.region
+terraform {
+  required_version = ">= 1.3.0"
+}
 
-  default_tags {
-    tags = {
-      ManagedBy = "Terraform"
-    }
-  }
+provider "aws" {
+  region = var.aws_region
 }
 
 resource "aws_security_group" "this" {
@@ -13,42 +11,36 @@ resource "aws_security_group" "this" {
   description = var.description
   vpc_id      = var.vpc_id
 
-  revoke_rules_on_delete = true
-
-  dynamic "Ingress" {
-    for_each = {}
-    content {}
-  }
-
   dynamic "ingress" {
     for_each = var.ingress_rules
     content {
-      description      = coalesce(ingress.value.description, "")
-      from_port        = ingress.value.from_port
-      to_port          = ingress.value.to_port
-      protocol         = ingress.value.protocol
-      cidr_blocks      = coalesce(ingress.value.cidr_blocks, [])
-      ipv6_cidr_blocks = coalesce(ingress.value.ipv6_cidr_blocks, [])
-      security_groups  = coalesce(ingress.value.security_groups, [])
-      self             = coalesce(ingress.value.self, false)
+      description = ingress.value.description
+      from_port   = ingress.value.from_port
+      to_port     = ingress.value.to_port
+      protocol    = ingress.value.protocol
+      cidr_blocks = ingress.value.cidr_blocks
     }
   }
 
   dynamic "egress" {
     for_each = var.egress_rules
     content {
-      description      = coalesce(egress.value.description, "")
-      from_port        = egress.value.from_port
-      to_port          = egress.value.to_port
-      protocol         = egress.value.protocol
-      cidr_blocks      = coalesce(egress.value.cidr_blocks, [])
-      ipv6_cidr_blocks = coalesce(egress.value.ipv6_cidr_blocks, [])
-      security_groups  = coalesce(egress.value.security_groups, [])
-      self             = coalesce(egress.value.self, false)
+      description = egress.value.description
+      from_port   = egress.value.from_port
+      to_port     = egress.value.to_port
+      protocol    = egress.value.protocol
+      cidr_blocks = egress.value.cidr_blocks
     }
   }
 
-  tags = merge(var.tags, {
-    Name = var.name
-  })
+  tags = merge(
+    {
+      Name = var.name
+    },
+    var.tags
+  )
+
+  lifecycle {
+    create_before_destroy = true
+  }
 }

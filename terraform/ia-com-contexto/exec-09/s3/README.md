@@ -1,44 +1,50 @@
-1. Visão geral do recurso
-Este template provisiona um bucket Amazon S3 alinhado às políticas internas:
-- Nome seguindo o padrão <ambiente>-<sistema>-<recurso>-<finalidade>, onde <recurso>=s3;
-- Bloqueio completo de acesso público (quatro flags do Public Access Block);
-- Criptografia server-side habilitada por padrão com SSE-S3 (AES256), com opção para KMS;
-- Policy explícita negando qualquer requisição sem aws:SecureTransport (TLS);
-- Versionamento configurável por variável, padrão Enabled;
-- Tags obrigatórias aplicadas a todos os recursos que suportam tags.
+# S3 Bucket - dev-tcc-s3-logs (exemplo)
 
-2. Tabela de variáveis
-- environment | string | Sim | Ambiente alvo: dev, hml ou prd.
-- system | string | Sim | Identificador do sistema/produto (minusculo, sem espaços).
-- region | string | Sim | Região AWS para o provider (ex.: us-east-1).
-- purpose | string | Sim | Finalidade do bucket (compõe o nome).
-- versioning_status | string | Não | Status do versionamento (Enabled ou Suspended). Padrão: Enabled.
-- sse_algorithm | string | Não | Algoritmo SSE: AES256 (padrão) ou aws:kms.
-- kms_key_arn | string | Condicional | ARN da chave KMS quando sse_algorithm=aws:kms.
-- force_destroy | bool | Não | Força a destruição do bucket mesmo com objetos. Padrão: false.
-- additional_tags | map(string) | Não | Tags adicionais mescladas às obrigatórias.
+## 1. Visao geral
 
-3. Tabela de outputs
-- bucket_name | Nome do bucket S3 criado.
-- bucket_arn | ARN do bucket S3 criado.
-- bucket_id | ID do bucket S3 (mesmo que o nome).
+Este modulo provisiona um bucket Amazon S3 seguindo os padroes internos da organizacao para nomenclatura, tags, seguranca e governanca. O bucket e criado com:
 
-4. Exemplo de uso do módulo/recurso
-module "s3_bucket" {
-  source = "."
+- Bloqueio total de acesso publico (quatro flags do Public Access Block ativas);
+- Criptografia server-side com o algoritmo padrao da organizacao (SSE-S3/AES256);
+- Bucket policy que nega explicitamente qualquer requisicao sem `aws:SecureTransport`;
+- Versionamento configuravel por variavel, com padrao `Enabled`;
+- Nomenclatura no padrao `<ambiente>-<sistema>-<recurso>-<finalidade>`;
+- Tags obrigatorias da organizacao aplicadas automaticamente.
 
-  environment       = "dev"
-  system            = "tcc"
-  region            = "us-east-1"
-  purpose           = "logs"
+## 2. Variaveis
+
+| Nome                | Tipo         | Obrigatoria | Descricao                                                              |
+|---------------------|--------------|-------------|--------------------------------------------------------------------------|
+| `environment`       | string       | Sim         | Ambiente de implantacao (`dev`, `hml` ou `prd`).                        |
+| `system`             | string       | Sim         | Nome do sistema ou projeto ao qual o bucket pertence.                   |
+| `region`             | string       | Sim         | Regiao AWS onde o bucket sera provisionado.                             |
+| `purpose`            | string       | Sim         | Finalidade do bucket, utilizada na composicao do nome (ex.: `logs`).    |
+| `versioning_status`  | string       | Nao         | Status do versionamento (`Enabled` ou `Suspended`). Padrao: `Enabled`.  |
+| `additional_tags`    | map(string)  | Nao         | Tags adicionais mescladas com as tags obrigatorias. Padrao: `{}`.       |
+
+## 3. Outputs
+
+| Nome          | Descricao                            |
+|---------------|----------------------------------------|
+| `bucket_name` | Nome do bucket S3 criado.              |
+| `bucket_arn`  | ARN do bucket S3 criado.               |
+| `bucket_id`   | ID do bucket S3 criado.                |
+
+## 4. Exemplo de uso
+
+```hcl
+module "s3_logs" {
+  source = "./exec-01/s3"
+
+  environment = "dev"
+  system      = "tcc"
+  region      = "us-east-1"
+  purpose     = "logs"
+
   versioning_status = "Enabled"
-  sse_algorithm     = "AES256"
-
-  # Quando usar KMS:
-  # sse_algorithm = "aws:kms"
-  # kms_key_arn   = "arn:aws:kms:us-east-1:111122223333:key/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
 
   additional_tags = {
-    Application = "sample-app"
+    Squad = "plataforma"
   }
 }
+```

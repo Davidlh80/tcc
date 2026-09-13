@@ -1,30 +1,22 @@
 locals {
   bucket_name = "${var.environment}-${var.system}-s3-${var.purpose}"
 
-  mandatory_tags = {
-    Project     = "tcc-iac-ia"
-    Environment = var.environment
-    ManagedBy   = "terraform"
-    Owner       = "devops"
-    CostCenter  = "academic-research"
-  }
-
-  tags = merge(local.mandatory_tags, var.additional_tags)
+  tags = merge(
+    {
+      Project     = "tcc-iac-ia"
+      Environment = var.environment
+      ManagedBy   = "terraform"
+      Owner       = "devops"
+      CostCenter  = "academic-research"
+    },
+    var.additional_tags
+  )
 }
 
 resource "aws_s3_bucket" "this" {
-  bucket        = local.bucket_name
-  force_destroy = var.force_destroy
+  bucket = local.bucket_name
 
   tags = local.tags
-}
-
-resource "aws_s3_bucket_ownership_controls" "this" {
-  bucket = aws_s3_bucket.this.id
-
-  rule {
-    object_ownership = "BucketOwnerEnforced"
-  }
 }
 
 resource "aws_s3_bucket_public_access_block" "this" {
@@ -34,14 +26,6 @@ resource "aws_s3_bucket_public_access_block" "this" {
   block_public_policy     = true
   ignore_public_acls      = true
   restrict_public_buckets = true
-}
-
-resource "aws_s3_bucket_versioning" "this" {
-  bucket = aws_s3_bucket.this.id
-
-  versioning_configuration {
-    status = var.versioning_enabled ? "Enabled" : "Suspended"
-  }
 }
 
 resource "aws_s3_bucket_server_side_encryption_configuration" "this" {
@@ -54,22 +38,29 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "this" {
   }
 }
 
+resource "aws_s3_bucket_versioning" "this" {
+  bucket = aws_s3_bucket.this.id
+
+  versioning_configuration {
+    status = var.versioning_status
+  }
+}
+
 data "aws_iam_policy_document" "deny_insecure_transport" {
   statement {
-    sid    = "DenyInsecureTransport"
-    effect = "Deny"
-
-    principals {
-      type        = "*"
-      identifiers = ["*"]
-    }
-
+    sid     = "DenyInsecureTransport"
+    effect  = "Deny"
     actions = ["s3:*"]
 
     resources = [
       aws_s3_bucket.this.arn,
       "${aws_s3_bucket.this.arn}/*"
     ]
+
+    principals {
+      type        = "AWS"
+      identifiers = ["*"]
+    }
 
     condition {
       test     = "Bool"
@@ -82,4 +73,6 @@ data "aws_iam_policy_document" "deny_insecure_transport" {
 resource "aws_s3_bucket_policy" "this" {
   bucket = aws_s3_bucket.this.id
   policy = data.aws_iam_policy_document.deny_insecure_transport.json
+
+  depends_on = [aws_s3_bucket_public_access_block.this]
 }

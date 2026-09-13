@@ -1,61 +1,73 @@
-Nome
-- Blueprint Terraform para criar um bucket Amazon S3 seguro por padrão.
+# S3 Bucket Blueprint
 
-Recursos principais
-- Bucket S3 com propriedade do objeto forçada ao dono (BucketOwnerEnforced).
-- Bloqueio completo de acesso público.
-- Versionamento opcional (habilitado por padrão).
-- Criptografia em repouso habilitada por padrão (SSE-S3 AES256) ou KMS opcional.
-- Política opcional para exigir HTTPS (negar requisições sem SecureTransport).
-- Regra de ciclo de vida para abortar uploads multipart incompletos.
+Blueprint Terraform para provisionamento de um bucket Amazon S3 seguro por padrao, gerado de forma autonoma sem vinculo a padroes organizacionais especificos.
 
-Arquivos
-- versions.tf: versões do Terraform e providers.
-- variables.tf: variáveis de entrada.
-- main.tf: definição dos recursos.
-- outputs.tf: saídas úteis.
-- README.md: instruções de uso.
+## Recursos criados
 
-Pré-requisitos
-- Terraform instalado.
-- Credenciais AWS configuradas no ambiente (por exemplo, variáveis de ambiente).
-- Nome de bucket globalmente único.
+- `aws_s3_bucket.this` — bucket S3 principal, com tags padronizadas.
+- `aws_s3_bucket_versioning.this` — versionamento de objetos (habilitado por padrao).
+- `aws_s3_bucket_server_side_encryption_configuration.this` — criptografia server-side padrao (AES256 ou aws:kms).
+- `aws_s3_bucket_ownership_controls.this` — forca `BucketOwnerEnforced`, desabilitando ACLs.
+- `aws_s3_bucket_public_access_block.this` — bloqueia todo acesso publico ao bucket.
+- `data.aws_iam_policy_document.deny_insecure_transport` / `aws_s3_bucket_policy.deny_insecure_transport` — nega qualquer acesso via HTTP (nao criptografado).
 
-Como usar
-1) Defina as variáveis desejadas (por exemplo via arquivo terraform.tfvars):
-aws_region = "us-east-1"
-bucket_name = "meu-bucket-unico-exemplo-123"
+## Postura de seguranca padrao
 
-2) Inicialize e valide:
+- Acesso publico totalmente bloqueado (ACLs e politicas publicas).
+- ACLs desabilitadas via `BucketOwnerEnforced` (o proprietario do bucket sempre possui os objetos).
+- Criptografia server-side obrigatoria (`AES256` por padrao, com suporte a `aws:kms`).
+- Politica de bucket nega explicitamente conexoes sem TLS (`aws:SecureTransport = false`).
+- Versionamento habilitado por padrao para protecao contra exclusao/sobrescrita acidental.
+- `force_destroy` desabilitado por padrao para evitar exclusao acidental de dados.
+
+## Uso
+
+```
+module "s3_bucket" {
+  source      = "./"
+  bucket_name = "meu-bucket-exemplo-123"
+  environment = "dev"
+
+  tags = {
+    Owner = "time-plataforma"
+  }
+}
+```
+
+Para usar criptografia com KMS:
+
+```
+sse_algorithm = "aws:kms"
+kms_key_arn   = "arn:aws:kms:us-east-1:123456789012:key/exemplo"
+```
+
+## Variaveis principais
+
+| Nome              | Descricao                                              | Padrao      |
+|-------------------|---------------------------------------------------------|-------------|
+| bucket_name       | Nome globalmente unico do bucket                        | (obrigatorio) |
+| aws_region        | Regiao AWS                                               | us-east-1   |
+| environment       | Ambiente, usado em tags                                  | dev         |
+| enable_versioning | Habilita versionamento                                   | true        |
+| sse_algorithm     | Algoritmo de criptografia (AES256 ou aws:kms)            | AES256      |
+| kms_key_arn       | ARN da chave KMS (quando sse_algorithm = aws:kms)        | null        |
+| force_destroy     | Permite exclusao do bucket com objetos dentro            | false       |
+| tags              | Tags adicionais                                          | {}          |
+
+## Outputs
+
+| Nome                        | Descricao                              |
+|-----------------------------|------------------------------------------|
+| bucket_id                   | Nome/identificador do bucket             |
+| bucket_arn                  | ARN do bucket                            |
+| bucket_domain_name          | Dominio do bucket                        |
+| bucket_regional_domain_name | Dominio regional do bucket               |
+
+## Validacao
+
+Este modulo pode ser validado sem credenciais reais:
+
+```
 terraform init -backend=false
 terraform validate
-
-3) Visualize o plano e aplique:
-terraform plan
-terraform apply
-
-Variáveis principais
-- aws_region: Região AWS (padrão: us-east-1).
-- bucket_name: Nome globalmente único do bucket (obrigatório).
-- versioning_enabled: true/false para versionamento (padrão: true).
-- force_destroy: true/false para destruir bucket com objetos (padrão: false).
-- kms_key_id: ARN/ID da CMK para KMS; se omitida, usa SSE-S3.
-- abort_incomplete_multipart_days: dias para abortar uploads incompletos (padrão: 7).
-- attach_https_only_policy: anexa política que exige HTTPS (padrão: true).
-- block_public_acls, block_public_policy, ignore_public_acls, restrict_public_buckets: controles de acesso público (padrão: true).
-- tags: mapa de tags adicionais.
-
-Saídas
-- bucket_id, bucket_arn, bucket_name, bucket_regional_domain_name, versioning_status.
-
-Notas
-- O recurso usa configurações seguras por padrão (sem acesso público e com criptografia).
-- Caso forneça kms_key_id, a criptografia usará aws:kms; caso contrário, AES256.
-- A política HTTPS somente nega tráfego sem TLS e não torna o bucket público.
-
-Comandos úteis
-- terraform fmt
-- terraform init -backend=false
-- terraform validate
-- terraform plan
-- terraform apply
+```

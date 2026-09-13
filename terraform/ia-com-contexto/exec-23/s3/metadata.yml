@@ -1,0 +1,12 @@
+scenario: ia-com-contexto
+execution_id: exec-23
+resource: s3
+model: "sonnet"
+prompt_file: "prompts/ia-com-contexto/prompt-s3.md"
+context_file: "contexto/contexto-organizacional.md"
+started_at: "2026-09-12T14:49:57.176938-03:00"
+finished_at: "2026-09-12T14:50:39.851371-03:00"
+api_duration_ms: 42673
+total_duration_ms: 42674
+generated_at: "2026-09-12T14:50:39.851371-03:00"
+generation_tool: "scripts/generate-blueprint"

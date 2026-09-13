@@ -1,47 +1,50 @@
-Visao geral do recurso
-- Este template provisiona um bucket Amazon S3 seguindo as diretrizes organizacionais:
-  - Nome no padrao <ambiente>-<sistema>-<recurso>-<finalidade>, onde recurso = s3.
-  - Bloqueio completo de acesso publico (quatro flags).
-  - Criptografia server-side habilitada com SSE-S3 (AES256).
-  - Policy que nega qualquer requisicao sem aws:SecureTransport.
-  - Versionamento configuravel (padrao Enabled).
-  - Tags obrigatorias aplicadas com possibilidade de tags adicionais.
+# S3 Bucket - dev-tcc-s3-logs (exemplo)
 
-Tabela de variaveis
-- environment (string) | obrigatoria: sim | Ambiente alvo. Valores: dev, hml, prd.
-- system (string) | obrigatoria: sim | Identificador do sistema (minusculo, numeros e hifens).
-- purpose (string) | obrigatoria: sim | Finalidade do bucket (minusculo, numeros e hifens).
-- region (string) | obrigatoria: sim | Regiao AWS para o provider.
-- additional_tags (map(string)) | obrigatoria: nao | Tags adicionais a serem mescladas.
-- versioning_status (string) | obrigatoria: nao | Estado do versionamento (Enabled ou Suspended). Padrao: Enabled.
-- force_destroy (bool) | obrigatoria: nao | Permite destruir o bucket mesmo com objetos. Padrao: false.
+## 1. Visao geral
 
-Tabela de outputs
-- bucket_name | Nome do bucket S3 criado.
-- bucket_arn | ARN do bucket S3 criado.
-- bucket_id | ID do bucket S3 criado (igual ao nome).
+Este modulo cria um bucket Amazon S3 seguindo os padroes internos da organizacao, contemplando:
 
-Exemplo de uso
-- Exemplo minimo de uso como modulo local:
-module "s3_bucket" {
-  source           = "./"
-  environment      = "dev"
-  system           = "tcc"
-  purpose          = "logs"
-  region           = "us-east-1"
+- Nomenclatura padronizada no formato `<ambiente>-<sistema>-<recurso>-<finalidade>`;
+- Bloqueio total de acesso publico (quatro flags do Public Access Block habilitadas);
+- Criptografia server-side com algoritmo AES256 (SSE-S3);
+- Bucket policy que nega explicitamente qualquer requisicao sem `aws:SecureTransport`;
+- Versionamento configuravel por variavel, com padrao `Enabled`;
+- Tags obrigatorias da organizacao aplicadas automaticamente.
+
+## 2. Variaveis
+
+| Nome                | Tipo          | Obrigatoria | Descricao                                                                          |
+|---------------------|---------------|-------------|--------------------------------------------------------------------------------------|
+| `environment`        | `string`      | Sim         | Ambiente de implantacao (`dev`, `hml` ou `prd`).                                    |
+| `system`              | `string`      | Nao         | Nome do sistema/projeto, usado na nomenclatura padrao. Padrao: `tcc`.               |
+| `region`              | `string`      | Nao         | Regiao AWS onde o bucket sera criado. Padrao: `us-east-1`.                          |
+| `additional_tags`     | `map(string)` | Nao         | Tags adicionais mescladas as tags obrigatorias da organizacao. Padrao: `{}`.        |
+| `purpose`             | `string`      | Sim         | Finalidade do bucket, usada na nomenclatura padrao (ex.: `logs`).                   |
+| `versioning_status`   | `string`      | Nao         | Status do versionamento do bucket (`Enabled` ou `Suspended`). Padrao: `Enabled`.     |
+
+## 3. Outputs
+
+| Nome           | Descricao                              |
+|----------------|-----------------------------------------|
+| `bucket_name`   | Nome do bucket S3 criado.               |
+| `bucket_arn`    | ARN do bucket S3 criado.                |
+| `bucket_id`     | ID (nome) do bucket S3 criado.          |
+
+## 4. Exemplo de uso
+
+```hcl
+module "s3_logs" {
+  source = "./s3"
+
+  environment = "dev"
+  system      = "tcc"
+  region      = "us-east-1"
+  purpose     = "logs"
+
   versioning_status = "Enabled"
-  additional_tags  = {
-    Application = "demo-app"
+
+  additional_tags = {
+    Squad = "plataforma"
   }
 }
-
-- Variaveis podem ser definidas via terraform.tfvars:
-environment      = "hml"
-system           = "tcc"
-purpose          = "artifacts"
-region           = "us-east-1"
-versioning_status = "Enabled"
-additional_tags = {
-  Application = "ci-cd"
-  Squad       = "platform"
-}
+```

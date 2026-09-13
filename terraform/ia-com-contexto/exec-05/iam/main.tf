@@ -1,41 +1,38 @@
 locals {
-  policy_resource_token = "iam"
+  name = "${var.environment}-${var.system}-iam-${var.policy_name}"
 
-  # Nome padronizado: <ambiente>-<sistema>-<recurso>-<finalidade>
-  policy_full_name = lower(format("%s-%s-%s-%s", var.environment, var.system, local.policy_resource_token, var.policy_name))
-
-  required_tags = {
-    Project     = "tcc-iac-ia"
-    Environment = var.environment
-    ManagedBy   = "terraform"
-    Owner       = "devops"
-    CostCenter  = "academic-research"
-  }
-
-  merged_tags = merge(local.required_tags, var.additional_tags)
+  tags = merge(
+    {
+      Project     = "tcc-iac-ia"
+      Environment = var.environment
+      ManagedBy   = "terraform"
+      Owner       = "devops"
+      CostCenter  = "academic-research"
+    },
+    var.additional_tags
+  )
 }
 
-data "aws_iam_policy_document" "allow" {
+data "aws_iam_policy_document" "this" {
   statement {
-    sid     = "AllowConfiguredActions"
-    effect  = "Allow"
-    actions = var.allowed_actions
-
+    sid       = "AllowConfiguredActions"
+    effect    = "Allow"
+    actions   = var.allowed_actions
     resources = var.allowed_resources
   }
 }
 
 resource "aws_iam_policy" "this" {
-  name        = local.policy_full_name
-  path        = var.policy_path
+  name        = local.name
   description = var.policy_description
-  policy      = data.aws_iam_policy_document.allow.json
-  tags        = local.merged_tags
+  policy      = data.aws_iam_policy_document.this.json
 
   lifecycle {
     precondition {
       condition     = !(contains(var.allowed_actions, "*") && contains(var.allowed_resources, "*"))
-      error_message = "Proibido combinar Action \"*\" com Resource \"*\" na mesma policy (bloqueio organizacional)."
+      error_message = "Nao e permitido combinar Action \"*\" com Resource \"*\" na mesma statement."
     }
   }
+
+  tags = local.tags
 }
