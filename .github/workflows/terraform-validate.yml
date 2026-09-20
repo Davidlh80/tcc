@@ -42,6 +42,15 @@ jobs:
         with:
           terraform_version: 1.9.8
 
+      - name: Configure Terraform provider cache
+        shell: bash
+        run: |
+          cache_dir="$RUNNER_TEMP/terraform-plugin-cache"
+
+          mkdir -p "$cache_dir"
+
+          echo "TF_PLUGIN_CACHE_DIR=$cache_dir" >> "$GITHUB_ENV"
+
       - name: Find Terraform templates
         id: find_templates
         shell: bash
@@ -190,7 +199,7 @@ jobs:
             echo
             echo "## Details"
             echo
-            awk -F, 'NR>1 {print "| `" $1 "` | " $2 " | " $3 " | " $4 " | " $5 " |"}' "$report_csv" | head -20
+            awk -F, 'NR>1 && NR<=21 {print "| `" $1 "` | " $2 " | " $3 " | " $4 " | " $5 " |"}' "$report_csv"
             if [ $total -gt 20 ]; then
               echo "| ... | ... | ... | ... | ... |"
               echo "| See artifacts for full report |"
