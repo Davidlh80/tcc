@@ -199,7 +199,7 @@ jobs:
             echo
             echo "## Details"
             echo
-            awk -F, 'NR>1 {print "| `" $1 "` | " $2 " | " $3 " | " $4 " | " $5 " |"}' "$report_csv" | head -20
+            awk -F, 'NR>1 && NR<=21 {print "| `" $1 "` | " $2 " | " $3 " | " $4 " | " $5 " |"}' "$report_csv"
             if [ $total -gt 20 ]; then
               echo "| ... | ... | ... | ... | ... |"
               echo "| See artifacts for full report |"
