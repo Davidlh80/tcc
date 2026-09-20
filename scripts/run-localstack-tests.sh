@@ -217,6 +217,16 @@ read_output() {
   return 1
 }
 
+bucket_name_from_arn() {
+  local arn="$1"
+
+  if [[ "$arn" != arn:*:s3:::* ]]; then
+    return 1
+  fi
+
+  printf '%s' "${arn##*:::}"
+}
+
 failures=0
 
 while IFS= read -r directory; do
@@ -285,8 +295,27 @@ while IFS= read -r directory; do
               read_output \
                 "$directory" \
                 bucket_name \
-                bucket_id || true
+                bucket_id \
+                bucket \
+                s3_bucket_name \
+                s3_bucket_id \
+                name \
+                id || true
             )
+
+            if [ -z "$identifier" ]; then
+              bucket_arn=$(
+                read_output \
+                  "$directory" \
+                  bucket_arn \
+                  s3_bucket_arn \
+                  arn || true
+              )
+
+              if [ -n "$bucket_arn" ]; then
+                identifier=$(bucket_name_from_arn "$bucket_arn" || true)
+              fi
+            fi
 
             if [ -n "$identifier" ] && \
               aws \
@@ -305,7 +334,9 @@ while IFS= read -r directory; do
                 "$directory" \
                 policy_arn \
                 iam_policy_arn \
-                arn || true
+                arn \
+                policy \
+                id || true
             )
 
             if [ -n "$identifier" ] && \
@@ -325,7 +356,10 @@ while IFS= read -r directory; do
                 "$directory" \
                 security_group_id \
                 sg_id \
-                id || true
+                id \
+                security_group \
+                sg \
+                name || true
             )
 
             if [ -n "$identifier" ] && \
