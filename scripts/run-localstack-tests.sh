@@ -200,17 +200,17 @@ read_output() {
   local output_value
 
   for output_name in "$@"; do
-    output_value=$(
+    if output_value=$(
       tflocal \
         -chdir="$directory" \
         output \
         -raw \
-        "$output_name" 2>/dev/null || true
-    )
-
-    if [ -n "$output_value" ]; then
-      printf '%s' "$output_value"
-      return 0
+        "$output_name" 2>/dev/null
+    ); then
+      if [ -n "$output_value" ]; then
+        printf '%s' "$output_value"
+        return 0
+      fi
     fi
   done
 
