@@ -1,60 +1,50 @@
-# IAM Policy — Blueprint Terraform
+# IAM Role com IAM Policy Anexada
 
-Blueprint autonoma para provisionar uma IAM Policy gerenciada pelo cliente (customer managed policy) na AWS, seguindo o principio de menor privilegio por padrao.
+Blueprint Terraform para provisionar uma IAM Role na AWS com uma IAM Policy de privilegio minimo anexada diretamente a ela (a policy nunca fica solta, sem principal associado).
 
 ## Recursos criados
 
-- `data.aws_iam_policy_document.this`: documento de politica montado dinamicamente a partir de `var.statements`.
-- `aws_iam_policy.this`: IAM Policy gerenciada.
+- `aws_iam_role.this`: IAM Role com trust policy (assume role) restrita aos principals informados em `trusted_service_principals`.
+- `aws_iam_policy.this`: IAM Policy com statement explicito de `actions` e `resources`, sem wildcards por padrao.
+- `aws_iam_role_policy_attachment.this`: anexa a policy diretamente a role.
 
-## Decisoes de seguranca
+## Decisoes de seguranca por padrao
 
-- Nenhum statement default permite `Resource = "*"`; validacoes em `variables.tf` bloqueiam wildcard isolado em `resources`.
-- `effect` de cada statement e restrito a `Allow` ou `Deny` via validacao.
-- Cada statement exige ao menos uma action e um resource explicitos.
-- Nao ha valores sensiveis fixos nem dependencia de credenciais reais para `terraform validate`.
+- `allowed_actions` e `allowed_resource_arns` nao aceitam `"*"` a menos que `allow_wildcard_actions` / `allow_wildcard_resources` sejam definidos explicitamente como `true`.
+- `max_session_duration` limitado entre 3600 e 43200 segundos (limites validos da AWS).
+- Suporte opcional a `permissions_boundary_arn` para limitar o escopo maximo de permissoes da role.
+- Suporte opcional a `external_id` na trust policy, recomendado para cenarios de assume role cross-account.
+- Nenhum valor sensivel ou credencial e definido no codigo; toda configuracao e feita via variaveis.
 
 ## Uso
 
 ```
 terraform init -backend=false
 terraform validate
-terraform plan -var="aws_region=us-east-1"
 ```
 
-Para customizar as permissoes, sobrescreva `statements` com os ARNs e actions desejados, por exemplo via arquivo `terraform.tfvars`:
+Para um plano real, informe valores adequados as variaveis (ex.: via `terraform.tfvars` ou `-var`), especialmente `trusted_service_principals`, `allowed_actions` e `allowed_resource_arns`, ajustando-os ao caso de uso real antes de aplicar.
 
-```
-statements = [
-  {
-    sid       = "AllowReadDynamoTable"
-    effect    = "Allow"
-    actions   = ["dynamodb:GetItem", "dynamodb:Query"]
-    resources = ["arn:aws:dynamodb:us-east-1:123456789012:table/minha-tabela"]
-  }
-]
-```
+## Inputs principais
 
-## Variaveis
+| Nome | Descricao | Default |
+|---|---|---|
+| `aws_region` | Regiao AWS | `us-east-1` |
+| `role_name` | Nome da IAM Role | `app-role` |
+| `trusted_service_principals` | Service principals que podem assumir a role | `["ec2.amazonaws.com"]` |
+| `external_id` | External ID exigido no AssumeRole | `null` |
+| `permissions_boundary_arn` | ARN de permissions boundary | `null` |
+| `policy_name` | Nome da IAM Policy | `app-role-policy` |
+| `allowed_actions` | Actions permitidas na policy | `["s3:GetObject", "s3:ListBucket"]` |
+| `allowed_resource_arns` | Recursos alvo das actions | ver `variables.tf` |
 
-| Nome          | Descricao                                         | Tipo                  | Default                  |
-|---------------|----------------------------------------------------|------------------------|---------------------------|
-| aws_region    | Regiao AWS utilizada pelo provider                 | string                 | "us-east-1"               |
-| policy_name   | Nome da IAM Policy                                 | string                 | "app-custom-policy"       |
-| path          | Path da IAM Policy no IAM                          | string                 | "/"                       |
-| description   | Descricao da IAM Policy                            | string                 | ver `variables.tf`        |
-| statements    | Lista de statements (sid, effect, actions, resources) | list(object)        | statement de exemplo em S3 |
-| tags          | Tags aplicadas ao recurso                          | map(string)            | { ManagedBy = "terraform" } |
+## Outputs principais
 
-## Outputs
-
-| Nome         | Descricao                          |
-|--------------|-------------------------------------|
-| policy_arn   | ARN da IAM Policy criada            |
-| policy_id    | ID da IAM Policy criada             |
-| policy_name  | Nome da IAM Policy criada           |
-| policy_path  | Path da IAM Policy criada           |
+- `role_name`, `role_arn`, `role_id`
+- `policy_name`, `policy_arn`
+- `policy_attachment_id`
 
 ## Observacoes
 
-Esta blueprint nao anexa a policy a nenhuma role, user ou group — o attachment deve ser feito por outro modulo/recurso conforme a necessidade de cada ambiente.
+- Ajuste `trusted_service_principals` para o(s) service principal(is) real(is) que devem assumir a role (ex.: `lambda.amazonaws.com`, `ecs-tasks.amazonaws.com`) ou substitua o bloco `principals` em `main.tf` caso o principal de confianca seja uma conta AWS ou um usuario/role especifico.
+- Revise `allowed_actions` e `allowed_resource_arns` para refletir o principio de privilegio minimo antes de qualquer `terraform apply`.

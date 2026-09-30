@@ -1,76 +1,85 @@
-# IAM Policy — Blueprint Terraform
+# IAM Role com IAM Policy anexada
 
-Blueprint autonomo para provisionar uma IAM Policy gerenciada na AWS, com escopo de permissoes definido explicitamente via variaveis (sem wildcards amplos por padrao).
+Blueprint Terraform para provisionar uma IAM Role na AWS com uma IAM Policy dedicada anexada a ela via `aws_iam_role_policy_attachment`. A policy nunca fica solta: ela e criada e imediatamente vinculada a role, que por sua vez so pode ser assumida pelo principal de confianca configurado.
 
-## Recursos criados
+## Decisoes de seguranca
 
-- `aws_iam_policy.this`
-- `data.aws_iam_policy_document.this`
-
-## Principios de seguranca adotados
-
-- Nenhum valor sensivel fixo no codigo; tudo parametrizado via variaveis.
-- `policy_actions` e `policy_resources` sao obrigatorios (sem default), forcando escopo explicito por quem consome o modulo.
-- Validacoes bloqueiam o uso do wildcard `"*"` isolado em `policy_actions` e `policy_resources`, reduzindo o risco de policies excessivamente permissivas.
-- `policy_effect` restrito a `Allow` ou `Deny` via validacao.
-- Nenhum backend remoto configurado — estado local, adequado para validacao sintatica isolada.
+- **Sem wildcards**: `allowed_actions`, `resource_arns` e `trusted_principal_identifiers` rejeitam o valor `"*"` via `validation` blocks, forcando escopo explicito de acoes, recursos e principais.
+- **Least privilege por padrao**: o exemplo padrao de `allowed_actions` cobre apenas leitura de objetos S3 (`s3:GetObject`, `s3:ListBucket`); ajuste conforme a necessidade real do workload.
+- **Trust policy explicita**: o assume role policy usa `aws_iam_policy_document` com `type`/`identifiers` configuraveis, evitando trust policies abertas (`Principal: "*"`).
+- **Suporte a External ID**: para cenarios cross-account, defina `external_id` para mitigar o problema do "confused deputy".
+- **Permissions boundary opcional**: `permissions_boundary_arn` permite aplicar um teto de permissoes adicional na role.
+- **Sessao limitada**: `max_session_duration` restringe o tempo maximo de uma sessao assumida (padrao de 1 hora, minimo permitido pela AWS).
+- **Sem credenciais reais**: o modulo nao depende de valores sensiveis fixos; tudo o que e configuravel e exposto via variaveis.
 
 ## Uso
 
 ```hcl
-module "iam_policy" {
+module "iam_role" {
   source = "./"
 
-  policy_name = "app-readonly-s3"
+  role_name   = "app-readonly-s3-role"
+  policy_name = "app-readonly-s3-policy"
 
-  policy_actions = [
+  trusted_principal_type        = "Service"
+  trusted_principal_identifiers = ["ec2.amazonaws.com"]
+
+  allowed_actions = [
     "s3:GetObject",
     "s3:ListBucket",
   ]
 
-  policy_resources = [
-    "arn:aws:s3:::meu-bucket",
-    "arn:aws:s3:::meu-bucket/*",
+  resource_arns = [
+    "arn:aws:s3:::exemplo-bucket",
+    "arn:aws:s3:::exemplo-bucket/*",
   ]
 
   tags = {
-    Ambiente = "producao"
-    Time     = "plataforma"
+    Environment = "dev"
+    ManagedBy   = "terraform"
   }
 }
 ```
 
-## Variaveis
+## Requisitos
 
-| Nome | Descricao | Tipo | Default | Obrigatoria |
+| Nome | Versao |
+|---|---|
+| terraform | >= 1.5.0 |
+| aws | ~> 5.0 |
+
+## Inputs
+
+| Nome | Descricao | Tipo | Default | Obrigatorio |
 |---|---|---|---|---|
-| `aws_region` | Regiao AWS do provider | `string` | `"us-east-1"` | Nao |
-| `policy_name` | Nome da IAM Policy | `string` | - | Sim |
-| `policy_description` | Descricao da IAM Policy | `string` | `"IAM Policy gerenciada via Terraform."` | Nao |
-| `policy_path` | Path da policy no IAM | `string` | `"/"` | Nao |
-| `policy_effect` | Efeito da statement (`Allow`/`Deny`) | `string` | `"Allow"` | Nao |
-| `policy_actions` | Lista de IAM actions cobertas | `list(string)` | - | Sim |
-| `policy_resources` | Lista de ARNs de recursos | `list(string)` | - | Sim |
-| `tags` | Tags aplicadas ao recurso | `map(string)` | `{}` | Nao |
+| aws_region | Regiao AWS usada pelo provider | string | "us-east-1" | nao |
+| role_name | Nome da IAM Role | string | "app-scoped-role" | nao |
+| role_description | Descricao da IAM Role | string | ver variables.tf | nao |
+| policy_name | Nome da IAM Policy | string | "app-scoped-policy" | nao |
+| policy_description | Descricao da IAM Policy | string | ver variables.tf | nao |
+| trusted_principal_type | Tipo do principal de confianca (Service ou AWS) | string | "Service" | nao |
+| trusted_principal_identifiers | Identificadores do principal de confianca | list(string) | ["ec2.amazonaws.com"] | nao |
+| external_id | External ID exigido no assume role | string | null | nao |
+| max_session_duration | Duracao maxima da sessao (segundos) | number | 3600 | nao |
+| permissions_boundary_arn | ARN da permissions boundary | string | null | nao |
+| allowed_actions | Acoes IAM permitidas na policy | list(string) | ["s3:GetObject", "s3:ListBucket"] | nao |
+| resource_arns | ARNs dos recursos alvo das acoes permitidas | list(string) | - | **sim** |
+| tags | Tags aplicadas na role e na policy | map(string) | { ManagedBy = "terraform" } | nao |
 
 ## Outputs
 
 | Nome | Descricao |
 |---|---|
-| `policy_arn` | ARN da IAM Policy criada |
-| `policy_id` | ID da IAM Policy criada |
-| `policy_name` | Nome da IAM Policy criada |
-| `policy_document_json` | Documento JSON gerado para a policy |
+| role_name | Nome da IAM Role criada |
+| role_arn | ARN da IAM Role criada |
+| role_id | ID unico da IAM Role criada |
+| policy_name | Nome da IAM Policy criada |
+| policy_arn | ARN da IAM Policy criada |
+| policy_attachment_id | ID do attachment entre policy e role |
 
 ## Validacao
 
 ```bash
-terraform fmt
 terraform init -backend=false
 terraform validate
 ```
-
-## Observacoes
-
-- Este blueprint nao assume nenhum padrao organizacional pre-existente; nomenclatura, tags e granularidade de permissoes devem ser ajustadas conforme a governanca de IAM de cada ambiente.
-- Recomenda-se anexar a policy resultante (`aws_iam_policy.this.arn`) a roles ou usuarios via `aws_iam_role_policy_attachment` ou `aws_iam_user_policy_attachment` em modulos consumidores, mantendo este blueprint focado apenas na definicao da policy.

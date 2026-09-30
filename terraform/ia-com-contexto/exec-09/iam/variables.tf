@@ -10,7 +10,7 @@ variable "environment" {
 
 variable "system" {
   type        = string
-  description = "Nome do sistema ou aplicacao ao qual o recurso pertence."
+  description = "Nome do sistema/aplicacao dono do recurso, usado na nomenclatura padronizada."
 
   validation {
     condition     = length(var.system) > 0
@@ -20,7 +20,7 @@ variable "system" {
 
 variable "region" {
   type        = string
-  description = "Regiao AWS onde o provider sera configurado."
+  description = "Regiao AWS onde os recursos serao provisionados."
   default     = "us-east-1"
 }
 
@@ -32,7 +32,7 @@ variable "additional_tags" {
 
 variable "policy_name" {
   type        = string
-  description = "Finalidade da IAM Policy, usada para compor o nome do recurso (ex.: readonly, deploy)."
+  description = "Finalidade/nome da policy, usado na nomenclatura padronizada do recurso (ex.: readonly, deploy)."
 
   validation {
     condition     = length(var.policy_name) > 0
@@ -40,28 +40,32 @@ variable "policy_name" {
   }
 }
 
-variable "policy_description" {
-  type        = string
-  description = "Descricao associada a IAM Policy."
-  default     = "Managed by Terraform."
-}
-
 variable "allowed_actions" {
   type        = list(string)
-  description = "Lista de actions IAM permitidas na statement Allow. Nao e permitido o valor \"*\" isolado na lista."
+  description = "Lista de acoes IAM permitidas na statement Allow da policy."
 
   validation {
-    condition     = length(var.allowed_actions) > 0 && !contains(var.allowed_actions, "*")
-    error_message = "allowed_actions deve conter ao menos uma action explicita e nao pode conter o valor \"*\"."
+    condition     = length(var.allowed_actions) > 0
+    error_message = "allowed_actions deve conter ao menos uma acao."
   }
 }
 
 variable "allowed_resources" {
   type        = list(string)
-  description = "Lista de ARNs de recursos permitidos na statement Allow. Nao e permitido o valor \"*\" isolado na lista."
+  description = "Lista de ARNs de recursos permitidos na statement Allow da policy."
 
   validation {
-    condition     = length(var.allowed_resources) > 0 && !contains(var.allowed_resources, "*")
-    error_message = "allowed_resources deve conter ao menos um recurso explicito e nao pode conter o valor \"*\"."
+    condition     = length(var.allowed_resources) > 0
+    error_message = "allowed_resources deve conter ao menos um recurso."
+  }
+}
+
+variable "trusted_principal_arn" {
+  type        = string
+  description = "ARN do principal (IAM User, Role ou conta) autorizado a assumir a role via trust policy. Nao pode ser \"*\"."
+
+  validation {
+    condition     = var.trusted_principal_arn != "*" && can(regex("^arn:aws:iam::", var.trusted_principal_arn))
+    error_message = "trusted_principal_arn deve ser um ARN IAM valido (arn:aws:iam::...) e nao pode ser \"*\"."
   }
 }

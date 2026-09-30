@@ -1,46 +1,75 @@
-terraform {
-  required_version = ">= 1.5.0"
-}
+data "aws_iam_policy_document" "assume_role" {
+  dynamic "statement" {
+    for_each = length(var.trusted_service_principals) > 0 ? [1] : []
+    content {
+      sid     = "TrustedServicePrincipals"
+      effect  = "Allow"
+      actions = ["sts:AssumeRole"]
 
-provider "aws" {
-  region = var.region
-}
+      principals {
+        type        = "Service"
+        identifiers = var.trusted_service_principals
+      }
+    }
+  }
 
-data "aws_iam_policy_document" "this" {
-  statement {
-    sid       = "GeneratedStatement"
-    effect    = var.effect
-    actions   = var.actions
-    resources = var.resources
+  dynamic "statement" {
+    for_each = length(var.trusted_account_arns) > 0 ? [1] : []
+    content {
+      sid     = "TrustedAccountPrincipals"
+      effect  = "Allow"
+      actions = ["sts:AssumeRole"]
 
-    dynamic "condition" {
-      for_each = var.conditions
-      content {
-        test     = condition.value.test
-        variable = condition.value.variable
-        values   = condition.value.values
+      principals {
+        type        = "AWS"
+        identifiers = var.trusted_account_arns
+      }
+
+      dynamic "condition" {
+        for_each = var.external_id != "" ? [1] : []
+        content {
+          test     = "StringEquals"
+          variable = "sts:ExternalId"
+          values   = [var.external_id]
+        }
       }
     }
   }
 }
 
-resource "aws_iam_policy" "this" {
-  name        = var.policy_name
-  path        = var.path
-  description = var.policy_description
-  policy      = data.aws_iam_policy_document.this.json
+resource "aws_iam_role" "this" {
+  name                  = "${var.name_prefix}-role"
+  description           = "Role gerenciada via Terraform para ${var.name_prefix}, com confianca restrita aos principais configurados."
+  assume_role_policy    = data.aws_iam_policy_document.assume_role.json
+  max_session_duration  = var.max_session_duration
+  permissions_boundary  = var.permissions_boundary_arn
+  force_detach_policies = true
 
-  tags = var.tags
+  tags = merge(var.tags, {
+    Name = "${var.name_prefix}-role"
+  })
+}
 
-  lifecycle {
-    precondition {
-      condition     = var.allow_wildcard_actions || !contains(var.actions, "*")
-      error_message = "O uso de action '*' (wildcard total) nao e permitido por padrao. Especifique acoes explicitas ou defina allow_wildcard_actions = true para reconhecer o risco."
-    }
-
-    precondition {
-      condition     = var.allow_wildcard_resources || !contains(var.resources, "*")
-      error_message = "O uso de resource '*' (wildcard total) nao e permitido por padrao. Especifique ARNs explicitos ou defina allow_wildcard_resources = true para reconhecer o risco."
-    }
+data "aws_iam_policy_document" "permissions" {
+  statement {
+    sid       = "AllowConfiguredActions"
+    effect    = "Allow"
+    actions   = var.policy_actions
+    resources = var.policy_resources
   }
+}
+
+resource "aws_iam_policy" "this" {
+  name        = "${var.name_prefix}-policy"
+  description = "Politica de minimo privilegio anexada a role ${var.name_prefix}-role. Sem principais soltos; uso exclusivo via role attachment."
+  policy      = data.aws_iam_policy_document.permissions.json
+
+  tags = merge(var.tags, {
+    Name = "${var.name_prefix}-policy"
+  })
+}
+
+resource "aws_iam_role_policy_attachment" "this" {
+  role       = aws_iam_role.this.name
+  policy_arn = aws_iam_policy.this.arn
 }

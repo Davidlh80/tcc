@@ -3,9 +3,9 @@ execution_id: exec-08
 resource: iam
 model: "sonnet"
 prompt_file: "prompts/ia-sem-contexto/prompt-iam.md"
-started_at: "2026-09-12T22:46:06.246469-03:00"
-finished_at: "2026-09-12T22:46:56.576136-03:00"
-api_duration_ms: 50325
-total_duration_ms: 50329
-generated_at: "2026-09-12T22:46:56.576136-03:00"
+started_at: "2026-09-30T10:27:55.604588-03:00"
+finished_at: "2026-09-30T10:29:10.061214-03:00"
+api_duration_ms: 74453
+total_duration_ms: 74456
+generated_at: "2026-09-30T10:29:10.061214-03:00"
 generation_tool: "scripts/generate-blueprint"

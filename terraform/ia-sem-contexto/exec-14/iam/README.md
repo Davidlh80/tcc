@@ -1,68 +1,78 @@
-# IAM Policy — Blueprint Terraform
+# IAM Policy anexada a IAM Role
 
-Blueprint autonomo para provisionamento de uma IAM Policy na AWS, sem dependencia de padroes organizacionais especificos. As decisoes de nomenclatura, escopo de permissoes e tags seguem boas praticas gerais de mercado, com enfase em menor privilegio.
+Blueprint Terraform independente (sem contexto organizacional) para provisionar uma IAM Role e uma IAM Policy de privilegio minimo anexada a ela via `aws_iam_role_policy_attachment`. A policy nunca fica solta: ela e sempre criada e anexada a uma role na mesma execucao.
 
-## Recursos criados
+## O que este blueprint cria
 
-- `aws_iam_policy.this`: IAM Policy gerenciada, com documento de politica construido via `data.aws_iam_policy_document.this`.
+- `aws_iam_role.this`: role com trust policy (assume role) restrita aos service principals informados em `assume_role_service_principals`.
+- `aws_iam_policy.this`: policy gerenciada composta pelos statements definidos em `policy_statements`.
+- `aws_iam_role_policy_attachment.this`: anexa a policy criada diretamente a role criada.
 
-## Decisoes de seguranca
+## Decisoes de seguranca por padrao
 
-- Nenhum valor padrao permite o wildcard global `"*"` em `actions` ou `resources`; ambos os campos sao validados para rejeitar esse valor, forcando o consumidor do modulo a declarar acoes e recursos explicitos.
-- Nao ha valores sensiveis fixos no codigo; toda configuracao e parametrizada via variaveis.
-- O efeito da statement (`Allow`/`Deny`) e configuravel e validado.
+- O principal de confianca (trust policy) e sempre um `Service` da AWS, nunca `"*"` — a variavel `assume_role_service_principals` rejeita explicitamente o valor `"*"`.
+- Suporte opcional a `sts:ExternalId` via `assume_role_external_id`, util para cenarios cross-account.
+- A policy anexada nao aceita `resources = ["*"]` em nenhum statement (validado via `validation` na variavel `policy_statements`), forcando escopo explicito de recursos.
+- `max_session_duration` limitado ao intervalo permitido pela AWS (3600–43200 segundos).
+- Suporte opcional a `permissions_boundary_arn` para reforcar o teto de privilegios da role.
+- Nenhum valor sensivel ou credencial fixa no codigo; tudo e parametrizado via variaveis.
 
 ## Uso
 
-```hcl
-module "iam_policy" {
+```
+module "iam_role_policy" {
   source = "./"
 
-  policy_name         = "app-s3-read-only"
-  policy_description  = "Permite leitura de objetos em um bucket especifico"
-  effect              = "Allow"
-  actions             = [
-    "s3:GetObject",
-    "s3:ListBucket",
-  ]
-  resources = [
-    "arn:aws:s3:::exemplo-bucket",
-    "arn:aws:s3:::exemplo-bucket/*",
+  role_name   = "minha-app-role"
+  policy_name = "minha-app-policy"
+
+  assume_role_service_principals = ["lambda.amazonaws.com"]
+
+  policy_statements = [
+    {
+      sid       = "AllowReadSpecificBucket"
+      effect    = "Allow"
+      actions   = ["s3:GetObject"]
+      resources = ["arn:aws:s3:::meu-bucket/*"]
+    }
   ]
 
   tags = {
-    Environment = "dev"
-    ManagedBy   = "terraform"
+    Ambiente = "dev"
   }
 }
 ```
 
-## Inputs
+## Inputs principais
 
-| Nome | Descricao | Tipo | Default | Obrigatorio |
-|---|---|---|---|---|
-| aws_region | Regiao AWS utilizada pelo provider | `string` | `"us-east-1"` | nao |
-| policy_name | Nome da IAM Policy | `string` | - | sim |
-| policy_description | Descricao da IAM Policy | `string` | `"Managed by Terraform"` | nao |
-| path | Path da IAM Policy no IAM | `string` | `"/"` | nao |
-| effect | Efeito da statement (`Allow` ou `Deny`) | `string` | `"Allow"` | nao |
-| actions | Lista de acoes IAM cobertas pela policy | `list(string)` | - | sim |
-| resources | Lista de ARNs de recursos alvo da policy | `list(string)` | - | sim |
-| tags | Tags aplicadas a IAM Policy | `map(string)` | `{}` | nao |
+| Nome                             | Descricao                                              | Default          |
+|-----------------------------------|---------------------------------------------------------|-------------------|
+| region                             | Regiao AWS                                              | "us-east-1"       |
+| role_name                          | Nome da IAM Role                                        | "app-role"        |
+| policy_name                        | Nome da IAM Policy                                      | "app-policy"      |
+| assume_role_service_principals     | Service principals autorizados a assumir a role         | ["ec2.amazonaws.com"] |
+| assume_role_external_id            | External ID exigido na AssumeRole (opcional)             | null              |
+| max_session_duration               | Duracao maxima da sessao assumida (segundos)             | 3600              |
+| permissions_boundary_arn           | ARN de permissions boundary (opcional)                   | null              |
+| policy_statements                  | Statements (sid, effect, actions, resources) da policy   | statement de exemplo (CloudWatch Logs) |
+| tags                                | Tags aplicadas aos recursos                              | {}                |
 
 ## Outputs
 
-| Nome | Descricao |
-|---|---|
-| policy_arn | ARN da IAM Policy criada |
-| policy_id | ID da IAM Policy criada |
-| policy_name | Nome da IAM Policy criada |
+| Nome                     | Descricao                                  |
+|---------------------------|---------------------------------------------|
+| role_arn                  | ARN da IAM Role criada                       |
+| role_name                 | Nome da IAM Role criada                      |
+| role_id                   | ID unico da IAM Role criada                  |
+| policy_arn                | ARN da IAM Policy criada                     |
+| policy_name                | Nome da IAM Policy criada                    |
+| assume_role_policy_json   | JSON da trust policy da role                 |
 
 ## Validacao local
 
-```bash
+```
 terraform init -backend=false
 terraform validate
 ```
 
-Nenhuma credencial real e necessaria para `init`/`validate`, pois nao ha data sources ou recursos que exijam chamadas de API na fase de validacao sintatica.
+Nenhuma credencial AWS real e necessaria para `init`/`validate`, pois nao ha backend remoto nem data sources que dependam de chamadas autenticadas para essas etapas.

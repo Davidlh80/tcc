@@ -1,7 +1,5 @@
 locals {
-  policy_full_name = "${var.environment}-${var.system}-iam-${var.policy_name}"
-
-  default_tags = {
+  mandatory_tags = {
     Project     = "tcc-iac-ia"
     Environment = var.environment
     ManagedBy   = "terraform"
@@ -9,33 +7,48 @@ locals {
     CostCenter  = "academic-research"
   }
 
-  tags = merge(local.default_tags, var.additional_tags)
+  tags = merge(local.mandatory_tags, var.additional_tags)
+
+  principal_type = strcontains(var.assume_role_principal_arn, "arn:aws") ? "AWS" : "Service"
 }
 
-provider "aws" {
-  region = var.region
-}
-
-data "aws_iam_policy_document" "this" {
+data "aws_iam_policy_document" "assume_role" {
   statement {
-    sid       = "AllowRestrictedActions"
-    effect    = "Allow"
-    actions   = var.allowed_actions
-    resources = var.allowed_resources
-  }
+    effect  = "Allow"
+    actions = ["sts:AssumeRole"]
 
-  lifecycle {
-    precondition {
-      condition     = !(contains(var.allowed_actions, "*") && contains(var.allowed_resources, "*"))
-      error_message = "A statement nao pode combinar Action \"*\" com Resource \"*\". Restrinja pelo menos uma das listas a valores especificos."
+    principals {
+      type        = local.principal_type
+      identifiers = [var.assume_role_principal_arn]
     }
   }
 }
 
-resource "aws_iam_policy" "this" {
-  name        = local.policy_full_name
-  description = var.policy_description
-  policy      = data.aws_iam_policy_document.this.json
+data "aws_iam_policy_document" "this" {
+  statement {
+    sid       = "AllowConfiguredActionsOnConfiguredResources"
+    effect    = "Allow"
+    actions   = var.allowed_actions
+    resources = var.allowed_resources
+  }
+}
+
+resource "aws_iam_role" "this" {
+  name                 = var.role_name
+  assume_role_policy   = data.aws_iam_policy_document.assume_role.json
+  max_session_duration = 3600
 
   tags = local.tags
+}
+
+resource "aws_iam_policy" "this" {
+  name   = var.policy_name
+  policy = data.aws_iam_policy_document.this.json
+
+  tags = local.tags
+}
+
+resource "aws_iam_role_policy_attachment" "this" {
+  role       = aws_iam_role.this.name
+  policy_arn = aws_iam_policy.this.arn
 }

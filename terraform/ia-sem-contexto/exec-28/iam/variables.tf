@@ -1,62 +1,144 @@
-variable "aws_region" {
+variable "region" {
+  description = "Regiao AWS usada pelo provider. IAM e um servico global, a regiao afeta apenas o endpoint da API."
   type        = string
-  description = "Regiao AWS onde a policy sera provisionada (IAM e global, mas o provider exige uma regiao valida)."
   default     = "us-east-1"
 }
 
-variable "policy_name" {
+variable "role_name" {
+  description = "Nome da IAM Role a ser criada."
   type        = string
-  description = "Nome da IAM Policy."
 
   validation {
-    condition     = can(regex("^[A-Za-z0-9+=,.@_-]{1,128}$", var.policy_name))
-    error_message = "policy_name deve ter entre 1 e 128 caracteres validos para nomes de IAM Policy (letras, numeros e + = , . @ _ -)."
+    condition     = length(var.role_name) > 0 && length(var.role_name) <= 64
+    error_message = "role_name deve ter entre 1 e 64 caracteres."
   }
 }
 
-variable "policy_description" {
+variable "role_path" {
+  description = "Path da IAM Role."
   type        = string
-  description = "Descricao da IAM Policy."
-  default     = "Managed by Terraform"
-}
-
-variable "path" {
-  type        = string
-  description = "Path da IAM Policy."
   default     = "/"
 }
 
+variable "role_description" {
+  description = "Descricao da IAM Role."
+  type        = string
+  default     = "IAM Role gerenciada via Terraform."
+}
+
+variable "max_session_duration" {
+  description = "Duracao maxima (em segundos) de uma sessao assumida com esta role."
+  type        = number
+  default     = 3600
+
+  validation {
+    condition     = var.max_session_duration >= 3600 && var.max_session_duration <= 43200
+    error_message = "max_session_duration deve estar entre 3600 e 43200 segundos."
+  }
+}
+
+variable "force_detach_policies" {
+  description = "Se true, forca o desanexamento de policies ao destruir a role."
+  type        = bool
+  default     = false
+}
+
+variable "permissions_boundary_arn" {
+  description = "ARN de uma policy a ser usada como permissions boundary da role. Deixe null para nao aplicar boundary."
+  type        = string
+  default     = null
+}
+
+variable "trusted_service_principals" {
+  description = "Lista de service principals da AWS (ex: lambda.amazonaws.com) autorizados a assumir a role."
+  type        = list(string)
+  default     = ["lambda.amazonaws.com"]
+}
+
+variable "trusted_aws_principals" {
+  description = "Lista de ARNs de contas/roles/usuarios AWS autorizados a assumir a role. Use com cautela em cenarios cross-account."
+  type        = list(string)
+  default     = []
+}
+
+variable "external_id" {
+  description = "External ID exigido no assume role, recomendado para cenarios cross-account. Deixe null para nao exigir."
+  type        = string
+  default     = null
+}
+
+variable "policy_name" {
+  description = "Nome da IAM Policy a ser criada e anexada a role."
+  type        = string
+
+  validation {
+    condition     = length(var.policy_name) > 0 && length(var.policy_name) <= 128
+    error_message = "policy_name deve ter entre 1 e 128 caracteres."
+  }
+}
+
+variable "policy_path" {
+  description = "Path da IAM Policy."
+  type        = string
+  default     = "/"
+}
+
+variable "policy_description" {
+  description = "Descricao da IAM Policy."
+  type        = string
+  default     = "IAM Policy gerenciada via Terraform, anexada a uma IAM Role especifica."
+}
+
 variable "policy_statements" {
+  description = "Lista de statements da IAM Policy. Nao utilize '*' em actions ou resources; prefira acoes e ARNs especificos (principio do menor privilegio)."
   type = list(object({
-    sid       = optional(string)
-    effect    = optional(string, "Allow")
+    sid    = optional(string)
+    effect = optional(string, "Allow")
     actions   = list(string)
     resources = list(string)
+    conditions = optional(list(object({
+      test     = string
+      variable = string
+      values   = list(string)
+    })), [])
   }))
-  description = "Lista de statements da policy. Actions e resources devem ser explicitos; wildcard '*' isolado nao e permitido para reforcar o principio de menor privilegio."
+
+  default = [
+    {
+      sid       = "AllowS3ReadOnlyExample"
+      effect    = "Allow"
+      actions   = ["s3:GetObject", "s3:ListBucket"]
+      resources = [
+        "arn:aws:s3:::REPLACE_WITH_BUCKET_NAME",
+        "arn:aws:s3:::REPLACE_WITH_BUCKET_NAME/*"
+      ]
+      conditions = []
+    }
+  ]
 
   validation {
     condition     = length(var.policy_statements) > 0
-    error_message = "Pelo menos um statement deve ser definido em policy_statements."
+    error_message = "policy_statements deve conter ao menos um statement."
   }
 
   validation {
-    condition = alltrue([
-      for s in var.policy_statements : !contains(s.actions, "*")
-    ])
-    error_message = "Wildcard '*' em actions nao e permitido. Especifique acoes explicitas (ex: s3:GetObject)."
+    condition     = alltrue([for s in var.policy_statements : contains(["Allow", "Deny"], s.effect)])
+    error_message = "O campo effect de cada statement deve ser 'Allow' ou 'Deny'."
   }
 
   validation {
-    condition = alltrue([
-      for s in var.policy_statements : !contains(s.resources, "*")
-    ])
-    error_message = "Wildcard '*' em resources nao e permitido. Especifique ARNs explicitos."
+    condition     = alltrue([for s in var.policy_statements : !contains(s.actions, "*")])
+    error_message = "Nao e permitido usar '*' em actions. Especifique as acoes necessarias."
+  }
+
+  validation {
+    condition     = alltrue([for s in var.policy_statements : !contains(s.resources, "*")])
+    error_message = "Nao e permitido usar '*' em resources. Especifique os ARNs necessarios."
   }
 }
 
 variable "tags" {
+  description = "Tags aplicadas a IAM Role e a IAM Policy."
   type        = map(string)
-  description = "Tags aplicadas a IAM Policy."
   default     = {}
 }

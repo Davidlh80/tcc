@@ -1,59 +1,79 @@
-# IAM Policy — Blueprint Terraform
+# IAM Role com IAM Policy Anexada
 
-Blueprint Terraform para provisionamento de uma IAM Policy gerenciada na AWS, seguindo o principio de menor privilegio por padrao.
+Blueprint Terraform para provisionar uma IAM Role e uma IAM Policy customer-managed anexada diretamente a ela via `aws_iam_role_policy_attachment`. A policy nunca fica solta: ela so existe atrelada a uma role com um trust policy (assume role) explicito.
 
 ## Recursos criados
 
-- `aws_iam_policy.this`: IAM Policy gerenciada, com documento gerado dinamicamente a partir da variavel `statements`.
-- `data.aws_iam_policy_document.this`: documento JSON da politica, construido via `dynamic "statement"` a partir da lista de statements informada.
+- `aws_iam_role.this` — a role, com trust policy (assume role policy) construido dinamicamente a partir de `var.trusted_principals`.
+- `aws_iam_policy.this` — a policy customer-managed, com statements definidos em `var.policy_statements`.
+- `aws_iam_role_policy_attachment.this` — o vinculo entre a policy e a role.
+- `data.aws_iam_policy_document.assume_role` e `data.aws_iam_policy_document.role_policy` — documentos JSON gerados de forma segura (evitam erros de sintaxe manual em JSON).
+
+## Postura de seguranca adotada
+
+- **Sem wildcard em actions/resources**: `var.policy_statements` possui validacoes que rejeitam `"*"` em `actions` e `resources`, forcando o consumidor do modulo a listar explicitamente o que e permitido.
+- **Principal de confianca explicito**: o assume role policy so aceita os principals definidos em `var.trusted_principals` (por padrao, apenas o servico `ec2.amazonaws.com`). Nenhuma role e criada sem ao menos um principal de confianca.
+- **Suporte a ExternalId**: quando `var.external_id` e definido, uma condicao `sts:ExternalId` e adicionada ao assume role policy — util para cenarios de acesso cross-account.
+- **Permissions boundary opcional**: `var.permissions_boundary_arn` permite aplicar um boundary de permissoes, limitando o teto de privilegios da role.
+- **Sem credenciais fixas**: nenhum valor sensivel e hardcoded; tudo e parametrizavel via variaveis.
 
 ## Uso
 
-```hcl
-module "iam_policy" {
+```
+module "iam_role_with_policy" {
   source = "./"
 
-  policy_name        = "app-read-only-policy"
-  policy_description = "Permite leitura de objetos em um bucket especifico."
+  role_name   = "minha-app-role"
+  policy_name = "minha-app-policy"
 
-  statements = [
+  trusted_principals = [
     {
-      sid       = "AllowAppS3Read"
-      effect    = "Allow"
-      actions   = ["s3:GetObject", "s3:ListBucket"]
-      resources = ["arn:aws:s3:::minha-app-bucket", "arn:aws:s3:::minha-app-bucket/*"]
+      type        = "Service"
+      identifiers = ["lambda.amazonaws.com"]
+    }
+  ]
+
+  policy_statements = [
+    {
+      sid        = "AllowReadSecrets"
+      effect     = "Allow"
+      actions    = ["secretsmanager:GetSecretValue"]
+      resources  = ["arn:aws:secretsmanager:us-east-1:123456789012:secret:minha-app/*"]
+      conditions = []
     }
   ]
 
   tags = {
-    Environment = "producao"
-    ManagedBy   = "terraform"
+    Environment = "production"
+    Owner       = "time-plataforma"
   }
 }
 ```
 
-## Inputs
+## Validacao
 
-| Nome                  | Descricao                                                        | Tipo           | Default                                  |
-|-----------------------|-------------------------------------------------------------------|----------------|-------------------------------------------|
-| aws_region            | Regiao AWS utilizada pelo provider                                | string         | `"us-east-1"`                             |
-| policy_name           | Nome da IAM Policy                                                | string         | `"example-least-privilege-policy"`        |
-| policy_description    | Descricao da IAM Policy                                          | string         | ver `variables.tf`                        |
-| policy_path           | Path da IAM Policy                                               | string         | `"/"`                                     |
-| statements            | Lista de statements (sid, effect, actions, resources) da politica| list(object)   | ver `variables.tf`                        |
-| tags                  | Tags aplicadas ao recurso                                        | map(string)    | `{ ManagedBy = "terraform" }`              |
+Este blueprint foi escrito para ser validado sem credenciais reais e sem backend remoto:
 
-## Outputs
+```
+terraform init -backend=false
+terraform validate
+```
 
-| Nome         | Descricao                          |
-|--------------|--------------------------------------|
-| policy_arn   | ARN da IAM Policy criada             |
-| policy_id    | ID da IAM Policy criada              |
-| policy_name  | Nome da IAM Policy criada            |
+## Variaveis principais
 
-## Boas praticas de seguranca aplicadas
+| Variavel | Descricao | Default |
+|---|---|---|
+| `role_name` | Nome da IAM Role | `app-execution-role` |
+| `policy_name` | Nome da IAM Policy | `app-execution-policy` |
+| `trusted_principals` | Principals autorizados a assumir a role | Servico `ec2.amazonaws.com` |
+| `external_id` | ExternalId exigido no assume role (opcional) | `null` |
+| `permissions_boundary_arn` | ARN do permissions boundary (opcional) | `null` |
+| `policy_statements` | Statements da policy anexada a role | Leitura em bucket S3 de exemplo |
+| `max_session_duration` | Duracao maxima da sessao assumida (segundos) | `3600` |
+| `tags` | Tags adicionais | `{}` |
 
-- Nenhuma action ou resource com wildcard (`*`) e definida por padrao; o exemplo padrao restringe acesso a um unico bucket S3.
-- Cada statement exige `effect`, `actions` e `resources` explicitos e nao vazios, validados via `validation` blocks.
-- Sem uso de backend remoto ou credenciais reais — compativel com `terraform init -backend=false` e `terraform validate`.
-- Recomenda-se sempre revisar as `actions` e `resources` fornecidos antes de aplicar em ambientes produtivos, restringindo ao minimo necessario (least privilege).
+## Outputs principais
+
+- `role_arn`, `role_name`, `role_id`
+- `policy_arn`, `policy_name`
+- `role_policy_attachment_id`

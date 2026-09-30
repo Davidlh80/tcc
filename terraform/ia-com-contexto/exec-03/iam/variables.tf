@@ -9,59 +9,67 @@ variable "environment" {
 }
 
 variable "system" {
-  description = "Nome do sistema/produto ao qual o recurso pertence."
+  description = "Nome curto do sistema/aplicacao ao qual o recurso pertence, usado na nomenclatura padrao."
   type        = string
 
   validation {
-    condition     = can(regex("^[a-z0-9]+(-[a-z0-9]+)*$", var.system))
-    error_message = "O valor de system deve conter apenas letras minusculas, numeros e hifens."
+    condition     = length(var.system) > 0
+    error_message = "O valor de system nao pode ser vazio."
   }
 }
 
 variable "region" {
   description = "Regiao AWS onde os recursos serao criados."
   type        = string
-  default     = "us-east-1"
-}
-
-variable "additional_tags" {
-  description = "Tags adicionais a serem mescladas as tags obrigatorias do recurso."
-  type        = map(string)
-  default     = {}
-}
-
-variable "policy_name" {
-  description = "Finalidade da IAM Policy, utilizada para compor o nome padronizado do recurso (ex.: readonly)."
-  type        = string
 
   validation {
-    condition     = can(regex("^[a-z0-9]+(-[a-z0-9]+)*$", var.policy_name))
-    error_message = "O valor de policy_name deve conter apenas letras minusculas, numeros e hifens."
+    condition     = length(var.region) > 0
+    error_message = "O valor de region nao pode ser vazio."
   }
 }
 
-variable "description" {
-  description = "Descricao da IAM Policy."
+variable "purpose" {
+  description = "Finalidade do recurso IAM, usada na nomenclatura padrao (ex.: readonly, deploy, ci)."
   type        = string
-  default     = "Gerenciada via Terraform."
+
+  validation {
+    condition     = length(var.purpose) > 0
+    error_message = "O valor de purpose nao pode ser vazio."
+  }
+}
+
+variable "trusted_principal_arn" {
+  description = "ARN do principal (usuario, role ou conta) autorizado a assumir a IAM Role via trust policy. Nao pode ser \"*\"."
+  type        = string
+
+  validation {
+    condition     = var.trusted_principal_arn != "*" && length(var.trusted_principal_arn) > 0
+    error_message = "trusted_principal_arn deve ser um ARN especifico e nao pode ser \"*\"."
+  }
 }
 
 variable "allowed_actions" {
-  description = "Lista de actions IAM permitidas na statement Allow da policy."
+  description = "Lista de actions IAM permitidas na statement Allow da policy. Nao pode conter apenas \"*\" combinado com allowed_resources = [\"*\"]."
   type        = list(string)
 
   validation {
     condition     = length(var.allowed_actions) > 0
-    error_message = "allowed_actions deve conter ao menos uma action."
+    error_message = "allowed_actions deve conter pelo menos uma action."
   }
 }
 
 variable "allowed_resources" {
-  description = "Lista de ARNs de recursos permitidos na statement Allow da policy."
+  description = "Lista de ARNs de recursos permitidos na statement Allow da policy. Nao pode conter apenas \"*\" combinado com allowed_actions = [\"*\"]."
   type        = list(string)
 
   validation {
     condition     = length(var.allowed_resources) > 0
-    error_message = "allowed_resources deve conter ao menos um resource."
+    error_message = "allowed_resources deve conter pelo menos um recurso."
   }
+}
+
+variable "additional_tags" {
+  description = "Tags adicionais a serem mescladas com as tags obrigatorias da organizacao."
+  type        = map(string)
+  default     = {}
 }

@@ -1,87 +1,113 @@
 variable "aws_region" {
+  description = "Regiao AWS onde os recursos serao criados."
   type        = string
-  description = "AWS region used by the provider."
   default     = "us-east-1"
+}
+
+variable "role_name" {
+  description = "Nome da IAM Role."
+  type        = string
+  default     = "app-execution-role"
 
   validation {
-    condition     = can(regex("^[a-z]{2}-[a-z]+-[0-9]$", var.aws_region))
-    error_message = "aws_region must be a valid AWS region identifier, e.g. us-east-1."
+    condition     = can(regex("^[a-zA-Z0-9+=,.@_-]{1,64}$", var.role_name))
+    error_message = "role_name deve conter apenas caracteres validos para nomes de IAM (letras, numeros e + = , . @ _ -) e ate 64 caracteres."
   }
 }
 
-variable "policy_name" {
+variable "role_description" {
+  description = "Descricao da IAM Role."
   type        = string
-  description = "Name of the IAM policy. Must be unique within the AWS account."
+  default     = "Role de execucao com permissoes minimas necessarias para a aplicacao."
+}
+
+variable "policy_name" {
+  description = "Nome da IAM Policy gerenciada."
+  type        = string
+  default     = "app-least-privilege-policy"
 
   validation {
-    condition     = length(var.policy_name) > 0 && length(var.policy_name) <= 128 && can(regex("^[\\w+=,.@-]+$", var.policy_name))
-    error_message = "policy_name must be 1-128 characters long and contain only alphanumeric characters and the symbols + = , . @ - _"
+    condition     = can(regex("^[a-zA-Z0-9+=,.@_-]{1,128}$", var.policy_name))
+    error_message = "policy_name deve conter apenas caracteres validos para nomes de IAM (letras, numeros e + = , . @ _ -) e ate 128 caracteres."
   }
 }
 
 variable "policy_description" {
+  description = "Descricao da IAM Policy."
   type        = string
-  description = "Description of the IAM policy."
-  default     = "Managed by Terraform."
-
-  validation {
-    condition     = length(var.policy_description) <= 1000
-    error_message = "policy_description must be at most 1000 characters long."
-  }
+  default     = "Policy com permissoes especificas, sem wildcards, anexada a uma unica role."
 }
 
-variable "policy_path" {
+variable "path" {
+  description = "Path aplicado a role e a policy."
   type        = string
-  description = "Path under which the IAM policy is created."
   default     = "/"
+}
+
+variable "trusted_service_principals" {
+  description = "Lista de service principals AWS autorizados a assumir a role (trust policy). Nao inclua contas/roles externas sem avaliacao de seguranca."
+  type        = list(string)
+  default     = ["ec2.amazonaws.com"]
 
   validation {
-    condition     = can(regex("^/([\\w+=,.@-]+/)*$", var.policy_path))
-    error_message = "policy_path must begin and end with a slash, e.g. / or /app/service/."
+    condition     = length(var.trusted_service_principals) > 0
+    error_message = "trusted_service_principals nao pode ser uma lista vazia; a role precisa de ao menos um principal de confianca explicito."
   }
 }
 
-variable "statements" {
-  description = "List of IAM policy statements. Prefer explicit actions and resource ARNs over wildcards to keep least privilege."
-  type = list(object({
-    sid       = optional(string)
-    effect    = optional(string, "Allow")
-    actions   = list(string)
-    resources = list(string)
-  }))
-
+variable "allowed_actions" {
+  description = "Lista explicita de actions IAM permitidas pela policy. Wildcards amplos (ex: \"*\" ou \"service:*\") nao sao recomendados."
+  type        = list(string)
   default = [
-    {
-      sid       = "AllowS3ReadOnlyExampleBucket"
-      effect    = "Allow"
-      actions   = ["s3:GetObject", "s3:ListBucket"]
-      resources = ["arn:aws:s3:::example-bucket", "arn:aws:s3:::example-bucket/*"]
-    }
+    "s3:GetObject",
+    "s3:ListBucket",
   ]
 
   validation {
-    condition     = length(var.statements) > 0
-    error_message = "statements must contain at least one policy statement."
+    condition     = length(var.allowed_actions) > 0
+    error_message = "allowed_actions nao pode ser uma lista vazia."
   }
 
   validation {
-    condition     = alltrue([for s in var.statements : contains(["Allow", "Deny"], s.effect)])
-    error_message = "Each statement's effect must be either \"Allow\" or \"Deny\"."
+    condition     = !contains(var.allowed_actions, "*")
+    error_message = "allowed_actions nao deve conter o wildcard \"*\" para todas as actions."
+  }
+}
+
+variable "resource_arns" {
+  description = "Lista de ARNs de recursos aos quais as actions se aplicam. Deve ser especifica, evitando \"*\" como recurso."
+  type        = list(string)
+  default = [
+    "arn:aws:s3:::example-bucket",
+    "arn:aws:s3:::example-bucket/*",
+  ]
+
+  validation {
+    condition     = length(var.resource_arns) > 0
+    error_message = "resource_arns nao pode ser uma lista vazia."
   }
 
   validation {
-    condition     = alltrue([for s in var.statements : length(s.actions) > 0])
-    error_message = "Each statement must declare at least one action."
+    condition     = !contains(var.resource_arns, "*")
+    error_message = "resource_arns nao deve conter o wildcard \"*\" isolado como recurso."
   }
+}
+
+variable "max_session_duration" {
+  description = "Duracao maxima (em segundos) da sessao assumida da role. Entre 3600 (1h) e 43200 (12h)."
+  type        = number
+  default     = 3600
 
   validation {
-    condition     = alltrue([for s in var.statements : length(s.resources) > 0])
-    error_message = "Each statement must declare at least one resource. Avoid using \"*\" unless strictly necessary."
+    condition     = var.max_session_duration >= 3600 && var.max_session_duration <= 43200
+    error_message = "max_session_duration deve estar entre 3600 e 43200 segundos."
   }
 }
 
 variable "tags" {
+  description = "Tags aplicadas a role e a policy."
   type        = map(string)
-  description = "Tags applied to the IAM policy."
-  default     = {}
+  default = {
+    ManagedBy = "terraform"
+  }
 }

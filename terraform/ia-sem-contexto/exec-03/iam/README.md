@@ -1,74 +1,63 @@
-# IAM Policy - Blueprint Terraform
+# IAM Role + IAM Policy (anexada)
 
-Blueprint autonomo para provisionamento de uma IAM Policy na AWS, gerado sem vinculo com padroes organizacionais especificos, seguindo boas praticas gerais de mercado para Terraform e AWS.
+Blueprint Terraform que provisiona uma IAM Role com uma trust policy (assume role) e uma IAM Policy customizada anexada diretamente a ela via `aws_iam_role_policy_attachment`. A policy nunca fica solta, sem principal associado.
 
-## Objetivo
+## Recursos criados
 
-Criar uma `aws_iam_policy` com uma statement unica, construida via `aws_iam_policy_document`, permitindo configurar effect, actions, resources, nome, path, descricao e tags por meio de variaveis.
+- `aws_iam_role.this` — role com trust policy (assume role) configurável.
+- `aws_iam_policy.this` — policy customizada com statements definidos por variável.
+- `aws_iam_role_policy_attachment.this` — anexa a policy à role.
 
-## Decisoes de seguranca
+## Trust policy (assume role)
 
-- Nao ha valores de credenciais fixos no codigo; toda configuracao sensivel deve ser fornecida via variaveis ou variaveis de ambiente do provider AWS.
-- As variaveis `actions` e `resources` possuem validacao que bloqueia o uso de `*` isolado, forcando o autor da configuracao a declarar explicitamente as permissoes e recursos necessarios (principio do menor privilegio).
-- O valor padrao de `actions`/`resources` e apenas um exemplo ilustrativo de acesso restrito a um bucket S3 especifico; ajuste conforme a necessidade real antes de aplicar em um ambiente real.
-- Tags sao opcionais e ficam a criterio de quem consome o modulo.
+Por padrão, apenas o serviço `ec2.amazonaws.com` pode assumir a role (`trusted_service_principals`). É possível:
+
+- Adicionar principais AWS (contas, roles, usuários) via `trusted_aws_principals`.
+- Exigir `sts:ExternalId` ao usar `trusted_aws_principals`, definindo `external_id` (recomendado para acesso cross-account de terceiros).
+
+Pelo menos um principal (serviço ou AWS) deve resultar da combinação das variáveis; o padrão já garante isso via `trusted_service_principals`.
+
+## Permissões (policy)
+
+`policy_statements` define os statements da policy anexada. O padrão inclui um exemplo de leitura restrita a um bucket S3 fictício (`example-bucket`), sem uso de wildcard em `actions` ou `resources`. Validações de variável bloqueiam `*` em `actions`/`resources` e exigem `effect` igual a `Allow` ou `Deny`.
+
+Ajuste `policy_statements` para o caso de uso real, mantendo o princípio de menor privilégio (ações e recursos específicos, evitando `*`).
 
 ## Uso
 
 ```
-module "iam_policy" {
-  source = "./"
-
-  policy_name = "app-read-only-s3"
-  description = "Permite leitura de objetos em um bucket especifico"
-  effect      = "Allow"
-  actions     = ["s3:GetObject", "s3:ListBucket"]
-  resources   = [
-    "arn:aws:s3:::meu-bucket",
-    "arn:aws:s3:::meu-bucket/*"
-  ]
-
-  tags = {
-    ambiente = "producao"
-    time     = "plataforma"
-  }
-}
+terraform init -backend=false
+terraform validate
+terraform plan \
+  -var 'role_name=minha-role' \
+  -var 'policy_name=minha-policy' \
+  -var 'trusted_service_principals=["lambda.amazonaws.com"]' \
+  -var 'policy_statements=[{sid="AllowLogs",effect="Allow",actions=["logs:CreateLogGroup","logs:CreateLogStream","logs:PutLogEvents"],resources=["arn:aws:logs:us-east-1:123456789012:log-group:/app/*"]}]'
 ```
 
-## Requisitos
+## Inputs principais
 
-| Nome | Versao |
-|------|--------|
-| terraform | >= 1.5.0 |
-| aws | ~> 5.0 |
-
-## Inputs
-
-| Nome | Descricao | Tipo | Default | Obrigatorio |
-|------|-----------|------|---------|-------------|
-| aws_region | Regiao AWS do provider | string | "us-east-1" | nao |
-| policy_name | Nome da IAM Policy | string | "example-least-privilege-policy" | nao |
-| description | Descricao da IAM Policy | string | "Policy gerenciada via Terraform seguindo o principio do menor privilegio." | nao |
-| path | Path da IAM Policy | string | "/" | nao |
-| effect | Effect da statement (Allow/Deny) | string | "Allow" | nao |
-| actions | Lista de actions da policy | list(string) | ["s3:GetObject", "s3:ListBucket"] | nao |
-| resources | Lista de ARNs de recursos | list(string) | ["arn:aws:s3:::example-bucket", "arn:aws:s3:::example-bucket/*"] | nao |
-| tags | Tags aplicadas ao recurso | map(string) | {} | nao |
+| Nome | Descrição | Padrão |
+|---|---|---|
+| `aws_region` | Região usada pelo provider | `us-east-1` |
+| `role_name` | Nome da IAM Role | `app-role` |
+| `policy_name` | Nome da IAM Policy | `app-policy` |
+| `trusted_service_principals` | Serviços autorizados a assumir a role | `["ec2.amazonaws.com"]` |
+| `trusted_aws_principals` | ARNs adicionais autorizados a assumir a role | `[]` |
+| `external_id` | External ID exigido em cross-account | `""` |
+| `max_session_duration` | Duração máxima da sessão (segundos) | `3600` |
+| `permissions_boundary_arn` | ARN de permissions boundary opcional | `""` |
+| `policy_statements` | Statements da policy anexada | ver `variables.tf` |
+| `tags` | Tags para role e policy | `{}` |
 
 ## Outputs
 
-| Nome | Descricao |
-|------|-----------|
-| policy_id | ID da IAM Policy criada |
-| policy_arn | ARN da IAM Policy criada |
-| policy_name | Nome da IAM Policy criada |
-| policy_document_json | Documento JSON da policy gerado |
+`role_arn`, `role_name`, `role_id`, `policy_arn`, `policy_name`, `policy_attachment_id`.
 
-## Validacao local
+## Segurança
 
-```
-terraform init -backend=false
-terraform validate
-```
-
-Nenhum backend remoto e nenhuma credencial real sao necessarios para executar os comandos acima.
+- Sem valores de credenciais reais ou fixos no código.
+- Sem wildcards (`*`) em actions/resources por padrão, reforçado por validações de variável.
+- Suporte a `permissions_boundary` e `sts:ExternalId` para reforçar controles em cenários cross-account.
+- `force_detach_policies = true` evita bloqueios ao destruir a role.
+- Sem backend remoto; validação sintática funciona com `terraform init -backend=false` e `terraform validate`, sem credenciais AWS reais.

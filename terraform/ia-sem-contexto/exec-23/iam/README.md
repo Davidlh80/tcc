@@ -1,70 +1,78 @@
-# IAM Policy — Terraform Blueprint
+# IAM Role com Policy Gerenciada Anexada
 
-Blueprint Terraform para provisionar uma IAM Policy na AWS, com foco em privilégio mínimo e statements configuráveis via variáveis.
+Blueprint Terraform para provisionar uma IAM Role e uma IAM Policy gerenciada,
+anexadas entre si via `aws_iam_role_policy_attachment`. A policy nunca fica
+solta: ela sempre e criada junto com o attachment para a role definida neste
+mesmo modulo.
 
-## Recursos criados
+## Decisoes de seguranca
 
-- `aws_iam_policy.this` — a política IAM.
-- `data.aws_iam_policy_document.this` — documento de política renderizado dinamicamente a partir de `var.statements`.
+- **Sem wildcards por padrao**: `allowed_actions` e `resource_arns` sao listas
+  explicitas e ha validacoes que impedem o uso do wildcard `"*"` isolado em
+  qualquer uma delas.
+- **Trust policy explicita**: a `assume_role_policy` e construida via
+  `data.aws_iam_policy_document`, aceitando apenas os service principals
+  informados em `trusted_service_principals`. Nao ha suporte, por padrao, a
+  contas externas ou usuarios arbitrarios como principal.
+- **Duracao de sessao limitada**: `max_session_duration` e restrita entre 1h e
+  12h (limites da AWS), evitando sessoes assumidas por tempo indefinido.
+- **Nomenclatura validada**: `role_name` e `policy_name` sao validados contra o
+  padrao de caracteres aceitos pela AWS para recursos IAM.
 
 ## Uso
 
 ```hcl
-module "iam_policy" {
+module "app_role" {
   source = "./"
 
-  policy_name        = "app-s3-readonly"
-  policy_description = "Read-only access to the app data bucket"
+  role_name   = "minha-app-role"
+  policy_name = "minha-app-policy"
 
-  statements = [
-    {
-      sid       = "AllowReadAppBucket"
-      effect    = "Allow"
-      actions   = ["s3:GetObject", "s3:ListBucket"]
-      resources = [
-        "arn:aws:s3:::app-data-bucket",
-        "arn:aws:s3:::app-data-bucket/*"
-      ]
-    }
+  trusted_service_principals = ["lambda.amazonaws.com"]
+
+  allowed_actions = [
+    "logs:CreateLogGroup",
+    "logs:CreateLogStream",
+    "logs:PutLogEvents",
+  ]
+
+  resource_arns = [
+    "arn:aws:logs:us-east-1:123456789012:log-group:/aws/lambda/minha-app:*",
   ]
 
   tags = {
-    Environment = "production"
-    Owner       = "platform-team"
+    Environment = "producao"
+    Owner       = "time-plataforma"
   }
 }
 ```
 
-## Inputs
+## Variaveis principais
 
-| Nome                | Tipo           | Padrão                                   | Descrição                                                        |
-|---------------------|----------------|-------------------------------------------|-------------------------------------------------------------------|
-| aws_region           | string         | `"us-east-1"`                             | Região AWS usada pelo provider.                                   |
-| policy_name          | string         | *(obrigatório)*                           | Nome único da IAM Policy na conta.                                 |
-| policy_description   | string         | `"Managed by Terraform."`                 | Descrição da política.                                             |
-| policy_path          | string         | `"/"`                                      | Path da IAM Policy.                                                |
-| statements           | list(object)   | statement de exemplo somente leitura S3   | Lista de statements (sid, effect, actions, resources).             |
-| tags                 | map(string)    | `{}`                                       | Tags aplicadas à política.                                         |
+| Nome                         | Descricao                                              | Default                          |
+|------------------------------|---------------------------------------------------------|-----------------------------------|
+| `aws_region`                  | Regiao AWS                                              | `us-east-1`                       |
+| `role_name`                   | Nome da IAM Role                                        | `app-execution-role`              |
+| `policy_name`                 | Nome da IAM Policy                                      | `app-least-privilege-policy`      |
+| `trusted_service_principals`  | Service principals autorizados a assumir a role         | `["ec2.amazonaws.com"]`           |
+| `allowed_actions`             | Actions permitidas pela policy                          | `["s3:GetObject", "s3:ListBucket"]` |
+| `resource_arns`               | ARNs de recursos cobertos pela policy                   | ver `variables.tf`                |
+| `max_session_duration`        | Duracao maxima de sessao (segundos)                     | `3600`                            |
+| `tags`                        | Tags aplicadas aos recursos                             | `{ ManagedBy = "terraform" }`     |
 
 ## Outputs
 
-| Nome                  | Descrição                                  |
-|-----------------------|----------------------------------------------|
-| policy_arn            | ARN da IAM Policy criada.                     |
-| policy_id             | ID da IAM Policy criada.                      |
-| policy_name           | Nome da IAM Policy criada.                    |
-| policy_document_json  | JSON renderizado do documento de política.    |
+- `role_arn`, `role_name`, `role_id`
+- `policy_arn`, `policy_name`, `policy_id`
+- `role_policy_attachment_id`
 
-## Boas práticas de segurança
-
-- Prefira `actions` e `resources` explícitos ao invés de `"*"`, seguindo o princípio de menor privilégio.
-- Revise cada statement quanto ao efeito (`Allow`/`Deny`) e ao escopo de recursos antes de aplicar em produção.
-- Use `tags` para rastreabilidade e governança (ex.: `Owner`, `Environment`, `CostCenter`).
-- Esta política não é anexada automaticamente a nenhuma role, user ou group — anexe-a explicitamente conforme o caso de uso, usando `aws_iam_role_policy_attachment`, `aws_iam_user_policy_attachment` ou `aws_iam_group_policy_attachment`.
-
-## Validação
+## Validacao local
 
 ```bash
+terraform fmt
 terraform init -backend=false
 terraform validate
 ```
+
+Nenhum backend remoto e nenhuma credencial real sao necessarios para essas
+validacoes sintaticas.

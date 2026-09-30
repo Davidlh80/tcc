@@ -1,69 +1,80 @@
-# IAM Policy - Blueprint Terraform
+# IAM Role com IAM Policy Anexada
 
-## Descricao
+Blueprint Terraform para provisionar uma IAM Role na AWS com uma IAM Policy dedicada, anexada via `aws_iam_role_policy_attachment`. A policy nunca fica solta: ela e criada e anexada a role no mesmo modulo.
 
-Este blueprint provisiona uma IAM Policy gerenciada na AWS (`aws_iam_policy`), com o documento de permissoes construido dinamicamente a partir da variavel `statements`. Nenhum attachment a usuarios, grupos ou roles e realizado por este modulo — a policy e criada de forma desacoplada para ser anexada conforme a necessidade de cada consumidor.
+## Recursos criados
 
-## Principios de seguranca adotados
+- `aws_iam_role.this` — role com trust policy (assume role policy) configuravel.
+- `aws_iam_policy.this` — policy gerenciada com acoes e recursos explicitos (sem wildcards).
+- `aws_iam_role_policy_attachment.this` — vinculo entre a policy e a role.
 
-- Nenhum valor sensivel ou credencial e fixado no codigo.
-- O exemplo padrao de `statements` segue o principio de menor privilegio (somente acoes de leitura em um servico especifico), evitando `Action = "*"` e `Resource = "*"`.
-- Cada statement e validado para garantir `effect` restrito a `Allow` ou `Deny` e a obrigatoriedade de `actions` e `resources` explicitos.
-- Recomenda-se fortemente que, ao customizar `statements`, os `resources` sejam escopados a ARNs especificos em vez de wildcards amplos.
+## Design de seguranca
+
+- **Sem wildcards**: `policy_actions` e `policy_resources` rejeitam o valor `"*"` via `validation` em `variables.tf`. Defina explicitamente as acoes e os ARNs necessarios.
+- **Trust policy explicita**: o assume role policy aceita dois mecanismos, combinaveis:
+  - `trusted_service_principals`: lista de service principals AWS (ex.: `ec2.amazonaws.com`, `lambda.amazonaws.com`). Default: `["ec2.amazonaws.com"]`.
+  - `trusted_account_arns`: lista de ARNs de contas, roles ou usuarios para cenarios cross-account. Quando usado junto com `external_id`, a condicao `sts:ExternalId` e aplicada automaticamente para mitigar o problema do "confused deputy".
+- **Permissions boundary opcional**: defina `permissions_boundary_arn` para aplicar um limite adicional de permissoes a role.
+- **Duracao de sessao limitada**: `max_session_duration` e validado entre 3600 e 43200 segundos (limites da AWS).
+- **Tags de rastreabilidade**: todas as tags informadas em `var.tags` sao mescladas com `ManagedBy = "terraform"`.
 
 ## Uso
 
-```
-module "iam_policy" {
+```hcl
+module "iam_role" {
   source = "./"
 
-  name        = "minha-policy-customizada"
-  description = "Policy de exemplo"
+  role_name   = "minha-app-role"
+  policy_name = "minha-app-policy"
 
-  statements = [
-    {
-      sid       = "AllowS3ReadOnly"
-      effect    = "Allow"
-      actions   = ["s3:GetObject", "s3:ListBucket"]
-      resources = [
-        "arn:aws:s3:::meu-bucket",
-        "arn:aws:s3:::meu-bucket/*"
-      ]
-    }
+  trusted_service_principals = ["lambda.amazonaws.com"]
+
+  policy_actions = [
+    "s3:GetObject",
+    "s3:ListBucket"
+  ]
+
+  policy_resources = [
+    "arn:aws:s3:::meu-bucket",
+    "arn:aws:s3:::meu-bucket/*"
   ]
 
   tags = {
-    Environment = "dev"
-    Owner       = "equipe-plataforma"
+    Ambiente = "dev"
   }
 }
 ```
 
-## Inputs
+### Cenario cross-account com External ID
 
-| Nome        | Descricao                                   | Tipo                | Default                  |
-|-------------|----------------------------------------------|---------------------|---------------------------|
-| aws_region  | Regiao AWS usada pelo provider               | string               | "us-east-1"              |
-| name        | Nome da IAM Policy                           | string               | "example-iam-policy"     |
-| description | Descricao da IAM Policy                      | string               | "Managed by Terraform"   |
-| path        | Path da IAM Policy                           | string               | "/"                      |
-| tags        | Tags aplicadas a policy                      | map(string)          | {}                       |
-| statements  | Lista de statements (sid, effect, actions, resources) | list(object) | exemplo de leitura em logs |
-
-## Outputs
-
-| Nome             | Descricao                                  |
-|------------------|----------------------------------------------|
-| policy_arn       | ARN da IAM Policy criada                     |
-| policy_id        | ID da IAM Policy criada                      |
-| policy_name      | Nome da IAM Policy criada                    |
-| policy_document  | Documento JSON da policy gerado              |
-
-## Validacao
-
-Este blueprint foi projetado para ser validado sem credenciais reais e sem backend remoto:
-
+```hcl
+trusted_service_principals = []
+trusted_account_arns       = ["arn:aws:iam::111122223333:root"]
+external_id                = "um-valor-secreto-unico"
 ```
+
+## Inputs principais
+
+| Nome | Descricao | Default |
+|---|---|---|
+| `role_name` | Nome da IAM Role | `app-role` |
+| `policy_name` | Nome da IAM Policy | `app-policy` |
+| `trusted_service_principals` | Service principals autorizados a assumir a role | `["ec2.amazonaws.com"]` |
+| `trusted_account_arns` | ARNs autorizados a assumir a role (cross-account) | `[]` |
+| `external_id` | External ID exigido para assume role cross-account | `""` |
+| `policy_actions` | Acoes permitidas pela policy (sem `*`) | `["s3:GetObject", "s3:ListBucket"]` |
+| `policy_resources` | Recursos permitidos pela policy (sem `*`) | ver `variables.tf` |
+| `max_session_duration` | Duracao maxima da sessao assumida (segundos) | `3600` |
+| `permissions_boundary_arn` | ARN de permissions boundary | `""` |
+| `tags` | Tags adicionais | `{}` |
+
+Veja `variables.tf` para a lista completa de inputs e `outputs.tf` para os outputs disponiveis.
+
+## Validacao local
+
+```bash
 terraform init -backend=false
 terraform validate
 ```
+
+Nenhum backend remoto e nenhuma credencial real da AWS sao necessarios para essas etapas, pois os recursos e data sources utilizados (`aws_iam_role`, `aws_iam_policy`, `aws_iam_policy_document`) nao dependem de chamadas de API para validacao sintatica.

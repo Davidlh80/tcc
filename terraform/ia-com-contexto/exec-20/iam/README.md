@@ -1,43 +1,53 @@
-# IAM Policy
+# IAM Policy anexada a IAM Role
 
-## Visao geral
+## 1. Visao geral
 
-Este template cria uma IAM Policy customizada seguindo os padroes internos de nomenclatura, tags e seguranca da organizacao. A policy contem uma unica statement `Allow`, restrita as actions e recursos informados via variavel. Nao e permitida a combinacao `Action: "*"` com `Resource: "*"` na mesma statement (validada por precondition no `main.tf`), e este template nao anexa nem replica policies gerenciadas administrativas (ex.: `AdministratorAccess`).
+Este template provisiona uma IAM Policy customizada anexada a uma IAM Role, seguindo o padrao de nomenclatura `<ambiente>-<sistema>-<recurso>-<finalidade>` da organizacao (ex.: `dev-tcc-iam-readonly`).
 
-Nome do recurso segue o padrao `<ambiente>-<sistema>-<recurso>-<finalidade>`, por exemplo: `dev-tcc-iam-readonly`.
+Caracteristicas de seguranca aplicadas por padrao:
 
-## Variaveis
+- a IAM Policy nunca fica solta: e sempre criada e anexada a uma IAM Role via `aws_iam_role_policy_attachment`;
+- a trust policy (assume role policy) da role restringe o principal a uma lista de ARNs especificos informada em `trusted_principal_arns`; `"Principal": "*"` ou `"AWS": "*"` nao sao permitidos;
+- a unica statement de permissao da policy usa `Effect: Allow` restrito exatamente as actions e aos recursos informados nas variaveis `allowed_actions` e `allowed_resources`;
+- e proibido, por validacao de variavel, combinar `Action: "*"` com `Resource: "*"` na mesma statement;
+- nenhuma policy gerenciada administrativa (ex.: `AdministratorAccess`) e anexada ou replicada;
+- todas as tags obrigatorias da organizacao sao aplicadas na Role e na Policy.
 
-| Nome                 | Tipo           | Obrigatoria | Descricao                                                                                     |
-|----------------------|----------------|-------------|------------------------------------------------------------------------------------------------|
-| environment          | string         | Sim         | Ambiente de implantacao (`dev`, `hml` ou `prd`).                                                |
-| system               | string         | Sim         | Nome curto do sistema ou produto associado ao recurso.                                          |
-| region               | string         | Sim         | Regiao AWS onde o recurso sera criado.                                                          |
-| additional_tags      | map(string)    | Nao         | Tags adicionais mescladas com as tags obrigatorias.                                              |
-| policy_name          | string         | Sim         | Finalidade da policy, usada como sufixo no padrao de nomenclatura.                               |
-| policy_description   | string         | Nao         | Descricao da IAM Policy.                                                                         |
-| allowed_actions      | list(string)   | Sim         | Lista de actions IAM permitidas na statement Allow.                                              |
-| allowed_resources    | list(string)   | Sim         | Lista de ARNs permitidos na statement Allow.                                                     |
+## 2. Variaveis
 
-## Outputs
+| Nome | Tipo | Obrigatoria | Descricao |
+|---|---|---|---|
+| `environment` | `string` | Sim | Ambiente de implantacao (`dev`, `hml` ou `prd`). |
+| `system` | `string` | Sim | Nome do sistema/aplicacao, usado na nomenclatura padronizada. |
+| `region` | `string` | Sim | Regiao AWS usada pelo provider. |
+| `additional_tags` | `map(string)` | Nao (default `{}`) | Tags adicionais mescladas as tags obrigatorias. |
+| `policy_name` | `string` | Sim | Finalidade da IAM Policy/Role, usada para compor o nome padronizado. |
+| `allowed_actions` | `list(string)` | Sim | Actions IAM permitidas na policy (menor privilegio). |
+| `allowed_resources` | `list(string)` | Sim | ARNs/recursos aos quais as actions permitidas se aplicam. |
+| `trusted_principal_arns` | `list(string)` | Sim | ARNs de principals autorizados a assumir a role (nunca `"*"`). |
+| `max_session_duration` | `number` | Nao (default `3600`) | Duracao maxima da sessao assumida, em segundos (3600-43200). |
 
-| Nome         | Descricao                          |
-|--------------|-------------------------------------|
-| policy_name  | Nome da IAM Policy criada.          |
-| policy_arn   | ARN da IAM Policy criada.           |
-| policy_id    | ID da IAM Policy criada.            |
+## 3. Outputs
 
-## Exemplo de uso
+| Nome | Descricao |
+|---|---|
+| `policy_name` | Nome da IAM Policy criada. |
+| `policy_arn` | ARN da IAM Policy criada. |
+| `policy_id` | ID da IAM Policy criada. |
+| `role_name` | Nome da IAM Role criada e associada a policy. |
+| `role_arn` | ARN da IAM Role criada e associada a policy. |
+| `role_id` | ID da IAM Role criada e associada a policy. |
+
+## 4. Exemplo de uso
 
 ```hcl
-module "iam_policy_readonly" {
-  source = "./"
+module "iam_readonly" {
+  source = "./iam"
 
-  environment       = "dev"
-  system            = "tcc"
-  region            = "us-east-1"
-  policy_name       = "readonly"
-  policy_description = "Acesso somente leitura ao bucket de logs"
+  environment = "dev"
+  system      = "tcc"
+  region      = "us-east-1"
+  policy_name = "readonly"
 
   allowed_actions = [
     "s3:GetObject",
@@ -47,6 +57,10 @@ module "iam_policy_readonly" {
   allowed_resources = [
     "arn:aws:s3:::dev-tcc-s3-logs",
     "arn:aws:s3:::dev-tcc-s3-logs/*"
+  ]
+
+  trusted_principal_arns = [
+    "arn:aws:iam::123456789012:role/dev-tcc-ec2-app"
   ]
 
   additional_tags = {

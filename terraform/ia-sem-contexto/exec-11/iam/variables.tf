@@ -1,67 +1,89 @@
-variable "region" {
-  description = "Regiao AWS onde o provider ira operar."
+variable "role_name" {
+  description = "Nome da IAM Role a ser criada."
   type        = string
-  default     = "us-east-1"
-}
-
-variable "name" {
-  description = "Nome da IAM Policy. Deve ser unico dentro da conta AWS."
-  type        = string
+  default     = "app-role"
 
   validation {
-    condition     = length(var.name) > 0 && length(var.name) <= 128
-    error_message = "O nome da policy deve ter entre 1 e 128 caracteres."
+    condition     = length(var.role_name) > 0 && length(var.role_name) <= 64
+    error_message = "role_name deve ter entre 1 e 64 caracteres."
   }
 }
 
-variable "description" {
+variable "role_description" {
+  description = "Descricao da IAM Role."
+  type        = string
+  default     = "Role gerenciada via Terraform com politica de privilegio minimo anexada."
+}
+
+variable "policy_name" {
+  description = "Nome da IAM Policy a ser criada e anexada a role."
+  type        = string
+  default     = "app-policy"
+
+  validation {
+    condition     = length(var.policy_name) > 0 && length(var.policy_name) <= 128
+    error_message = "policy_name deve ter entre 1 e 128 caracteres."
+  }
+}
+
+variable "policy_description" {
   description = "Descricao da IAM Policy."
   type        = string
-  default     = "Managed by Terraform"
+  default     = "Politica de privilegio minimo com acoes e recursos explicitos."
 }
 
 variable "path" {
-  description = "Path da IAM Policy dentro do IAM."
+  description = "Path aplicado tanto a role quanto a policy."
   type        = string
   default     = "/"
 }
 
-variable "tags" {
-  description = "Tags adicionais a serem aplicadas a IAM Policy."
-  type        = map(string)
-  default     = {}
+variable "trusted_principal_service" {
+  description = "Principal de servico AWS autorizado a assumir a role (trust policy). Ex.: ec2.amazonaws.com, lambda.amazonaws.com."
+  type        = string
+  default     = "ec2.amazonaws.com"
+
+  validation {
+    condition     = can(regex("^[a-zA-Z0-9.-]+\\.amazonaws\\.com$", var.trusted_principal_service))
+    error_message = "trusted_principal_service deve ser um principal de servico valido, ex.: ec2.amazonaws.com."
+  }
 }
 
-variable "policy_statements" {
-  description = "Lista de statements do documento de policy. Cada item define sid (opcional), effect (Allow ou Deny), actions e resources. Evite o uso de wildcard '*' em actions e resources; prefira ARNs e acoes especificas."
-  type = list(object({
-    sid       = optional(string)
-    effect    = string
-    actions   = list(string)
-    resources = list(string)
-  }))
-
-  default = [
-    {
-      sid       = "AllowReadOwnS3Objects"
-      effect    = "Allow"
-      actions   = ["s3:GetObject", "s3:ListBucket"]
-      resources = ["arn:aws:s3:::example-bucket", "arn:aws:s3:::example-bucket/*"]
-    }
-  ]
+variable "max_session_duration" {
+  description = "Duracao maxima (em segundos) da sessao assumida da role."
+  type        = number
+  default     = 3600
 
   validation {
-    condition     = length(var.policy_statements) > 0
-    error_message = "Ao menos um statement deve ser fornecido em policy_statements."
+    condition     = var.max_session_duration >= 3600 && var.max_session_duration <= 43200
+    error_message = "max_session_duration deve estar entre 3600 e 43200 segundos."
   }
+}
+
+variable "allowed_actions" {
+  description = "Lista explicita de acoes IAM permitidas pela policy. Evite wildcards amplos como \"*\" ou \"service:*\"."
+  type        = list(string)
+  default     = ["s3:GetObject", "s3:ListBucket"]
 
   validation {
-    condition     = alltrue([for s in var.policy_statements : contains(["Allow", "Deny"], s.effect)])
-    error_message = "O campo 'effect' de cada statement deve ser 'Allow' ou 'Deny'."
+    condition     = length(var.allowed_actions) > 0 && alltrue([for a in var.allowed_actions : a != "*"])
+    error_message = "allowed_actions nao pode ser vazio nem conter o wildcard total \"*\"."
   }
+}
+
+variable "allowed_resources" {
+  description = "Lista explicita de ARNs de recursos aos quais as acoes se aplicam. Evite o wildcard \"*\"."
+  type        = list(string)
+  default     = ["arn:aws:s3:::example-bucket", "arn:aws:s3:::example-bucket/*"]
 
   validation {
-    condition     = alltrue([for s in var.policy_statements : !contains(s.actions, "*")])
-    error_message = "Wildcard '*' nao e permitido em actions. Especifique as acoes necessarias."
+    condition     = length(var.allowed_resources) > 0 && alltrue([for r in var.allowed_resources : r != "*"])
+    error_message = "allowed_resources nao pode ser vazio nem conter o wildcard total \"*\"."
   }
+}
+
+variable "tags" {
+  description = "Tags aplicadas a role e a policy."
+  type        = map(string)
+  default     = {}
 }
