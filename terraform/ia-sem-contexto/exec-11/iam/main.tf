@@ -1,34 +1,46 @@
-terraform {
-  required_version = ">= 1.5.0"
-}
+data "aws_iam_policy_document" "assume_role" {
+  statement {
+    sid     = "AllowAssumeRoleByTrustedPrincipal"
+    effect  = "Allow"
+    actions = ["sts:AssumeRole"]
 
-provider "aws" {
-  region = var.region
-}
-
-data "aws_iam_policy_document" "this" {
-  dynamic "statement" {
-    for_each = var.policy_statements
-
-    content {
-      sid       = lookup(statement.value, "sid", null)
-      effect    = statement.value.effect
-      actions   = statement.value.actions
-      resources = statement.value.resources
+    principals {
+      type        = "Service"
+      identifiers = [var.trusted_principal_service]
     }
   }
 }
 
+resource "aws_iam_role" "this" {
+  name                 = var.role_name
+  path                 = var.path
+  description          = var.role_description
+  assume_role_policy   = data.aws_iam_policy_document.assume_role.json
+  max_session_duration = var.max_session_duration
+  force_detach_policies = true
+
+  tags = var.tags
+}
+
+data "aws_iam_policy_document" "this" {
+  statement {
+    sid       = "AllowExplicitActionsOnExplicitResources"
+    effect    = "Allow"
+    actions   = var.allowed_actions
+    resources = var.allowed_resources
+  }
+}
+
 resource "aws_iam_policy" "this" {
-  name        = var.name
+  name        = var.policy_name
   path        = var.path
-  description = var.description
+  description = var.policy_description
   policy      = data.aws_iam_policy_document.this.json
 
-  tags = merge(
-    {
-      "ManagedBy" = "Terraform"
-    },
-    var.tags
-  )
+  tags = var.tags
+}
+
+resource "aws_iam_role_policy_attachment" "this" {
+  role       = aws_iam_role.this.name
+  policy_arn = aws_iam_policy.this.arn
 }

@@ -1,6 +1,6 @@
 variable "environment" {
-  description = "Ambiente de implantacao do recurso. Deve ser um dos ambientes permitidos pela organizacao."
   type        = string
+  description = "Ambiente de implantacao do recurso (dev, hml ou prd)."
 
   validation {
     condition     = contains(["dev", "hml", "prd"], var.environment)
@@ -9,8 +9,8 @@ variable "environment" {
 }
 
 variable "system" {
-  description = "Nome do sistema ou produto ao qual o recurso pertence, utilizado na nomenclatura padronizada."
   type        = string
+  description = "Nome do sistema ou aplicacao associado ao recurso, usado na composicao do nome padronizado."
 
   validation {
     condition     = length(var.system) > 0
@@ -19,20 +19,20 @@ variable "system" {
 }
 
 variable "region" {
-  description = "Regiao AWS onde o provider sera configurado."
   type        = string
+  description = "Regiao AWS onde os recursos serao provisionados."
   default     = "us-east-1"
 }
 
 variable "additional_tags" {
-  description = "Tags adicionais a serem mescladas com as tags obrigatorias da organizacao."
   type        = map(string)
+  description = "Tags adicionais a serem mescladas com as tags obrigatorias da organizacao."
   default     = {}
 }
 
 variable "policy_name" {
-  description = "Finalidade da IAM Policy, utilizada na composicao do nome padronizado (ex.: readonly, deploy, logs)."
   type        = string
+  description = "Finalidade da IAM Policy/Role, usada na composicao do nome padronizado (ex.: readonly, deploy)."
 
   validation {
     condition     = length(var.policy_name) > 0
@@ -40,28 +40,32 @@ variable "policy_name" {
   }
 }
 
-variable "policy_description" {
-  description = "Descricao da IAM Policy."
+variable "trusted_principal_arn" {
   type        = string
-  default     = "IAM Policy gerenciada via Terraform seguindo o padrao organizacional."
+  description = "ARN do principal (usuario, role ou conta) autorizado a assumir a IAM Role via trust policy. Nao pode ser '*'."
+
+  validation {
+    condition     = var.trusted_principal_arn != "*" && length(var.trusted_principal_arn) > 0
+    error_message = "trusted_principal_arn nao pode ser vazio nem utilizar o wildcard '*'."
+  }
 }
 
 variable "allowed_actions" {
-  description = "Lista de actions IAM permitidas na statement Allow da policy. Nao pode conter \"*\" combinado com allowed_resources contendo \"*\"."
   type        = list(string)
+  description = "Lista de acoes IAM permitidas (Effect = Allow) na policy. Nao deve conter '*' combinado com allowed_resources contendo '*'."
 
   validation {
     condition     = length(var.allowed_actions) > 0
-    error_message = "O valor de allowed_actions deve conter ao menos uma action."
+    error_message = "allowed_actions deve conter ao menos uma acao."
   }
 }
 
 variable "allowed_resources" {
-  description = "Lista de recursos (ARNs) permitidos na statement Allow da policy. Nao pode conter \"*\" combinado com allowed_actions contendo \"*\"."
   type        = list(string)
+  description = "Lista de ARNs de recursos aos quais as acoes permitidas se aplicam. Nao deve conter '*' combinado com allowed_actions contendo '*'."
 
   validation {
     condition     = length(var.allowed_resources) > 0
-    error_message = "O valor de allowed_resources deve conter ao menos um recurso."
+    error_message = "allowed_resources deve conter ao menos um recurso."
   }
 }

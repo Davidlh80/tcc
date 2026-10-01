@@ -9,7 +9,7 @@ variable "environment" {
 }
 
 variable "system" {
-  description = "Identificador do sistema/projeto ao qual o recurso pertence."
+  description = "Nome do sistema/projeto ao qual o recurso pertence, usado no padrao de nomenclatura."
   type        = string
 
   validation {
@@ -19,13 +19,9 @@ variable "system" {
 }
 
 variable "region" {
-  description = "Regiao AWS utilizada para configurar o provider."
+  description = "Regiao AWS onde os recursos serao provisionados."
   type        = string
-
-  validation {
-    condition     = can(regex("^[a-z]{2}-[a-z]+-[0-9]$", var.region))
-    error_message = "O valor de region deve seguir o formato de regiao AWS, ex.: us-east-1."
-  }
+  default     = "us-east-1"
 }
 
 variable "additional_tags" {
@@ -35,37 +31,54 @@ variable "additional_tags" {
 }
 
 variable "policy_name" {
-  description = "Finalidade da IAM Policy, utilizada para compor o nome padronizado do recurso."
+  description = "Nome completo da IAM Policy, seguindo o padrao <ambiente>-<sistema>-iam-<finalidade>."
   type        = string
 
   validation {
-    condition     = can(regex("^[a-z0-9-]+$", var.policy_name))
-    error_message = "O valor de policy_name deve conter apenas letras minusculas, numeros e hifens."
+    condition     = can(regex("^(dev|hml|prd)-[a-z0-9-]+-iam-[a-z0-9-]+$", var.policy_name))
+    error_message = "O valor de policy_name deve seguir o padrao <ambiente>-<sistema>-iam-<finalidade>, ex.: prd-tcc-iam-readonly."
   }
 }
 
-variable "policy_description" {
-  description = "Descricao da IAM Policy."
+variable "role_name" {
+  description = "Nome completo da IAM Role, seguindo o padrao <ambiente>-<sistema>-iam-role-<finalidade>."
   type        = string
-  default     = "Policy gerenciada via Terraform seguindo o principio do menor privilegio."
+
+  validation {
+    condition     = can(regex("^(dev|hml|prd)-[a-z0-9-]+-iam-role-[a-z0-9-]+$", var.role_name))
+    error_message = "O valor de role_name deve seguir o padrao <ambiente>-<sistema>-iam-role-<finalidade>, ex.: prd-tcc-iam-role-readonly."
+  }
+}
+
+variable "assume_role_principal_arn" {
+  description = "ARN do principal (conta, role ou usuario IAM) ou service principal autorizado a assumir a role. Nao pode ser um wildcard."
+  type        = string
+
+  validation {
+    condition = (
+      var.assume_role_principal_arn != "*" &&
+      can(regex("^(arn:aws:(iam|sts)::[0-9]{12}:.+|[a-z0-9.-]+\\.amazonaws\\.com)$", var.assume_role_principal_arn))
+    )
+    error_message = "O valor de assume_role_principal_arn deve ser um ARN de conta/role/usuario IAM valido ou um service principal (ex.: ec2.amazonaws.com), e nao pode ser \"*\"."
+  }
 }
 
 variable "allowed_actions" {
-  description = "Lista de actions IAM permitidas na statement Allow da policy."
+  description = "Lista de acoes IAM permitidas na policy. Nao pode conter o wildcard \"*\"."
   type        = list(string)
 
   validation {
-    condition     = length(var.allowed_actions) > 0
-    error_message = "allowed_actions deve conter ao menos uma action."
+    condition     = length(var.allowed_actions) > 0 && !contains(var.allowed_actions, "*")
+    error_message = "O valor de allowed_actions deve conter ao menos uma acao e nao pode incluir o wildcard \"*\"."
   }
 }
 
 variable "allowed_resources" {
-  description = "Lista de ARNs/recursos permitidos na statement Allow da policy."
+  description = "Lista de recursos (ARNs) permitidos na policy. Nao pode conter o wildcard \"*\"."
   type        = list(string)
 
   validation {
-    condition     = length(var.allowed_resources) > 0
-    error_message = "allowed_resources deve conter ao menos um recurso."
+    condition     = length(var.allowed_resources) > 0 && !contains(var.allowed_resources, "*")
+    error_message = "O valor de allowed_resources deve conter ao menos um recurso e nao pode incluir o wildcard \"*\"."
   }
 }

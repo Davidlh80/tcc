@@ -1,31 +1,30 @@
 variable "environment" {
-  description = "Ambiente de implantacao (dev, hml ou prd)."
+  description = "Ambiente de implantacao do recurso."
   type        = string
 
   validation {
     condition     = contains(["dev", "hml", "prd"], var.environment)
-    error_message = "O valor de environment deve ser um dos seguintes: dev, hml, prd."
+    error_message = "environment deve ser um dos valores: dev, hml, prd."
   }
 }
 
 variable "system" {
-  description = "Identificador do sistema/produto, usado na nomenclatura padronizada dos recursos."
+  description = "Nome do sistema/aplicacao proprietario do recurso, usado na nomenclatura padronizada."
   type        = string
 
   validation {
     condition     = length(var.system) > 0
-    error_message = "O valor de system nao pode ser vazio."
+    error_message = "system nao pode ser vazio."
   }
 }
 
 variable "region" {
-  description = "Regiao AWS onde os recursos serao provisionados."
+  description = "Regiao AWS onde os recursos serao criados."
   type        = string
-  default     = "us-east-1"
 
   validation {
-    condition     = length(var.region) > 0
-    error_message = "O valor de region nao pode ser vazio."
+    condition     = can(regex("^[a-z]{2}-[a-z]+-[0-9]$", var.region))
+    error_message = "region deve seguir o formato de uma regiao AWS valida, ex.: us-east-1."
   }
 }
 
@@ -36,47 +35,41 @@ variable "additional_tags" {
 }
 
 variable "policy_name" {
-  description = "Finalidade da IAM Policy, utilizada na composicao do nome padronizado (ex.: readonly, deploy)."
+  description = "Finalidade/identificador do recurso IAM (ex.: readonly, s3-access), usado na nomenclatura padronizada da policy e da role."
   type        = string
 
   validation {
-    condition     = can(regex("^[a-z0-9]+(-[a-z0-9]+)*$", var.policy_name))
-    error_message = "O valor de policy_name deve conter apenas letras minusculas, numeros e hifens (ex.: readonly, deploy-app)."
+    condition     = can(regex("^[a-z0-9-]+$", var.policy_name))
+    error_message = "policy_name deve conter apenas letras minusculas, numeros e hifens."
   }
 }
 
-variable "policy_description" {
-  description = "Descricao da IAM Policy."
+variable "trusted_principal_arn" {
+  description = "ARN do principal (IAM role, usuario ou conta) autorizado a assumir a IAM Role via trust policy. Nao pode ser \"*\"."
   type        = string
-  default     = "Managed by Terraform."
+
+  validation {
+    condition     = var.trusted_principal_arn != "*" && can(regex("^arn:aws:iam::[0-9]{12}:.+$", var.trusted_principal_arn))
+    error_message = "trusted_principal_arn deve ser um ARN IAM valido (ex.: arn:aws:iam::123456789012:role/nome) e nao pode ser \"*\"."
+  }
 }
 
 variable "allowed_actions" {
-  description = "Lista de acoes IAM permitidas (Effect Allow). Nao deve conter apenas \"*\" combinado com allowed_resources igual a [\"*\"]."
+  description = "Lista de acoes IAM permitidas na statement Allow da policy (principio do menor privilegio)."
   type        = list(string)
 
   validation {
     condition     = length(var.allowed_actions) > 0
-    error_message = "allowed_actions deve conter ao menos uma acao."
-  }
-
-  validation {
-    condition     = alltrue([for a in var.allowed_actions : a != ""])
-    error_message = "allowed_actions nao pode conter strings vazias."
+    error_message = "allowed_actions deve conter ao menos uma acao IAM."
   }
 }
 
 variable "allowed_resources" {
-  description = "Lista de ARNs de recursos aos quais as acoes permitidas se aplicam."
+  description = "Lista de ARNs de recursos permitidos na statement Allow da policy (principio do menor privilegio)."
   type        = list(string)
 
   validation {
     condition     = length(var.allowed_resources) > 0
-    error_message = "allowed_resources deve conter ao menos um recurso."
-  }
-
-  validation {
-    condition     = alltrue([for r in var.allowed_resources : r != ""])
-    error_message = "allowed_resources nao pode conter strings vazias."
+    error_message = "allowed_resources deve conter ao menos um ARN de recurso."
   }
 }

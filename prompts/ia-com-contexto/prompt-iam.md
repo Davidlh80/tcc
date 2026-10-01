@@ -8,17 +8,19 @@ Você é um especialista em Terraform, AWS, DevOps e segurança de Infraestrutur
 
 Execução isolada de um experimento — ignore gerações anteriores. Contexto organizacional anexado logo abaixo, sob o cabeçalho "Contexto organizacional": leia-o e siga-o como fonte normativa (prevalece sobre prática geral de mercado em caso de conflito).
 
-Recurso desta execução: IAM Policy.
+Recurso desta execução: IAM Policy anexada a uma IAM Role.
 
 ## Ação
 
-Gere uma blueprint Terraform completa para a IAM Policy, cobrindo:
+Gere uma blueprint Terraform completa para a IAM Policy anexada a uma IAM Role, cobrindo:
 
 - criação da IAM Policy;
+- criação de uma IAM Role e anexação da IAM Policy a essa role (a policy não deve ficar solta, sem nenhum principal associado);
+- trust policy (assume role policy) da role restrita a um principal específico, configurável por variável — proibido `Principal: "*"` ou `"AWS": "*"`;
 - proibição de uma statement que combine `Action: "*"` com `Resource: "*"`;
 - `Effect: Allow` restrito apenas às ações e recursos informados por variável;
 - nenhuma policy gerenciada administrativa anexada ou replicada (ex.: `AdministratorAccess`);
-- ações e recursos permitidos configuráveis por variável;
+- ações, recursos e principal de confiança permitidos configuráveis por variável;
 - aplicação do padrão de nomenclatura, das tags obrigatórias (quando o recurso suportar), da nomenclatura de variáveis e outputs, e da estrutura de README definidos no contexto organizacional.
 
 ## Formato de saída

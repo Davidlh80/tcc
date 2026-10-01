@@ -3,15 +3,6 @@ name: LocalStack Experiment
 on:
   workflow_dispatch:
 
-  push:
-    branches:
-      - "**"
-    paths:
-      - "terraform/**"
-      - "scripts/run-localstack-tests.sh"
-      - "test-data/provider-lock/versions.tf"
-      - ".github/workflows/localstack.yml"
-
 permissions:
   contents: read
 
@@ -26,7 +17,6 @@ env:
 jobs:
   discover:
     name: Discover Terraform batches
-    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && contains(toJson(github.event.commits), '#teste'))
     runs-on: ubuntu-latest
 
     outputs:

@@ -1,19 +1,29 @@
-output "policy_arn" {
-  description = "ARN da IAM Policy criada."
-  value       = aws_iam_policy.this.arn
+output "role_name" {
+  description = "Nome da IAM Role criada."
+  value       = aws_iam_role.this.name
 }
 
-output "policy_id" {
-  description = "ID da IAM Policy criada."
-  value       = aws_iam_policy.this.id
+output "role_arn" {
+  description = "ARN da IAM Role criada."
+  value       = aws_iam_role.this.arn
+}
+
+output "role_unique_id" {
+  description = "Identificador unico gerado pela AWS para a IAM Role."
+  value       = aws_iam_role.this.unique_id
 }
 
 output "policy_name" {
-  description = "Nome da IAM Policy criada."
+  description = "Nome da IAM Policy gerenciada criada."
   value       = aws_iam_policy.this.name
 }
 
-output "policy_document_json" {
-  description = "Documento JSON da policy gerado a partir da statement configurada."
-  value       = data.aws_iam_policy_document.this.json
+output "policy_arn" {
+  description = "ARN da IAM Policy gerenciada criada."
+  value       = aws_iam_policy.this.arn
+}
+
+output "policy_attachment_id" {
+  description = "ID do attachment entre a IAM Policy e a IAM Role."
+  value       = aws_iam_role_policy_attachment.this.id
 }

@@ -1,5 +1,11 @@
+provider "aws" {
+  region = var.region
+}
+
 locals {
-  policy_name_full = "${var.environment}-${var.system}-iam-${var.policy_name}"
+  name_prefix = "${var.environment}-${var.system}"
+  policy_name = "${local.name_prefix}-iam-policy-${var.policy_name}"
+  role_name   = "${local.name_prefix}-iam-role-${var.policy_name}"
 
   tags = merge(
     {
@@ -13,13 +19,22 @@ locals {
   )
 }
 
-provider "aws" {
-  region = var.region
+data "aws_iam_policy_document" "trust" {
+  statement {
+    sid     = "AssumeRoleTrust"
+    effect  = "Allow"
+    actions = ["sts:AssumeRole"]
+
+    principals {
+      type        = "AWS"
+      identifiers = var.trusted_principal_arns
+    }
+  }
 }
 
 data "aws_iam_policy_document" "this" {
   statement {
-    sid       = "AllowedActions"
+    sid       = "AllowConfiguredActions"
     effect    = "Allow"
     actions   = var.allowed_actions
     resources = var.allowed_resources
@@ -27,25 +42,23 @@ data "aws_iam_policy_document" "this" {
 }
 
 resource "aws_iam_policy" "this" {
-  name        = local.policy_name_full
-  description = var.policy_description
+  name        = local.policy_name
+  description = "Policy IAM gerenciada via Terraform para o sistema ${var.system} no ambiente ${var.environment}."
   policy      = data.aws_iam_policy_document.this.json
-  tags        = local.tags
 
-  lifecycle {
-    precondition {
-      condition     = !(contains(var.allowed_actions, "*") && contains(var.allowed_resources, "*"))
-      error_message = "A statement da policy nao pode combinar Action \"*\" com Resource \"*\"."
-    }
+  tags = local.tags
+}
 
-    precondition {
-      condition     = !contains(var.allowed_actions, "*") || length(var.allowed_actions) == 1
-      error_message = "Quando \"*\" for utilizado em allowed_actions, ele deve ser o unico item da lista."
-    }
+resource "aws_iam_role" "this" {
+  name                 = local.role_name
+  description          = "Role IAM gerenciada via Terraform para o sistema ${var.system} no ambiente ${var.environment}."
+  assume_role_policy   = data.aws_iam_policy_document.trust.json
+  max_session_duration = 3600
 
-    precondition {
-      condition     = !contains(var.allowed_resources, "*") || length(var.allowed_resources) == 1
-      error_message = "Quando \"*\" for utilizado em allowed_resources, ele deve ser o unico item da lista."
-    }
-  }
+  tags = local.tags
+}
+
+resource "aws_iam_role_policy_attachment" "this" {
+  role       = aws_iam_role.this.name
+  policy_arn = aws_iam_policy.this.arn
 }

@@ -4,9 +4,9 @@ resource: iam
 model: "sonnet"
 prompt_file: "prompts/ia-com-contexto/prompt-iam.md"
 context_file: "contexto/contexto-organizacional.md"
-started_at: "2026-09-12T13:22:12.493132-03:00"
-finished_at: "2026-09-12T13:23:11.15516-03:00"
-api_duration_ms: 58660
-total_duration_ms: 58662
-generated_at: "2026-09-12T13:23:11.15516-03:00"
+started_at: "2026-09-30T10:34:14.054604-03:00"
+finished_at: "2026-09-30T10:35:51.132895-03:00"
+api_duration_ms: 97074
+total_duration_ms: 97078
+generated_at: "2026-09-30T10:35:51.132895-03:00"
 generation_tool: "scripts/generate-blueprint"

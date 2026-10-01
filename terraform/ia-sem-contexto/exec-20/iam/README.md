@@ -1,37 +1,53 @@
-# IAM Policy — Blueprint Terraform
+# IAM Policy anexada a IAM Role
 
-Blueprint standalone para provisionamento de uma IAM Policy na AWS, gerado sem vínculo a padrões organizacionais específicos. Todas as decisões de nomenclatura, privilégio, tags e estrutura seguem boas práticas gerais de mercado para Terraform e AWS.
+Blueprint Terraform que provisiona uma IAM Role e uma IAM Policy gerenciada,
+anexando a policy a role via `aws_iam_role_policy_attachment`. A policy nunca
+existe "solta": ela e sempre criada e anexada a um principal (a role) na mesma
+aplicacao.
 
-## Descrição
+## Recursos criados
 
-Este módulo cria uma `aws_iam_policy` a partir de uma lista configurável de statements (`var.statements`), renderizados via `data.aws_iam_policy_document`. O statement padrão fornecido é apenas um exemplo de acesso somente leitura a um bucket S3 e **deve ser substituído** pelas actions/resources reais antes do uso em produção.
+- `aws_iam_role.this` — role com trust policy (assume role) configuravel.
+- `aws_iam_policy.this` — policy gerenciada com acoes e recursos explicitos.
+- `aws_iam_role_policy_attachment.this` — vinculo entre a policy e a role.
 
-## Requisitos
+## Decisoes de seguranca
 
-| Nome | Versão |
-|---|---|
-| terraform | >= 1.5.0 |
-| aws | >= 5.0, < 6.0 |
+- **Sem wildcard amplo**: `allowed_actions` e `resource_arns` rejeitam o valor
+  `"*"` via `validation` nas variaveis. Toda acao e recurso deve ser declarado
+  explicitamente.
+- **Trust policy explicito**: o principal de confianca (`trusted_principal_type`
+  e `trusted_principal_identifiers`) e definido pelo consumidor do modulo — nao
+  ha default que confie em `"*"` ou em qualquer conta AWS.
+- **External ID opcional**: quando `external_id` e informado, o trust policy
+  exige a condicao `sts:ExternalId`, mitigando o problema do "confused deputy"
+  em cenarios de acesso cross-account/terceiros.
+- **MFA opcional**: `require_mfa = true` adiciona a condicao
+  `aws:MultiFactorAuthPresent = true` ao assume role.
+- **Permissions boundary opcional**: `permissions_boundary_arn` permite limitar
+  o escopo maximo de permissoes da role.
+- **Sem credenciais reais**: nenhum valor sensivel fixo e usado; tudo que e
+  configuravel esta exposto como variavel.
 
 ## Uso
 
-```
-module "iam_policy" {
+```hcl
+module "iam_role_policy" {
   source = "./"
 
-  policy_name        = "app-readonly-s3"
-  policy_description = "Acesso somente leitura ao bucket de dados da aplicação X"
+  role_name   = "meu-servico-role"
+  policy_name = "meu-servico-policy"
 
-  statements = [
-    {
-      sid       = "AllowReadDataBucket"
-      effect    = "Allow"
-      actions   = ["s3:GetObject", "s3:ListBucket"]
-      resources = [
-        "arn:aws:s3:::meu-bucket-de-dados",
-        "arn:aws:s3:::meu-bucket-de-dados/*",
-      ]
-    }
+  trusted_principal_type        = "Service"
+  trusted_principal_identifiers = ["lambda.amazonaws.com"]
+
+  allowed_actions = [
+    "s3:GetObject",
+    "s3:PutObject",
+  ]
+
+  resource_arns = [
+    "arn:aws:s3:::meu-bucket/*",
   ]
 
   tags = {
@@ -41,38 +57,34 @@ module "iam_policy" {
 }
 ```
 
-## Inputs
+## Inputs principais
 
-| Nome | Descrição | Tipo | Default | Obrigatório |
-|---|---|---|---|---|
-| aws_region | Região AWS do provider | `string` | `"us-east-1"` | não |
-| policy_name | Nome da IAM Policy | `string` | — | sim |
-| policy_description | Descrição da policy | `string` | texto padrão | não |
-| path | Path da IAM Policy | `string` | `"/"` | não |
-| tags | Tags aplicadas à policy | `map(string)` | `{}` | não |
-| statements | Lista de statements da policy | `list(object)` | exemplo de leitura em S3 | não |
+| Nome                             | Descricao                                           | Default                  |
+|-----------------------------------|------------------------------------------------------|---------------------------|
+| `role_name`                       | Nome da IAM Role                                     | `app-scoped-role`        |
+| `policy_name`                     | Nome da IAM Policy                                   | `app-scoped-policy`      |
+| `trusted_principal_type`          | Tipo do principal (`AWS`, `Service`, `Federated`)    | `Service`                 |
+| `trusted_principal_identifiers`   | Identificadores do principal de confianca             | `["ec2.amazonaws.com"]`  |
+| `external_id`                     | External ID exigido no assume role                    | `null`                    |
+| `require_mfa`                     | Exige MFA para assumir a role                          | `false`                   |
+| `allowed_actions`                 | Acoes IAM permitidas (sem `*`)                        | ver `variables.tf`        |
+| `resource_arns`                   | Recursos alvo das acoes (sem `*`)                     | ver `variables.tf`        |
+| `permissions_boundary_arn`        | ARN de permissions boundary                            | `null`                    |
+| `tags`                            | Tags aplicadas a role e a policy                       | `{ ManagedBy = "terraform" }` |
 
-## Outputs
+## Outputs principais
 
-| Nome | Descrição |
-|---|---|
-| policy_arn | ARN da IAM Policy criada |
-| policy_id | ID da IAM Policy criada |
-| policy_name | Nome da IAM Policy criada |
-| policy_document_json | JSON final do documento de policy |
+- `role_arn`, `role_name`, `role_id`
+- `policy_arn`, `policy_name`, `policy_id`
+- `role_policy_attachment_id`
 
-## Considerações de segurança
+## Validacao local
 
-- O módulo bloqueia, via `validation`, qualquer statement que combine `actions = ["*"]` com `resources = ["*"]`, evitando a criação acidental de uma policy com privilégio administrativo total.
-- Substitua os valores de exemplo (`REPLACE_ME_BUCKET_NAME`) por ARNs reais e restrinja `actions` ao mínimo necessário (princípio de menor privilégio).
-- Prefira anexar esta policy a **roles** ou **grupos** IAM em vez de usuários individuais.
-- Utilize `tags` para rastreabilidade (owner, ambiente, custo) conforme a governança da sua organização.
-- Nenhum valor sensível ou credencial é definido neste módulo; a autenticação do provider AWS deve ser feita externamente (variáveis de ambiente, perfil compartilhado, OIDC, etc.).
-- Não há backend remoto configurado; defina um backend adequado ao seu ambiente antes de uso em produção.
-
-## Validação local
-
-```
+```bash
+terraform fmt -recursive
 terraform init -backend=false
 terraform validate
 ```
+
+Nenhum destes comandos requer credenciais AWS reais, pois nao ha backend
+remoto nem chamadas de dados dependentes de uma conta especifica.

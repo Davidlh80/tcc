@@ -1,63 +1,78 @@
-# IAM Policy - Blueprint Terraform
+# IAM Role com IAM Policy anexada
 
-Blueprint Terraform para provisionamento de uma IAM Policy na AWS, seguindo o principio de menor privilegio por padrao.
+Blueprint Terraform que provisiona uma IAM Role e uma IAM Policy gerenciada, anexando a policy diretamente a role (nenhuma policy fica solta, sem principal associado).
 
 ## Recursos criados
 
-- `aws_iam_policy.this`: IAM Policy gerenciada, com documento gerado via `data.aws_iam_policy_document`.
+- `data.aws_iam_policy_document.assume_role` — trust policy (assume role) da IAM Role.
+- `data.aws_iam_policy_document.permissions` — documento de permissoes da IAM Policy.
+- `aws_iam_role.this` — IAM Role.
+- `aws_iam_policy.this` — IAM Policy gerenciada.
+- `aws_iam_role_policy_attachment.this` — anexa a policy a role.
+
+## Decisoes de seguranca
+
+- Nenhum wildcard total (`"*"`) e permitido em `allowed_actions` nem em `resource_arns`; ambas as variaveis sao validadas para bloquear esse valor.
+- O principal de confianca (assume role) e explicito e configuravel via `assume_role_principal_type` e `assume_role_principal_identifiers` — nao ha padrao permissivo do tipo `"AWS": "*"`.
+- Suporte opcional a `sts:ExternalId` na trust policy, recomendado para cenarios cross-account.
+- Suporte opcional a `permissions_boundary_arn` para limitar o escopo maximo de permissoes da role.
+- `force_detach_policies = true` por padrao, evitando bloqueios acidentais na destruicao da role.
+- Nenhum valor sensivel ou credencial real e usado; ARNs de exemplo devem ser substituidos pelos recursos reais do consumidor do modulo.
 
 ## Uso
 
 ```
-module "iam_policy" {
+module "iam_role_with_policy" {
   source = "./"
 
-  policy_name        = "app-readonly-s3-policy"
-  policy_description = "Permite leitura de objetos em bucket especifico"
-  policy_actions      = ["s3:GetObject", "s3:ListBucket"]
-  policy_resources    = [
-    "arn:aws:s3:::my-app-bucket",
-    "arn:aws:s3:::my-app-bucket/*"
+  role_name                         = "minha-app-role"
+  policy_name                       = "minha-app-policy"
+  assume_role_principal_type        = "Service"
+  assume_role_principal_identifiers = ["lambda.amazonaws.com"]
+
+  allowed_actions = [
+    "logs:CreateLogGroup",
+    "logs:CreateLogStream",
+    "logs:PutLogEvents",
+  ]
+
+  resource_arns = [
+    "arn:aws:logs:us-east-1:123456789012:log-group:/aws/lambda/minha-app:*",
   ]
 
   tags = {
-    Environment = "production"
-    Owner       = "team-platform"
+    Ambiente = "producao"
   }
 }
 ```
 
-## Variaveis
+## Inputs principais
 
-| Nome                  | Descricao                                              | Tipo         | Default                                   |
-|-----------------------|---------------------------------------------------------|--------------|--------------------------------------------|
-| aws_region            | Regiao AWS                                               | string       | "us-east-1"                                |
-| policy_name           | Nome da IAM Policy                                       | string       | "least-privilege-policy"                   |
-| policy_path           | Path da IAM Policy                                       | string       | "/"                                        |
-| policy_description    | Descricao da IAM Policy                                  | string       | "Policy gerada seguindo o principio de menor privilegio." |
-| policy_actions        | Acoes IAM permitidas (sem wildcard `*`)                   | list(string) | ["s3:GetObject", "s3:ListBucket"]          |
-| policy_resources      | ARNs de recursos alvo (evitar `*`)                        | list(string) | ["arn:aws:s3:::example-bucket", "arn:aws:s3:::example-bucket/*"] |
-| tags                  | Tags aplicadas ao recurso                                 | map(string)  | { ManagedBy = "terraform" }                |
+| Nome | Descricao | Default |
+|---|---|---|
+| `aws_region` | Regiao usada pelo provider AWS | `us-east-1` |
+| `role_name` | Nome da IAM Role | `app-role` |
+| `policy_name` | Nome da IAM Policy | `app-policy` |
+| `assume_role_principal_type` | Tipo do principal de confianca (`Service` ou `AWS`) | `Service` |
+| `assume_role_principal_identifiers` | Identificadores do principal de confianca | `["ec2.amazonaws.com"]` |
+| `assume_role_external_id` | External ID opcional para assume role | `null` |
+| `allowed_actions` | Actions permitidas na policy | `["s3:GetObject", "s3:ListBucket"]` |
+| `resource_arns` | Recursos alvo das actions | `["arn:aws:s3:::example-bucket", "arn:aws:s3:::example-bucket/*"]` |
+| `max_session_duration` | Duracao maxima da sessao (segundos) | `3600` |
+| `permissions_boundary_arn` | ARN de permissions boundary opcional | `null` |
+| `tags` | Tags aplicadas aos recursos | `{ ManagedBy = "terraform" }` |
 
 ## Outputs
 
-| Nome                  | Descricao                                  |
-|-----------------------|---------------------------------------------|
-| policy_arn            | ARN da IAM Policy criada                     |
-| policy_id             | ID da IAM Policy criada                      |
-| policy_name           | Nome da IAM Policy criada                    |
-| policy_document_json  | Documento JSON gerado para a policy          |
+- `role_name`, `role_arn`, `role_unique_id`
+- `policy_name`, `policy_arn`
+- `policy_attachment_id`
 
-## Consideracoes de seguranca
-
-- Nao use `policy_actions` ou `policy_resources` com valor `*`; a variavel `policy_actions` bloqueia explicitamente o wildcard `*` via `validation`.
-- A statement inclui uma condition `aws:SecureTransport = true`, exigindo HTTPS para as chamadas cobertas pela policy.
-- Prefira escopar `policy_resources` ao ARN exato dos recursos necessarios, evitando permissoes amplas por conta ou regiao.
-- Revise periodicamente as acoes concedidas para manter o principio de menor privilegio.
-
-## Validacao
+## Validacao local
 
 ```
 terraform init -backend=false
 terraform validate
 ```
+
+Nenhum backend remoto e nenhuma credencial real sao necessarios para essas etapas.

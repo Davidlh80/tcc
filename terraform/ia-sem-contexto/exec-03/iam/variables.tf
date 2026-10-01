@@ -1,72 +1,120 @@
 variable "aws_region" {
-  description = "Regiao AWS onde o provider ira operar."
+  description = "Região AWS usada pelo provider. Recursos IAM são globais, mas o provider exige uma região."
   type        = string
   default     = "us-east-1"
 }
 
+variable "role_name" {
+  description = "Nome da IAM Role."
+  type        = string
+  default     = "app-role"
+
+  validation {
+    condition     = length(var.role_name) > 0 && length(var.role_name) <= 64
+    error_message = "role_name deve ter entre 1 e 64 caracteres."
+  }
+}
+
+variable "role_description" {
+  description = "Descrição da IAM Role."
+  type        = string
+  default     = "Role gerenciada via Terraform."
+}
+
 variable "policy_name" {
-  description = "Nome da IAM Policy. Deve seguir o padrao aceito pela AWS (1-128 caracteres, letras, numeros e + = , . @ - _)."
+  description = "Nome da IAM Policy anexada à role."
   type        = string
-  default     = "example-least-privilege-policy"
+  default     = "app-policy"
 
   validation {
-    condition     = can(regex("^[\\w+=,.@-]{1,128}$", var.policy_name))
-    error_message = "O nome da policy deve ter entre 1 e 128 caracteres validos para IAM (letras, numeros, + = , . @ - _)."
+    condition     = length(var.policy_name) > 0 && length(var.policy_name) <= 128
+    error_message = "policy_name deve ter entre 1 e 128 caracteres."
   }
 }
 
-variable "description" {
-  description = "Descricao da IAM Policy."
+variable "policy_description" {
+  description = "Descrição da IAM Policy."
   type        = string
-  default     = "Policy gerenciada via Terraform seguindo o principio do menor privilegio."
+  default     = "Policy gerenciada via Terraform."
 }
 
-variable "path" {
-  description = "Path da IAM Policy dentro da conta AWS."
-  type        = string
-  default     = "/"
-
-  validation {
-    condition     = can(regex("^/.*/$|^/$", var.path))
-    error_message = "O path deve comecar e terminar com '/', por exemplo '/' ou '/times/plataforma/'."
-  }
-}
-
-variable "effect" {
-  description = "Efeito da statement da policy (Allow ou Deny)."
-  type        = string
-  default     = "Allow"
-
-  validation {
-    condition     = contains(["Allow", "Deny"], var.effect)
-    error_message = "O valor de effect deve ser 'Allow' ou 'Deny'."
-  }
-}
-
-variable "actions" {
-  description = "Lista de actions IAM permitidas/negadas pela policy. Nao utilize '*' isolado; prefira wildcards de servico especifico (ex: 's3:Get*')."
+variable "trusted_service_principals" {
+  description = "Serviços AWS (ex: ec2.amazonaws.com) autorizados a assumir a role via sts:AssumeRole."
   type        = list(string)
-  default     = ["s3:GetObject", "s3:ListBucket"]
+  default     = ["ec2.amazonaws.com"]
+}
+
+variable "trusted_aws_principals" {
+  description = "ARNs de contas, roles ou usuários AWS adicionais autorizados a assumir a role. Vazio por padrão (nenhum principal AWS além dos serviços)."
+  type        = list(string)
+  default     = []
+}
+
+variable "external_id" {
+  description = "External ID exigido (condição sts:ExternalId) ao assumir a role a partir de trusted_aws_principals. Recomendado em cenários cross-account com terceiros. Deixe vazio para não exigir."
+  type        = string
+  default     = ""
+  sensitive   = true
+}
+
+variable "max_session_duration" {
+  description = "Duração máxima, em segundos, da sessão obtida via sts:AssumeRole."
+  type        = number
+  default     = 3600
 
   validation {
-    condition     = length(var.actions) > 0 && !contains(var.actions, "*")
-    error_message = "Informe ao menos uma action e evite o uso de '*' isolado como action, para manter o menor privilegio."
+    condition     = var.max_session_duration >= 3600 && var.max_session_duration <= 43200
+    error_message = "max_session_duration deve estar entre 3600 e 43200 segundos."
   }
 }
 
-variable "resources" {
-  description = "Lista de ARNs de recursos aos quais a policy se aplica. Nao utilize '*' isolado; especifique ARNs concretos."
-  type        = list(string)
-  default     = ["arn:aws:s3:::example-bucket", "arn:aws:s3:::example-bucket/*"]
+variable "permissions_boundary_arn" {
+  description = "ARN de uma IAM Policy a ser usada como permissions boundary da role. Deixe vazio para não aplicar boundary."
+  type        = string
+  default     = ""
+}
+
+variable "policy_statements" {
+  description = "Statements da IAM Policy anexada à role. Defina ações e recursos com o menor privilégio necessário; wildcards (*) não são permitidos em actions ou resources."
+  type = list(object({
+    sid       = string
+    effect    = string
+    actions   = list(string)
+    resources = list(string)
+  }))
+
+  default = [
+    {
+      sid       = "AllowReadOnlyExampleBucket"
+      effect    = "Allow"
+      actions   = ["s3:GetObject", "s3:ListBucket"]
+      resources = ["arn:aws:s3:::example-bucket", "arn:aws:s3:::example-bucket/*"]
+    }
+  ]
 
   validation {
-    condition     = length(var.resources) > 0 && !contains(var.resources, "*")
-    error_message = "Informe ao menos um ARN de recurso e evite o uso de '*' isolado, para manter o menor privilegio."
+    condition     = length(var.policy_statements) > 0
+    error_message = "policy_statements deve conter ao menos um statement."
+  }
+
+  validation {
+    condition     = alltrue([for s in var.policy_statements : contains(["Allow", "Deny"], s.effect)])
+    error_message = "O campo effect de cada statement deve ser \"Allow\" ou \"Deny\"."
+  }
+
+  validation {
+    condition     = alltrue([for s in var.policy_statements : !contains(s.actions, "*")])
+    error_message = "Wildcard \"*\" não é permitido em actions; especifique ações explícitas."
+  }
+
+  validation {
+    condition     = alltrue([for s in var.policy_statements : !contains(s.resources, "*")])
+    error_message = "Wildcard \"*\" não é permitido em resources; especifique ARNs explícitos."
   }
 }
 
 variable "tags" {
-  description = "Tags a serem aplicadas na IAM Policy."
+  description = "Tags aplicadas à IAM Role e à IAM Policy."
   type        = map(string)
   default     = {}
 }

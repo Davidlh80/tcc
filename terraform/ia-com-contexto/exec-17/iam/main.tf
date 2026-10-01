@@ -1,7 +1,9 @@
 locals {
-  name = "${var.environment}-${var.system}-iam-${var.policy_name}"
+  name_prefix      = "${var.environment}-${var.system}"
+  policy_full_name = "${local.name_prefix}-iam-${var.policy_name}"
+  role_full_name   = "${local.name_prefix}-iam-role-${var.policy_name}"
 
-  tags = merge(
+  common_tags = merge(
     {
       Project     = "tcc-iac-ia"
       Environment = var.environment
@@ -11,31 +13,55 @@ locals {
     },
     var.additional_tags
   )
-
-  has_wildcard_action   = contains(var.allowed_actions, "*")
-  has_wildcard_resource = contains(var.allowed_resources, "*")
 }
 
 data "aws_iam_policy_document" "this" {
   statement {
-    sid       = "AllowConfiguredActions"
+    sid       = "AllowedActionsOnResources"
     effect    = "Allow"
     actions   = var.allowed_actions
     resources = var.allowed_resources
   }
+}
 
-  lifecycle {
-    precondition {
-      condition     = !(local.has_wildcard_action && local.has_wildcard_resource)
-      error_message = "Nao e permitido combinar Action = \"*\" com Resource = \"*\" na mesma statement."
+data "aws_iam_policy_document" "assume_role" {
+  statement {
+    sid     = "AllowSpecificPrincipalAssumeRole"
+    effect  = "Allow"
+    actions = ["sts:AssumeRole"]
+
+    principals {
+      type        = "AWS"
+      identifiers = [var.trusted_principal_arn]
     }
   }
 }
 
 resource "aws_iam_policy" "this" {
-  name        = local.name
-  description = var.policy_description
+  name        = local.policy_full_name
+  description = "Policy de menor privilegio para o sistema ${var.system} (${var.environment}) - finalidade: ${var.policy_name}."
   policy      = data.aws_iam_policy_document.this.json
 
-  tags = local.tags
+  tags = local.common_tags
+
+  lifecycle {
+    precondition {
+      condition     = !(contains(var.allowed_actions, "*") && contains(var.allowed_resources, "*"))
+      error_message = "Nao e permitido combinar Action = \"*\" com Resource = \"*\" na mesma statement."
+    }
+  }
+}
+
+resource "aws_iam_role" "this" {
+  name                 = local.role_full_name
+  description          = "Role de menor privilegio para o sistema ${var.system} (${var.environment}) - finalidade: ${var.policy_name}."
+  assume_role_policy   = data.aws_iam_policy_document.assume_role.json
+  max_session_duration = 3600
+
+  tags = local.common_tags
+}
+
+resource "aws_iam_role_policy_attachment" "this" {
+  role       = aws_iam_role.this.name
+  policy_arn = aws_iam_policy.this.arn
 }
