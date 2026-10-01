@@ -1,6 +1,6 @@
 variable "environment" {
+  description = "Ambiente de implantacao do recurso (dev, hml ou prd)."
   type        = string
-  description = "Ambiente de implantacao do recurso."
 
   validation {
     condition     = contains(["dev", "hml", "prd"], var.environment)
@@ -9,85 +9,67 @@ variable "environment" {
 }
 
 variable "system" {
+  description = "Identificador do sistema ou projeto ao qual o recurso pertence, usado na nomenclatura padronizada."
   type        = string
-  description = "Nome do sistema/projeto ao qual o recurso pertence."
 
   validation {
-    condition     = length(var.system) > 0
-    error_message = "system nao pode ser vazio."
+    condition     = length(var.system) > 0 && can(regex("^[a-z0-9-]+$", var.system))
+    error_message = "system deve ser nao vazio e conter apenas letras minusculas, numeros e hifens."
   }
 }
 
 variable "region" {
+  description = "Regiao AWS onde os recursos serao criados."
   type        = string
-  description = "Regiao AWS onde os recursos serao provisionados."
-  default     = "us-east-1"
+
+  validation {
+    condition     = can(regex("^[a-z]{2}-[a-z]+-[0-9]$", var.region))
+    error_message = "region deve seguir o formato de uma regiao AWS valida, ex.: us-east-1."
+  }
 }
 
 variable "additional_tags" {
+  description = "Tags adicionais a serem mescladas as tags obrigatorias da organizacao."
   type        = map(string)
-  description = "Tags adicionais mescladas com as tags obrigatorias da organizacao."
   default     = {}
 }
 
-variable "purpose" {
+variable "policy_name" {
+  description = "Finalidade/nome da IAM Policy e da IAM Role, usado na nomenclatura padronizada (<ambiente>-<sistema>-<recurso>-<finalidade>)."
   type        = string
-  description = "Finalidade da IAM Policy/Role, usada na nomenclatura padronizada (ex.: readonly, deploy)."
 
   validation {
-    condition     = length(var.purpose) > 0
-    error_message = "purpose nao pode ser vazio."
-  }
-}
-
-variable "policy_description" {
-  type        = string
-  description = "Descricao da IAM Policy criada."
-  default     = "Custom least-privilege IAM policy managed via Terraform."
-}
-
-variable "allowed_actions" {
-  type        = list(string)
-  description = "Lista de actions IAM permitidas na policy (principio do menor privilegio)."
-
-  validation {
-    condition     = length(var.allowed_actions) > 0
-    error_message = "allowed_actions deve conter ao menos uma action."
-  }
-}
-
-variable "allowed_resources" {
-  type        = list(string)
-  description = "Lista de ARNs/recursos aos quais as actions permitidas se aplicam."
-
-  validation {
-    condition     = length(var.allowed_resources) > 0
-    error_message = "allowed_resources deve conter ao menos um recurso."
+    condition     = length(var.policy_name) > 0 && can(regex("^[a-z0-9-]+$", var.policy_name))
+    error_message = "policy_name deve ser nao vazio e conter apenas letras minusculas, numeros e hifens."
   }
 }
 
 variable "trusted_principal_arn" {
+  description = "ARN unico do principal (usuario, role ou conta) autorizado a assumir a IAM Role. Nao pode ser um wildcard."
   type        = string
-  description = "ARN do principal IAM (conta, role ou usuario) autorizado a assumir a role. Nao pode ser curinga."
 
   validation {
-    condition     = var.trusted_principal_arn != "*" && var.trusted_principal_arn != ""
-    error_message = "trusted_principal_arn nao pode ser vazio nem \"*\". Informe um ARN especifico."
-  }
-
-  validation {
-    condition     = can(regex("^arn:aws:iam::", var.trusted_principal_arn))
-    error_message = "trusted_principal_arn deve ser um ARN IAM valido (ex.: arn:aws:iam::123456789012:role/nome)."
+    condition     = can(regex("^arn:aws:iam::[0-9]{12}:", var.trusted_principal_arn)) && !can(regex("\\*", var.trusted_principal_arn))
+    error_message = "trusted_principal_arn deve ser um ARN IAM valido (arn:aws:iam::<account-id>:...) e nao pode conter wildcard."
   }
 }
 
-variable "max_session_duration" {
-  type        = number
-  description = "Duracao maxima (em segundos) da sessao assumida pela role."
-  default     = 3600
+variable "allowed_actions" {
+  description = "Lista de acoes IAM permitidas na policy. Nao deve conter apenas \"*\" combinado com allowed_resources igual a \"*\"."
+  type        = list(string)
 
   validation {
-    condition     = var.max_session_duration >= 3600 && var.max_session_duration <= 43200
-    error_message = "max_session_duration deve estar entre 3600 e 43200 segundos."
+    condition     = length(var.allowed_actions) > 0
+    error_message = "allowed_actions deve conter pelo menos uma acao."
+  }
+}
+
+variable "allowed_resources" {
+  description = "Lista de recursos (ARNs) aos quais as acoes permitidas se aplicam."
+  type        = list(string)
+
+  validation {
+    condition     = length(var.allowed_resources) > 0
+    error_message = "allowed_resources deve conter pelo menos um recurso."
   }
 }

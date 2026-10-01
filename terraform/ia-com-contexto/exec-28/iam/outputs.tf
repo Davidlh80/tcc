@@ -14,11 +14,11 @@ output "policy_id" {
 }
 
 output "role_name" {
-  description = "Nome da IAM Role a qual a policy foi anexada."
+  description = "Nome da IAM Role criada e associada a IAM Policy."
   value       = aws_iam_role.this.name
 }
 
 output "role_arn" {
-  description = "ARN da IAM Role a qual a policy foi anexada."
+  description = "ARN da IAM Role criada e associada a IAM Policy."
   value       = aws_iam_role.this.arn
 }

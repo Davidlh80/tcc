@@ -22,8 +22,3 @@ output "role_arn" {
   description = "ARN da IAM Role criada."
   value       = aws_iam_role.this.arn
 }
-
-output "role_id" {
-  description = "ID unico (unique_id) da IAM Role criada."
-  value       = aws_iam_role.this.unique_id
-}

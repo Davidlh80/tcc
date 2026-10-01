@@ -1,21 +1,26 @@
 locals {
-  policy_full_name = "${var.environment}-${var.system}-iam-${var.policy_name}-policy"
-  role_full_name    = "${var.environment}-${var.system}-iam-${var.policy_name}-role"
+  policy_name = "${var.environment}-${var.system}-iam-policy-${var.policy_name}"
+  role_name   = "${var.environment}-${var.system}-iam-role-${var.policy_name}"
 
-  mandatory_tags = {
-    Project     = "tcc-iac-ia"
-    Environment = var.environment
-    ManagedBy   = "terraform"
-    Owner       = "devops"
-    CostCenter  = "academic-research"
-  }
-
-  tags = merge(local.mandatory_tags, var.additional_tags)
+  tags = merge(
+    {
+      Project     = "tcc-iac-ia"
+      Environment = var.environment
+      ManagedBy   = "terraform"
+      Owner       = "devops"
+      CostCenter  = "academic-research"
+    },
+    var.additional_tags
+  )
 }
 
-data "aws_iam_policy_document" "assume_role" {
+provider "aws" {
+  region = var.region
+}
+
+data "aws_iam_policy_document" "trust" {
   statement {
-    sid     = "AssumeRoleTrustedPrincipalOnly"
+    sid     = "AllowSpecificPrincipalAssumeRole"
     effect  = "Allow"
     actions = ["sts:AssumeRole"]
 
@@ -26,9 +31,9 @@ data "aws_iam_policy_document" "assume_role" {
   }
 }
 
-data "aws_iam_policy_document" "permissions" {
+data "aws_iam_policy_document" "this" {
   statement {
-    sid       = "LeastPrivilegeAllow"
+    sid       = "AllowConfiguredActionsOnConfiguredResources"
     effect    = "Allow"
     actions   = var.allowed_actions
     resources = var.allowed_resources
@@ -36,33 +41,20 @@ data "aws_iam_policy_document" "permissions" {
 }
 
 resource "aws_iam_role" "this" {
-  name                 = local.role_full_name
-  assume_role_policy   = data.aws_iam_policy_document.assume_role.json
+  name                 = local.role_name
+  description          = "Role gerenciada via Terraform para o sistema ${var.system} (${var.environment})."
+  assume_role_policy   = data.aws_iam_policy_document.trust.json
   max_session_duration = 3600
 
   tags = local.tags
-
-  lifecycle {
-    precondition {
-      condition     = var.trusted_principal_arn != "*"
-      error_message = "trusted_principal_arn nao pode ser \"*\". A trust policy deve ser restrita a um principal especifico."
-    }
-  }
 }
 
 resource "aws_iam_policy" "this" {
-  name        = local.policy_full_name
-  description = "Policy de minimo privilegio (${var.policy_name}) para o sistema ${var.system} no ambiente ${var.environment}."
-  policy      = data.aws_iam_policy_document.permissions.json
+  name        = local.policy_name
+  description = var.policy_description
+  policy      = data.aws_iam_policy_document.this.json
 
   tags = local.tags
-
-  lifecycle {
-    precondition {
-      condition     = !(contains(var.allowed_actions, "*") && contains(var.allowed_resources, "*"))
-      error_message = "Nao e permitido combinar Action = \"*\" com Resource = \"*\" na mesma statement."
-    }
-  }
 }
 
 resource "aws_iam_role_policy_attachment" "this" {

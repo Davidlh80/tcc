@@ -22,13 +22,3 @@ output "role_arn" {
   description = "ARN da IAM Role criada."
   value       = aws_iam_role.this.arn
 }
-
-output "role_id" {
-  description = "Unique ID da IAM Role criada."
-  value       = aws_iam_role.this.unique_id
-}
-
-output "role_policy_attachment_id" {
-  description = "ID do vinculo (attachment) entre a IAM Role e a IAM Policy."
-  value       = aws_iam_role_policy_attachment.this.id
-}

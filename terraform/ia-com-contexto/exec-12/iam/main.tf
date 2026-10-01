@@ -13,51 +13,50 @@ locals {
 
   tags = merge(local.mandatory_tags, var.additional_tags)
 
-  policy_full_name = "${var.environment}-${var.system}-iam-policy-${var.policy_name}"
-  role_full_name   = "${var.environment}-${var.system}-iam-role-${var.role_name}"
-}
-
-check "no_full_wildcard_statement" {
-  assert {
-    condition     = !(contains(var.allowed_actions, "*") && contains(var.allowed_resources, "*"))
-    error_message = "Nao e permitido combinar Action = \"*\" com Resource = \"*\" na mesma statement."
-  }
-}
-
-data "aws_iam_policy_document" "assume_role" {
-  statement {
-    sid     = "AllowConfiguredTrustedPrincipal"
-    effect  = "Allow"
-    actions = ["sts:AssumeRole"]
-
-    principals {
-      type        = var.trusted_principal_type
-      identifiers = var.trusted_principal_identifiers
-    }
-  }
+  iam_policy_name = "${var.environment}-${var.system}-iam-policy-${var.policy_name}"
+  iam_role_name   = "${var.environment}-${var.system}-iam-role-${var.policy_name}"
 }
 
 data "aws_iam_policy_document" "this" {
   statement {
-    sid       = "AllowConfiguredActionsOnConfiguredResources"
+    sid       = "AllowConfiguredActionsOnResources"
     effect    = "Allow"
     actions   = var.allowed_actions
     resources = var.allowed_resources
   }
 }
 
-resource "aws_iam_role" "this" {
-  name               = local.role_full_name
-  description        = "IAM Role gerenciada via Terraform, com trust policy restrita ao principal configurado."
-  assume_role_policy = data.aws_iam_policy_document.assume_role.json
+data "aws_iam_policy_document" "assume_role" {
+  statement {
+    sid     = "AllowTrustedPrincipalToAssumeRole"
+    effect  = "Allow"
+    actions = ["sts:AssumeRole"]
 
-  tags = local.tags
+    principals {
+      type        = "AWS"
+      identifiers = [var.trusted_principal_arn]
+    }
+  }
 }
 
 resource "aws_iam_policy" "this" {
-  name        = local.policy_full_name
-  description = var.policy_description
+  name        = local.iam_policy_name
+  description = "Policy de menor privilegio para ${var.system} (${var.environment}), restrita as acoes e recursos informados via variavel."
   policy      = data.aws_iam_policy_document.this.json
+
+  tags = local.tags
+
+  lifecycle {
+    precondition {
+      condition     = !(contains(var.allowed_actions, "*") && contains(var.allowed_resources, "*"))
+      error_message = "Nao e permitido combinar Action \"*\" com Resource \"*\" na mesma statement da policy."
+    }
+  }
+}
+
+resource "aws_iam_role" "this" {
+  name               = local.iam_role_name
+  assume_role_policy = data.aws_iam_policy_document.assume_role.json
 
   tags = local.tags
 }

@@ -4,28 +4,24 @@ variable "environment" {
 
   validation {
     condition     = contains(["dev", "hml", "prd"], var.environment)
-    error_message = "O valor de environment deve ser 'dev', 'hml' ou 'prd'."
+    error_message = "O valor de environment deve ser um dos seguintes: dev, hml, prd."
   }
 }
 
 variable "system" {
-  description = "Nome do sistema/aplicacao proprietaria do recurso, usado na nomenclatura padrao."
+  description = "Identificador do sistema dono do recurso, usado na nomenclatura padrao."
   type        = string
 
   validation {
-    condition     = length(var.system) > 0
-    error_message = "O valor de system nao pode ser vazio."
+    condition     = can(regex("^[a-z0-9-]+$", var.system))
+    error_message = "O valor de system deve conter apenas letras minusculas, numeros e hifens."
   }
 }
 
 variable "region" {
-  description = "Regiao AWS onde o provider ira operar."
+  description = "Regiao AWS onde os recursos serao provisionados."
   type        = string
-
-  validation {
-    condition     = can(regex("^[a-z]{2}-[a-z]+-[0-9]$", var.region))
-    error_message = "O valor de region deve ser uma regiao AWS valida, por exemplo: us-east-1."
-  }
+  default     = "us-east-1"
 }
 
 variable "additional_tags" {
@@ -35,7 +31,7 @@ variable "additional_tags" {
 }
 
 variable "policy_name" {
-  description = "Finalidade da IAM Policy/Role, utilizada na nomenclatura padrao <ambiente>-<sistema>-<recurso>-<finalidade>."
+  description = "Finalidade/nome que identifica a IAM Policy e a IAM Role, usado na nomenclatura padrao."
   type        = string
 
   validation {
@@ -45,31 +41,31 @@ variable "policy_name" {
 }
 
 variable "trusted_principal_arn" {
-  description = "ARN do principal (conta, usuario ou role) autorizado a assumir a IAM Role. Nao e permitido usar '*'."
+  description = "ARN do unico principal autorizado a assumir a IAM Role (trust policy). Nao aceita wildcard."
   type        = string
 
   validation {
-    condition     = var.trusted_principal_arn != "*" && can(regex("^arn:aws:iam::[0-9]{12}:(root|user/.+|role/.+)$", var.trusted_principal_arn))
-    error_message = "O valor de trusted_principal_arn deve ser um ARN IAM valido (conta root, usuario ou role) e nao pode ser '*'."
+    condition     = var.trusted_principal_arn != "*" && can(regex("^arn:aws:iam::[0-9]{12}:.+$", var.trusted_principal_arn))
+    error_message = "trusted_principal_arn deve ser um ARN IAM valido (arn:aws:iam::<account-id>:...) e nao pode ser \"*\"."
   }
 }
 
 variable "allowed_actions" {
-  description = "Lista de acoes IAM permitidas na statement Allow da policy."
+  description = "Lista de acoes IAM permitidas (Effect Allow) na policy."
   type        = list(string)
 
   validation {
     condition     = length(var.allowed_actions) > 0
-    error_message = "O valor de allowed_actions nao pode ser uma lista vazia."
+    error_message = "allowed_actions deve conter ao menos uma acao."
   }
 }
 
 variable "allowed_resources" {
-  description = "Lista de ARNs de recursos permitidos na statement Allow da policy. Proibida a combinacao Action:'*' com Resource:'*'."
+  description = "Lista de recursos (ARNs) aos quais as acoes permitidas se aplicam."
   type        = list(string)
 
   validation {
-    condition     = length(var.allowed_resources) > 0 && !(contains(var.allowed_actions, "*") && contains(var.allowed_resources, "*"))
-    error_message = "Combinacao proibida: allowed_actions e allowed_resources nao podem conter '*' simultaneamente, e allowed_resources nao pode ser uma lista vazia."
+    condition     = length(var.allowed_resources) > 0
+    error_message = "allowed_resources deve conter ao menos um recurso."
   }
 }

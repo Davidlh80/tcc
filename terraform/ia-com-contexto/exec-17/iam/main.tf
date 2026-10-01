@@ -1,9 +1,13 @@
-locals {
-  name_prefix      = "${var.environment}-${var.system}"
-  policy_full_name = "${local.name_prefix}-iam-${var.policy_name}"
-  role_full_name   = "${local.name_prefix}-iam-role-${var.policy_name}"
+provider "aws" {
+  region = var.region
+}
 
-  common_tags = merge(
+locals {
+  name_prefix       = "${var.environment}-${var.system}"
+  policy_name_full  = "${local.name_prefix}-iam-policy-${var.policy_name}"
+  role_name_full    = "${local.name_prefix}-iam-role-${var.policy_name}"
+
+  tags = merge(
     {
       Project     = "tcc-iac-ia"
       Environment = var.environment
@@ -13,11 +17,13 @@ locals {
     },
     var.additional_tags
   )
+
+  has_full_wildcard_statement = contains(var.allowed_actions, "*") && contains(var.allowed_resources, "*")
 }
 
 data "aws_iam_policy_document" "this" {
   statement {
-    sid       = "AllowedActionsOnResources"
+    sid       = "AllowConfiguredActions"
     effect    = "Allow"
     actions   = var.allowed_actions
     resources = var.allowed_resources
@@ -26,7 +32,7 @@ data "aws_iam_policy_document" "this" {
 
 data "aws_iam_policy_document" "assume_role" {
   statement {
-    sid     = "AllowSpecificPrincipalAssumeRole"
+    sid     = "AllowTrustedPrincipalAssumeRole"
     effect  = "Allow"
     actions = ["sts:AssumeRole"]
 
@@ -38,27 +44,25 @@ data "aws_iam_policy_document" "assume_role" {
 }
 
 resource "aws_iam_policy" "this" {
-  name        = local.policy_full_name
-  description = "Policy de menor privilegio para o sistema ${var.system} (${var.environment}) - finalidade: ${var.policy_name}."
+  name        = local.policy_name_full
+  description = "Policy de menor privilegio gerenciada via Terraform para ${local.policy_name_full}."
   policy      = data.aws_iam_policy_document.this.json
 
-  tags = local.common_tags
+  tags = local.tags
 
   lifecycle {
     precondition {
-      condition     = !(contains(var.allowed_actions, "*") && contains(var.allowed_resources, "*"))
-      error_message = "Nao e permitido combinar Action = \"*\" com Resource = \"*\" na mesma statement."
+      condition     = !local.has_full_wildcard_statement
+      error_message = "Combinacao proibida: Action \"*\" junto com Resource \"*\" na mesma statement."
     }
   }
 }
 
 resource "aws_iam_role" "this" {
-  name                 = local.role_full_name
-  description          = "Role de menor privilegio para o sistema ${var.system} (${var.environment}) - finalidade: ${var.policy_name}."
-  assume_role_policy   = data.aws_iam_policy_document.assume_role.json
-  max_session_duration = 3600
+  name               = local.role_name_full
+  assume_role_policy = data.aws_iam_policy_document.assume_role.json
 
-  tags = local.common_tags
+  tags = local.tags
 }
 
 resource "aws_iam_role_policy_attachment" "this" {

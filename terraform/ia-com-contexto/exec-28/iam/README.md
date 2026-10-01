@@ -2,63 +2,67 @@
 
 ## Visao geral
 
-Este template provisiona uma IAM Policy de menor privilegio e uma IAM Role associada, seguindo os padroes internos de nomenclatura, tags e governanca da organizacao.
+Este template cria uma IAM Policy de minimo privilegio e uma IAM Role dedicada,
+anexando a policy a role (a policy nunca fica solta, sem principal associado).
 
-Caracteristicas principais:
+Caracteristicas de seguranca aplicadas por padrao:
 
-- A IAM Policy nunca fica solta: e sempre anexada a uma IAM Role via `aws_iam_role_policy_attachment`.
-- A trust policy (assume role policy) da Role restringe o principal autorizado via `var.trusted_principal_arn`, proibindo `Principal: "*"`.
-- A policy proibe, por meio de uma `precondition`, a combinacao de `Action: "*"` com `Resource: "*"` na mesma statement.
-- O `Effect: Allow` e restrito exclusivamente as acoes e recursos informados pelas variaveis `allowed_actions` e `allowed_resources`.
-- Nenhuma policy gerenciada administrativa (ex.: `AdministratorAccess`) e anexada ou replicada.
-- Nomenclatura dos recursos segue o padrao `<ambiente>-<sistema>-<recurso>-<finalidade>`.
-- Tags obrigatorias da organizacao sao aplicadas a todos os recursos que suportam tags.
+- a trust policy (assume role policy) da IAM Role restringe `Principal` a um
+  unico ARN configuravel (`var.trusted_principal_arn`), proibindo `"*"`;
+- nenhuma statement combina `Action: "*"` com `Resource: "*"` (validado via
+  `lifecycle.precondition` no `main.tf`);
+- o `Effect: Allow` da policy e restrito exatamente as acoes e recursos
+  informados pelas variaveis `allowed_actions` e `allowed_resources`;
+- nenhuma policy gerenciada administrativa (ex.: `AdministratorAccess`) e
+  anexada ou replicada;
+- nomenclatura e tags seguem o padrao organizacional
+  `<ambiente>-<sistema>-<recurso>-<finalidade>`.
 
 ## Variaveis
 
-| Nome                    | Tipo           | Obrigatoria | Descricao                                                                                   |
-|-------------------------|----------------|-------------|-----------------------------------------------------------------------------------------------|
-| `environment`           | `string`       | Sim         | Ambiente de implantacao (`dev`, `hml` ou `prd`).                                              |
-| `system`                | `string`       | Sim         | Nome do sistema ou aplicacao associado ao recurso.                                             |
-| `region`                | `string`       | Nao         | Regiao AWS onde os recursos serao provisionados. Padrao: `us-east-1`.                          |
-| `additional_tags`       | `map(string)`  | Nao         | Tags adicionais mescladas com as tags obrigatorias. Padrao: `{}`.                              |
-| `policy_name`           | `string`       | Sim         | Finalidade da IAM Policy/Role, usada na composicao do nome padronizado.                        |
-| `trusted_principal_arn` | `string`       | Sim         | ARN do principal autorizado a assumir a Role. Nao pode ser `"*"`.                               |
-| `allowed_actions`       | `list(string)` | Sim         | Lista de acoes IAM permitidas (`Effect = Allow`).                                              |
-| `allowed_resources`     | `list(string)` | Sim         | Lista de ARNs de recursos aos quais as acoes permitidas se aplicam.                            |
+| Nome                    | Tipo           | Obrigatoria | Descricao                                                                 |
+|-------------------------|----------------|-------------|----------------------------------------------------------------------------|
+| `environment`           | `string`       | Sim         | Ambiente de implantacao (`dev`, `hml` ou `prd`).                           |
+| `system`                | `string`       | Sim         | Nome curto do sistema dono do recurso.                                    |
+| `region`                | `string`       | Nao         | Regiao AWS do provider. Padrao: `us-east-1`.                               |
+| `additional_tags`       | `map(string)`  | Nao         | Tags adicionais mescladas com as tags obrigatorias. Padrao: `{}`.          |
+| `policy_name`           | `string`       | Sim         | Finalidade da policy/role, usada no padrao de nomenclatura.                |
+| `allowed_actions`       | `list(string)` | Sim         | Acoes IAM permitidas na policy.                                           |
+| `allowed_resources`     | `list(string)` | Sim         | ARNs/recursos permitidos na policy.                                       |
+| `trusted_principal_arn` | `string`       | Sim         | ARN unico autorizado a assumir a role (`sts:AssumeRole`). Sem wildcard.    |
 
 ## Outputs
 
-| Nome          | Descricao                                             |
-|---------------|--------------------------------------------------------|
-| `policy_name` | Nome da IAM Policy criada.                             |
-| `policy_arn`  | ARN da IAM Policy criada.                              |
-| `policy_id`   | ID da IAM Policy criada.                               |
-| `role_name`   | Nome da IAM Role a qual a policy foi anexada.          |
-| `role_arn`    | ARN da IAM Role a qual a policy foi anexada.           |
+| Nome          | Descricao                                   |
+|---------------|-----------------------------------------------|
+| `policy_name` | Nome da IAM Policy criada.                     |
+| `policy_arn`  | ARN da IAM Policy criada.                      |
+| `policy_id`   | ID da IAM Policy criada.                       |
+| `role_name`   | Nome da IAM Role criada.                       |
+| `role_arn`    | ARN da IAM Role criada.                        |
 
 ## Exemplo de uso
 
 ```hcl
 module "iam_readonly" {
-  source = "./caminho/para/este/modulo"
+  source = "./"
 
-  environment = "dev"
+  environment = "prd"
   system      = "tcc"
   region      = "us-east-1"
   policy_name = "readonly"
 
-  trusted_principal_arn = "arn:aws:iam::123456789012:role/dev-tcc-app-execution"
-
   allowed_actions = [
     "s3:GetObject",
-    "s3:ListBucket",
+    "s3:ListBucket"
   ]
 
   allowed_resources = [
-    "arn:aws:s3:::dev-tcc-s3-logs",
-    "arn:aws:s3:::dev-tcc-s3-logs/*",
+    "arn:aws:s3:::prd-tcc-s3-logs",
+    "arn:aws:s3:::prd-tcc-s3-logs/*"
   ]
+
+  trusted_principal_arn = "arn:aws:iam::123456789012:role/prd-tcc-app-role"
 
   additional_tags = {
     Squad = "plataforma"

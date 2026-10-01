@@ -1,5 +1,11 @@
+provider "aws" {
+  region = var.region
+}
+
 locals {
-  common_tags = merge(
+  name_prefix = "${var.environment}-${var.system}-iam-${var.policy_name}"
+
+  tags = merge(
     {
       Project     = "tcc-iac-ia"
       Environment = var.environment
@@ -9,18 +15,11 @@ locals {
     },
     var.additional_tags
   )
-
-  policy_full_name = "${var.environment}-${var.system}-iam-${var.policy_name}"
-  role_full_name   = "${var.environment}-${var.system}-iam-role-${var.policy_name}"
 }
 
-provider "aws" {
-  region = var.region
-}
-
-data "aws_iam_policy_document" "trust" {
+data "aws_iam_policy_document" "assume_role" {
   statement {
-    sid     = "AllowAssumeRoleByTrustedPrincipal"
+    sid     = "AllowTrustedPrincipalAssumeRole"
     effect  = "Allow"
     actions = ["sts:AssumeRole"]
 
@@ -31,9 +30,9 @@ data "aws_iam_policy_document" "trust" {
   }
 }
 
-data "aws_iam_policy_document" "this" {
+data "aws_iam_policy_document" "permissions" {
   statement {
-    sid       = "LeastPrivilegeAllowedActions"
+    sid       = "AllowConfiguredActionsOnConfiguredResources"
     effect    = "Allow"
     actions   = var.allowed_actions
     resources = var.allowed_resources
@@ -41,24 +40,25 @@ data "aws_iam_policy_document" "this" {
 }
 
 resource "aws_iam_role" "this" {
-  name                 = local.role_full_name
-  assume_role_policy   = data.aws_iam_policy_document.trust.json
+  name                 = "${local.name_prefix}-role"
+  description          = "Role de menor privilegio para ${var.system} (${var.environment}) - finalidade: ${var.policy_name}"
+  assume_role_policy   = data.aws_iam_policy_document.assume_role.json
   max_session_duration = 3600
 
-  tags = local.common_tags
+  tags = local.tags
 }
 
 resource "aws_iam_policy" "this" {
-  name        = local.policy_full_name
-  description = "Policy de minimo privilegio para ${var.system} no ambiente ${var.environment}."
-  policy      = data.aws_iam_policy_document.this.json
+  name        = "${local.name_prefix}-policy"
+  description = "Policy de menor privilegio para ${var.system} (${var.environment}) - finalidade: ${var.policy_name}"
+  policy      = data.aws_iam_policy_document.permissions.json
 
-  tags = local.common_tags
+  tags = local.tags
 
   lifecycle {
     precondition {
       condition     = !(contains(var.allowed_actions, "*") && contains(var.allowed_resources, "*"))
-      error_message = "Nao e permitido combinar Action = \"*\" com Resource = \"*\" na mesma statement da policy."
+      error_message = "A combinacao de Action \"*\" com Resource \"*\" na mesma statement nao e permitida."
     }
   }
 }

@@ -1,30 +1,24 @@
-terraform {
-  required_version = ">= 1.5.0"
+locals {
+  name_prefix = "${var.environment}-${var.system}-iam-${var.policy_name}"
+
+  mandatory_tags = {
+    Project     = "tcc-iac-ia"
+    Environment = var.environment
+    ManagedBy   = "terraform"
+    Owner       = "devops"
+    CostCenter  = "academic-research"
+  }
+
+  tags = merge(var.additional_tags, local.mandatory_tags)
 }
 
 provider "aws" {
   region = var.region
 }
 
-locals {
-  policy_name_full = "${var.environment}-${var.system}-iam-policy-${var.policy_name}"
-  role_name_full   = "${var.environment}-${var.system}-iam-role-${var.policy_name}"
-
-  common_tags = merge(
-    {
-      Project     = "tcc-iac-ia"
-      Environment = var.environment
-      ManagedBy   = "terraform"
-      Owner       = "devops"
-      CostCenter  = "academic-research"
-    },
-    var.additional_tags
-  )
-}
-
 data "aws_iam_policy_document" "assume_role" {
   statement {
-    sid     = "AllowConfiguredPrincipalToAssumeRole"
+    sid     = "AssumeRoleTrustedPrincipal"
     effect  = "Allow"
     actions = ["sts:AssumeRole"]
 
@@ -37,39 +31,27 @@ data "aws_iam_policy_document" "assume_role" {
 
 data "aws_iam_policy_document" "this" {
   statement {
-    sid       = "AllowConfiguredActionsOnConfiguredResources"
+    sid       = "LeastPrivilegeAccess"
     effect    = "Allow"
     actions   = var.allowed_actions
     resources = var.allowed_resources
   }
 }
 
-resource "aws_iam_policy" "this" {
-  name        = local.policy_name_full
-  description = "Policy gerenciada via Terraform para o sistema ${var.system} no ambiente ${var.environment}."
-  policy      = data.aws_iam_policy_document.this.json
-  tags        = local.common_tags
+resource "aws_iam_role" "this" {
+  name                 = "${local.name_prefix}-role"
+  assume_role_policy   = data.aws_iam_policy_document.assume_role.json
+  max_session_duration = var.max_session_duration
 
-  lifecycle {
-    precondition {
-      condition     = !(contains(var.allowed_actions, "*") && contains(var.allowed_resources, "*"))
-      error_message = "Nao e permitido combinar Action \"*\" com Resource \"*\" na mesma statement."
-    }
-  }
+  tags = local.tags
 }
 
-resource "aws_iam_role" "this" {
-  name               = local.role_name_full
-  description        = "Role gerenciada via Terraform para o sistema ${var.system} no ambiente ${var.environment}."
-  assume_role_policy = data.aws_iam_policy_document.assume_role.json
-  tags               = local.common_tags
+resource "aws_iam_policy" "this" {
+  name        = "${local.name_prefix}-policy"
+  description = var.policy_description
+  policy      = data.aws_iam_policy_document.this.json
 
-  lifecycle {
-    precondition {
-      condition     = var.trusted_principal_arn != "*"
-      error_message = "trusted_principal_arn nao pode ser \"*\"."
-    }
-  }
+  tags = local.tags
 }
 
 resource "aws_iam_role_policy_attachment" "this" {

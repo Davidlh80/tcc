@@ -1,13 +1,13 @@
-provider "aws" {
-  region = var.region
+terraform {
+  required_version = ">= 1.5.0"
 }
 
 locals {
-  name_prefix = "${var.environment}-${var.system}"
-  policy_name = "${local.name_prefix}-iam-policy-${var.policy_name}"
-  role_name   = "${local.name_prefix}-iam-role-${var.policy_name}"
+  base_name   = "${var.environment}-${var.system}-iam-${var.policy_name}"
+  policy_name = "${local.base_name}-policy"
+  role_name   = "${local.base_name}-role"
 
-  tags = merge(
+  common_tags = merge(
     {
       Project     = "tcc-iac-ia"
       Environment = var.environment
@@ -17,45 +17,62 @@ locals {
     },
     var.additional_tags
   )
+
+  has_full_wildcard_statement = (
+    contains(var.allowed_actions, "*") && contains(var.allowed_resources, "*")
+  )
 }
 
-data "aws_iam_policy_document" "trust" {
+data "aws_iam_policy_document" "assume_role" {
   statement {
-    sid     = "AssumeRoleTrust"
+    sid     = "AllowTrustedPrincipalAssumeRole"
     effect  = "Allow"
     actions = ["sts:AssumeRole"]
 
     principals {
       type        = "AWS"
-      identifiers = var.trusted_principal_arns
+      identifiers = [var.trusted_principal_arn]
     }
   }
 }
 
-data "aws_iam_policy_document" "this" {
+data "aws_iam_policy_document" "permissions" {
   statement {
-    sid       = "AllowConfiguredActions"
+    sid       = "AllowConfiguredActionsOnConfiguredResources"
     effect    = "Allow"
     actions   = var.allowed_actions
     resources = var.allowed_resources
   }
 }
 
-resource "aws_iam_policy" "this" {
-  name        = local.policy_name
-  description = "Policy IAM gerenciada via Terraform para o sistema ${var.system} no ambiente ${var.environment}."
-  policy      = data.aws_iam_policy_document.this.json
-
-  tags = local.tags
-}
-
 resource "aws_iam_role" "this" {
   name                 = local.role_name
-  description          = "Role IAM gerenciada via Terraform para o sistema ${var.system} no ambiente ${var.environment}."
-  assume_role_policy   = data.aws_iam_policy_document.trust.json
+  assume_role_policy   = data.aws_iam_policy_document.assume_role.json
   max_session_duration = 3600
 
-  tags = local.tags
+  tags = local.common_tags
+
+  lifecycle {
+    precondition {
+      condition     = var.trusted_principal_arn != "*"
+      error_message = "trusted_principal_arn nao pode ser \"*\": a trust policy deve restringir um principal especifico."
+    }
+  }
+}
+
+resource "aws_iam_policy" "this" {
+  name        = local.policy_name
+  description = "Policy de minimo privilegio para ${var.system} (${var.environment}), gerenciada via Terraform."
+  policy      = data.aws_iam_policy_document.permissions.json
+
+  tags = local.common_tags
+
+  lifecycle {
+    precondition {
+      condition     = !local.has_full_wildcard_statement
+      error_message = "Statement com Action = \"*\" combinado com Resource = \"*\" nao e permitida. Restrinja allowed_actions e/ou allowed_resources."
+    }
+  }
 }
 
 resource "aws_iam_role_policy_attachment" "this" {

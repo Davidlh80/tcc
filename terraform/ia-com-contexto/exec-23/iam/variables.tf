@@ -1,83 +1,71 @@
 variable "environment" {
-  description = "Ambiente de implantacao do recurso (dev, hml ou prd)."
   type        = string
+  description = "Ambiente de implantacao do recurso. Valores permitidos: dev, hml, prd."
 
   validation {
     condition     = contains(["dev", "hml", "prd"], var.environment)
-    error_message = "O valor de environment deve ser 'dev', 'hml' ou 'prd'."
+    error_message = "O valor de environment deve ser \"dev\", \"hml\" ou \"prd\"."
   }
 }
 
 variable "system" {
-  description = "Nome do sistema ou projeto ao qual o recurso pertence, usado no padrao de nomenclatura."
   type        = string
-  default     = "tcc"
+  description = "Nome do sistema/aplicacao proprietaria do recurso, usado no padrao de nomenclatura."
 
   validation {
-    condition     = can(regex("^[a-z0-9]+(-[a-z0-9]+)*$", var.system))
-    error_message = "O valor de system deve conter apenas letras minusculas, numeros e hifens."
+    condition     = length(trimspace(var.system)) > 0
+    error_message = "O valor de system nao pode ser vazio."
   }
 }
 
 variable "region" {
-  description = "Regiao AWS onde os recursos serao provisionados."
   type        = string
+  description = "Regiao AWS onde os recursos IAM serao avaliados/criados."
   default     = "us-east-1"
 }
 
 variable "additional_tags" {
-  description = "Tags adicionais a serem mescladas as tags obrigatorias do recurso."
   type        = map(string)
+  description = "Tags adicionais a serem mescladas as tags obrigatorias da organizacao."
   default     = {}
 }
 
 variable "policy_name" {
-  description = "Finalidade da IAM Policy/Role, usada como sufixo no padrao <ambiente>-<sistema>-iam-<finalidade>."
   type        = string
+  description = "Finalidade da IAM Policy/Role, usada como sufixo no padrao de nomenclatura (ex.: readonly)."
 
   validation {
-    condition     = can(regex("^[a-z0-9]+(-[a-z0-9]+)*$", var.policy_name))
-    error_message = "O valor de policy_name deve conter apenas letras minusculas, numeros e hifens."
+    condition     = can(regex("^[a-z0-9-]+$", var.policy_name))
+    error_message = "policy_name deve conter apenas letras minusculas, numeros e hifens."
   }
 }
 
 variable "allowed_actions" {
-  description = "Lista de acoes IAM permitidas na policy (Effect Allow). Nao pode conter \"*\" combinado com allowed_resources contendo \"*\"."
   type        = list(string)
+  description = "Lista de IAM Actions permitidas na statement Allow da policy."
 
   validation {
     condition     = length(var.allowed_actions) > 0
-    error_message = "Informe ao menos uma acao em allowed_actions."
+    error_message = "allowed_actions deve conter ao menos uma action."
   }
 }
 
 variable "allowed_resources" {
-  description = "Lista de ARNs de recursos permitidos na policy (Effect Allow). Nao pode conter \"*\" combinado com allowed_actions contendo \"*\"."
   type        = list(string)
+  description = "Lista de ARNs de recursos permitidos na statement Allow da policy."
 
   validation {
     condition     = length(var.allowed_resources) > 0
-    error_message = "Informe ao menos um recurso em allowed_resources."
+    error_message = "allowed_resources deve conter ao menos um ARN de recurso."
   }
 }
 
 variable "trusted_principal_arn" {
-  description = "ARN do principal (conta, usuario ou role) autorizado a assumir a IAM Role. Nao e permitido '*'."
   type        = string
+  description = "ARN unico do principal autorizado a assumir a IAM Role (trust policy). Nao pode ser \"*\"."
 
   validation {
-    condition     = var.trusted_principal_arn != "*" && can(regex("^arn:aws:iam::\\d{12}:(root|user/.+|role/.+)$", var.trusted_principal_arn))
-    error_message = "trusted_principal_arn deve ser um ARN valido de conta (root), usuario ou role (ex.: arn:aws:iam::123456789012:role/nome)."
-  }
-}
-
-variable "max_session_duration" {
-  description = "Duracao maxima, em segundos, da sessao assumida pela IAM Role."
-  type        = number
-  default     = 3600
-
-  validation {
-    condition     = var.max_session_duration >= 3600 && var.max_session_duration <= 43200
-    error_message = "max_session_duration deve estar entre 3600 e 43200 segundos."
+    condition     = var.trusted_principal_arn != "*" && can(regex("^arn:aws[a-zA-Z0-9-]*:iam::[0-9]{12}:", var.trusted_principal_arn))
+    error_message = "trusted_principal_arn deve ser um ARN IAM valido (ex.: arn:aws:iam::111122223333:role/nome) e nao pode ser \"*\"."
   }
 }

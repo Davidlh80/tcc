@@ -1,14 +1,6 @@
-terraform {
-  required_version = ">= 1.5.0"
-}
-
-provider "aws" {
-  region = var.region
-}
-
 locals {
-  policy_name = "${var.environment}-${var.system}-iam-${var.policy_name}"
   role_name   = "${var.environment}-${var.system}-iam-role-${var.policy_name}"
+  policy_name = "${var.environment}-${var.system}-iam-policy-${var.policy_name}"
 
   tags = merge(
     {
@@ -20,14 +12,11 @@ locals {
     },
     var.additional_tags
   )
-
-  has_wildcard_action   = contains(var.allowed_actions, "*")
-  has_wildcard_resource = contains(var.allowed_resources, "*")
 }
 
-data "aws_iam_policy_document" "assume_role" {
+data "aws_iam_policy_document" "trust" {
   statement {
-    sid     = "AllowConfiguredPrincipalAssumeRole"
+    sid     = "AssumeRoleTrustedPrincipalOnly"
     effect  = "Allow"
     actions = ["sts:AssumeRole"]
 
@@ -38,32 +27,34 @@ data "aws_iam_policy_document" "assume_role" {
   }
 }
 
-data "aws_iam_policy_document" "this" {
+resource "aws_iam_role" "this" {
+  name                 = local.role_name
+  assume_role_policy   = data.aws_iam_policy_document.trust.json
+  max_session_duration = 3600
+
+  tags = local.tags
+}
+
+data "aws_iam_policy_document" "permissions" {
   statement {
-    sid       = "AllowConfiguredActionsOnConfiguredResources"
+    sid       = "LeastPrivilegeAllow"
     effect    = "Allow"
     actions   = var.allowed_actions
     resources = var.allowed_resources
   }
 }
 
-resource "aws_iam_role" "this" {
-  name                 = local.role_name
-  assume_role_policy   = data.aws_iam_policy_document.assume_role.json
-  max_session_duration = var.max_session_duration
-  tags                 = local.tags
-}
-
 resource "aws_iam_policy" "this" {
   name        = local.policy_name
-  description = "Policy de menor privilegio para ${var.system} (${var.environment}) - finalidade: ${var.policy_name}"
-  policy      = data.aws_iam_policy_document.this.json
-  tags        = local.tags
+  description = "Policy de menor privilegio (${local.policy_name}), gerenciada via Terraform."
+  policy      = data.aws_iam_policy_document.permissions.json
+
+  tags = local.tags
 
   lifecycle {
     precondition {
-      condition     = !(local.has_wildcard_action && local.has_wildcard_resource)
-      error_message = "A statement da policy nao pode combinar Action = \"*\" com Resource = \"*\". Restrinja allowed_actions ou allowed_resources."
+      condition     = !(contains(var.allowed_actions, "*") && contains(var.allowed_resources, "*"))
+      error_message = "Nao e permitida uma statement combinando Action \"*\" com Resource \"*\"."
     }
   }
 }

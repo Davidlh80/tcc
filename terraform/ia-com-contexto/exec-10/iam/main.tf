@@ -1,5 +1,8 @@
 locals {
-  common_tags = merge(
+  policy_full_name = "${var.environment}-${var.system}-iam-${var.policy_name}-policy"
+  role_full_name   = "${var.environment}-${var.system}-iam-${var.policy_name}-role"
+
+  tags = merge(
     {
       Project     = "tcc-iac-ia"
       Environment = var.environment
@@ -9,27 +12,28 @@ locals {
     },
     var.additional_tags
   )
+}
 
-  role_name   = "${var.environment}-${var.system}-iam-role-${var.policy_name}"
-  policy_name = "${var.environment}-${var.system}-iam-${var.policy_name}"
+provider "aws" {
+  region = var.region
 }
 
 data "aws_iam_policy_document" "assume_role" {
   statement {
-    sid     = "AssumeRoleTrust"
+    sid     = "AllowTrustedPrincipalAssumeRole"
     effect  = "Allow"
     actions = ["sts:AssumeRole"]
 
     principals {
       type        = "AWS"
-      identifiers = var.trusted_principal_arns
+      identifiers = [var.trusted_principal_arn]
     }
   }
 }
 
-data "aws_iam_policy_document" "policy" {
+data "aws_iam_policy_document" "this" {
   statement {
-    sid       = "AllowConfiguredActions"
+    sid       = "AllowConfiguredActionsOnConfiguredResources"
     effect    = "Allow"
     actions   = var.allowed_actions
     resources = var.allowed_resources
@@ -37,19 +41,23 @@ data "aws_iam_policy_document" "policy" {
 }
 
 resource "aws_iam_role" "this" {
-  name                 = local.role_name
-  assume_role_policy   = data.aws_iam_policy_document.assume_role.json
-  max_session_duration = 3600
+  name               = local.role_full_name
+  assume_role_policy = data.aws_iam_policy_document.assume_role.json
 
-  tags = local.common_tags
+  lifecycle {
+    precondition {
+      condition     = var.trusted_principal_arn != "*"
+      error_message = "trusted_principal_arn nao pode ser \"*\"; e obrigatorio informar um principal especifico."
+    }
+  }
+
+  tags = local.tags
 }
 
 resource "aws_iam_policy" "this" {
-  name        = local.policy_name
-  description = "Policy de menor privilegio (${var.policy_name}) gerenciada via Terraform."
-  policy      = data.aws_iam_policy_document.policy.json
-
-  tags = local.common_tags
+  name        = local.policy_full_name
+  description = "Policy de minimo privilegio para o sistema ${var.system} no ambiente ${var.environment}, gerenciada via Terraform."
+  policy      = data.aws_iam_policy_document.this.json
 
   lifecycle {
     precondition {
@@ -57,6 +65,8 @@ resource "aws_iam_policy" "this" {
       error_message = "Nao e permitido combinar Action \"*\" com Resource \"*\" na mesma statement."
     }
   }
+
+  tags = local.tags
 }
 
 resource "aws_iam_role_policy_attachment" "this" {

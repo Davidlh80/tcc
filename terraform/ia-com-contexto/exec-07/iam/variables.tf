@@ -4,24 +4,28 @@ variable "environment" {
 
   validation {
     condition     = contains(["dev", "hml", "prd"], var.environment)
-    error_message = "O valor de environment deve ser um dos seguintes: dev, hml, prd."
+    error_message = "O valor de environment deve ser um de: dev, hml, prd."
   }
 }
 
 variable "system" {
-  description = "Nome do sistema/projeto ao qual o recurso pertence, usado no padrao de nomenclatura."
+  description = "Identificador do sistema/aplicacao dono do recurso, usado na nomenclatura padrao."
   type        = string
 
   validation {
-    condition     = can(regex("^[a-z0-9-]+$", var.system))
-    error_message = "O valor de system deve conter apenas letras minusculas, numeros e hifens."
+    condition     = length(var.system) > 0
+    error_message = "O valor de system nao pode ser vazio."
   }
 }
 
 variable "region" {
-  description = "Regiao AWS onde os recursos serao provisionados."
+  description = "Regiao AWS onde o provider ira operar."
   type        = string
-  default     = "us-east-1"
+
+  validation {
+    condition     = can(regex("^[a-z]{2}-[a-z]+-[0-9]$", var.region))
+    error_message = "O valor de region deve seguir o formato de uma regiao AWS valida, ex.: us-east-1."
+  }
 }
 
 variable "additional_tags" {
@@ -31,54 +35,41 @@ variable "additional_tags" {
 }
 
 variable "policy_name" {
-  description = "Nome completo da IAM Policy, seguindo o padrao <ambiente>-<sistema>-iam-<finalidade>."
+  description = "Finalidade da IAM Policy/Role, usada como sufixo de nomenclatura (ex.: readonly, deploy-only)."
   type        = string
 
   validation {
-    condition     = can(regex("^(dev|hml|prd)-[a-z0-9-]+-iam-[a-z0-9-]+$", var.policy_name))
-    error_message = "O valor de policy_name deve seguir o padrao <ambiente>-<sistema>-iam-<finalidade>, ex.: prd-tcc-iam-readonly."
-  }
-}
-
-variable "role_name" {
-  description = "Nome completo da IAM Role, seguindo o padrao <ambiente>-<sistema>-iam-role-<finalidade>."
-  type        = string
-
-  validation {
-    condition     = can(regex("^(dev|hml|prd)-[a-z0-9-]+-iam-role-[a-z0-9-]+$", var.role_name))
-    error_message = "O valor de role_name deve seguir o padrao <ambiente>-<sistema>-iam-role-<finalidade>, ex.: prd-tcc-iam-role-readonly."
-  }
-}
-
-variable "assume_role_principal_arn" {
-  description = "ARN do principal (conta, role ou usuario IAM) ou service principal autorizado a assumir a role. Nao pode ser um wildcard."
-  type        = string
-
-  validation {
-    condition = (
-      var.assume_role_principal_arn != "*" &&
-      can(regex("^(arn:aws:(iam|sts)::[0-9]{12}:.+|[a-z0-9.-]+\\.amazonaws\\.com)$", var.assume_role_principal_arn))
-    )
-    error_message = "O valor de assume_role_principal_arn deve ser um ARN de conta/role/usuario IAM valido ou um service principal (ex.: ec2.amazonaws.com), e nao pode ser \"*\"."
+    condition     = can(regex("^[a-z0-9-]+$", var.policy_name))
+    error_message = "O valor de policy_name deve conter apenas letras minusculas, numeros e hifens."
   }
 }
 
 variable "allowed_actions" {
-  description = "Lista de acoes IAM permitidas na policy. Nao pode conter o wildcard \"*\"."
+  description = "Lista de IAM Actions permitidas na statement Allow da policy. Nao pode conter \"*\" combinado com allowed_resources igual a \"*\"."
   type        = list(string)
 
   validation {
-    condition     = length(var.allowed_actions) > 0 && !contains(var.allowed_actions, "*")
-    error_message = "O valor de allowed_actions deve conter ao menos uma acao e nao pode incluir o wildcard \"*\"."
+    condition     = length(var.allowed_actions) > 0
+    error_message = "Informe ao menos uma action em allowed_actions."
   }
 }
 
 variable "allowed_resources" {
-  description = "Lista de recursos (ARNs) permitidos na policy. Nao pode conter o wildcard \"*\"."
+  description = "Lista de ARNs de recursos permitidos na statement Allow da policy. Nao pode conter \"*\" combinado com allowed_actions igual a \"*\"."
   type        = list(string)
 
   validation {
-    condition     = length(var.allowed_resources) > 0 && !contains(var.allowed_resources, "*")
-    error_message = "O valor de allowed_resources deve conter ao menos um recurso e nao pode incluir o wildcard \"*\"."
+    condition     = length(var.allowed_resources) > 0
+    error_message = "Informe ao menos um recurso em allowed_resources."
+  }
+}
+
+variable "trusted_principal_arn" {
+  description = "ARN unico do principal autorizado a assumir a IAM Role (trust policy). Nao pode ser curinga."
+  type        = string
+
+  validation {
+    condition     = var.trusted_principal_arn != "*" && can(regex("^arn:aws:", var.trusted_principal_arn))
+    error_message = "O valor de trusted_principal_arn deve ser um ARN AWS valido e nao pode ser \"*\"."
   }
 }

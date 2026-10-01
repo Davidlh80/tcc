@@ -4,72 +4,79 @@ variable "environment" {
 
   validation {
     condition     = contains(["dev", "hml", "prd"], var.environment)
-    error_message = "environment deve ser um dos valores: dev, hml, prd."
+    error_message = "O valor de environment deve ser um dos seguintes: dev, hml, prd."
   }
 }
 
 variable "system" {
-  description = "Nome do sistema/aplicacao proprietario do recurso, usado na nomenclatura padronizada."
+  description = "Nome curto do sistema ou projeto ao qual o recurso pertence, usado na composicao do nome padronizado."
   type        = string
 
   validation {
     condition     = length(var.system) > 0
-    error_message = "system nao pode ser vazio."
+    error_message = "O valor de system nao pode ser vazio."
   }
 }
 
 variable "region" {
-  description = "Regiao AWS onde os recursos serao criados."
+  description = "Regiao AWS onde os recursos serao provisionados."
   type        = string
-
-  validation {
-    condition     = can(regex("^[a-z]{2}-[a-z]+-[0-9]$", var.region))
-    error_message = "region deve seguir o formato de uma regiao AWS valida, ex.: us-east-1."
-  }
+  default     = "us-east-1"
 }
 
 variable "additional_tags" {
-  description = "Tags adicionais a serem mescladas com as tags obrigatorias da organizacao."
+  description = "Tags adicionais a serem mescladas com as tags obrigatorias definidas pela organizacao."
   type        = map(string)
   default     = {}
 }
 
 variable "policy_name" {
-  description = "Finalidade/identificador do recurso IAM (ex.: readonly, s3-access), usado na nomenclatura padronizada da policy e da role."
+  description = "Finalidade da IAM Policy/Role, usada na composicao do nome padronizado (ex.: readonly, deploy)."
   type        = string
 
   validation {
-    condition     = can(regex("^[a-z0-9-]+$", var.policy_name))
-    error_message = "policy_name deve conter apenas letras minusculas, numeros e hifens."
+    condition     = length(var.policy_name) > 0
+    error_message = "O valor de policy_name nao pode ser vazio."
   }
 }
 
+variable "policy_description" {
+  description = "Descricao da IAM Policy criada."
+  type        = string
+  default     = "Policy gerenciada via Terraform com permissoes restritas as acoes e recursos configurados por variavel."
+}
+
 variable "trusted_principal_arn" {
-  description = "ARN do principal (IAM role, usuario ou conta) autorizado a assumir a IAM Role via trust policy. Nao pode ser \"*\"."
+  description = "ARN unico do principal autorizado a assumir a IAM Role (trust policy). Nao pode ser curinga."
   type        = string
 
   validation {
-    condition     = var.trusted_principal_arn != "*" && can(regex("^arn:aws:iam::[0-9]{12}:.+$", var.trusted_principal_arn))
-    error_message = "trusted_principal_arn deve ser um ARN IAM valido (ex.: arn:aws:iam::123456789012:role/nome) e nao pode ser \"*\"."
+    condition     = var.trusted_principal_arn != "*" && can(regex("^arn:aws[a-zA-Z-]*:iam::\\d{12}:(role|user|root)(/.*)?$", var.trusted_principal_arn))
+    error_message = "trusted_principal_arn deve ser um ARN IAM valido e especifico (role, user ou root), sem curinga."
   }
 }
 
 variable "allowed_actions" {
-  description = "Lista de acoes IAM permitidas na statement Allow da policy (principio do menor privilegio)."
+  description = "Lista de acoes IAM permitidas na policy (Effect Allow)."
   type        = list(string)
 
   validation {
     condition     = length(var.allowed_actions) > 0
-    error_message = "allowed_actions deve conter ao menos uma acao IAM."
+    error_message = "allowed_actions deve conter ao menos uma acao."
+  }
+
+  validation {
+    condition     = !(contains(var.allowed_actions, "*") && contains(var.allowed_resources, "*"))
+    error_message = "Nao e permitido combinar Action \"*\" com Resource \"*\" na mesma policy."
   }
 }
 
 variable "allowed_resources" {
-  description = "Lista de ARNs de recursos permitidos na statement Allow da policy (principio do menor privilegio)."
+  description = "Lista de ARNs de recursos permitidos na policy (Effect Allow)."
   type        = list(string)
 
   validation {
     condition     = length(var.allowed_resources) > 0
-    error_message = "allowed_resources deve conter ao menos um ARN de recurso."
+    error_message = "allowed_resources deve conter ao menos um recurso."
   }
 }

@@ -14,16 +14,11 @@ output "policy_id" {
 }
 
 output "role_name" {
-  description = "Nome da IAM Role criada e associada a policy."
+  description = "Nome da IAM Role criada."
   value       = aws_iam_role.this.name
 }
 
 output "role_arn" {
-  description = "ARN da IAM Role criada e associada a policy."
+  description = "ARN da IAM Role criada."
   value       = aws_iam_role.this.arn
-}
-
-output "role_id" {
-  description = "Identificador unico (unique_id) da IAM Role criada."
-  value       = aws_iam_role.this.unique_id
 }

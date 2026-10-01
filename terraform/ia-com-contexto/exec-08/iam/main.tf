@@ -3,10 +3,11 @@ provider "aws" {
 }
 
 locals {
-  name      = "${var.environment}-${var.system}-iam-${var.policy_name}"
-  role_name = "${local.name}-role"
+  name_prefix = "${var.environment}-${var.system}"
+  policy_name = "${local.name_prefix}-iam-${var.policy_name}"
+  role_name   = "${local.name_prefix}-iam-role-${var.policy_name}"
 
-  common_tags = merge(
+  tags = merge(
     {
       Project     = "tcc-iac-ia"
       Environment = var.environment
@@ -18,16 +19,9 @@ locals {
   )
 }
 
-check "no_full_wildcard_statement" {
-  assert {
-    condition     = !(contains(var.allowed_actions, "*") && contains(var.allowed_resources, "*"))
-    error_message = "A statement Allow nao pode combinar Action \"*\" com Resource \"*\"."
-  }
-}
-
 data "aws_iam_policy_document" "assume_role" {
   statement {
-    sid     = "AssumeRoleTrust"
+    sid     = "AllowTrustedPrincipalAssumeRole"
     effect  = "Allow"
     actions = ["sts:AssumeRole"]
 
@@ -40,26 +34,34 @@ data "aws_iam_policy_document" "assume_role" {
 
 data "aws_iam_policy_document" "this" {
   statement {
-    sid       = "AllowConfiguredActions"
+    sid       = "AllowConfiguredActionsOnConfiguredResources"
     effect    = "Allow"
     actions   = var.allowed_actions
     resources = var.allowed_resources
   }
 }
 
-resource "aws_iam_policy" "this" {
-  name        = local.name
-  description = "Policy gerenciada via Terraform para o sistema ${var.system} (${var.environment})."
-  policy      = data.aws_iam_policy_document.this.json
+resource "aws_iam_role" "this" {
+  name                 = local.role_name
+  assume_role_policy   = data.aws_iam_policy_document.assume_role.json
+  max_session_duration = 3600
 
-  tags = local.common_tags
+  tags = local.tags
 }
 
-resource "aws_iam_role" "this" {
-  name               = local.role_name
-  assume_role_policy = data.aws_iam_policy_document.assume_role.json
+resource "aws_iam_policy" "this" {
+  name        = local.policy_name
+  description = "Policy ${local.policy_name} gerenciada via terraform para o sistema ${var.system} (${var.environment})."
+  policy      = data.aws_iam_policy_document.this.json
 
-  tags = local.common_tags
+  lifecycle {
+    precondition {
+      condition     = !(contains(var.allowed_actions, "*") && contains(var.allowed_resources, "*"))
+      error_message = "A policy nao pode combinar Action \"*\" com Resource \"*\" na mesma statement."
+    }
+  }
+
+  tags = local.tags
 }
 
 resource "aws_iam_role_policy_attachment" "this" {

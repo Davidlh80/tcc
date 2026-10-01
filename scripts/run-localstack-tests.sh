@@ -129,6 +129,8 @@ export TF_VAR_allowed_actions='["s3:GetObject","s3:ListBucket"]'
 export TF_VAR_allowed_resources='["arn:aws:s3:::tcc-experiment","arn:aws:s3:::tcc-experiment/*"]'
 export TF_VAR_allowed_ports='[443]'
 export TF_VAR_allowed_cidrs='["10.0.0.0/8"]'
+export TF_VAR_trusted_principal_arn='arn:aws:iam::123456789012:root'
+export TF_VAR_trusted_principal_arns='["arn:aws:iam::123456789012:root"]'
 
 if [ "$resource" = "security-group" ]; then
   vpc_id=$(
@@ -247,6 +249,7 @@ while IFS= read -r directory; do
 
   export TF_VAR_bucket_name="$unique_name"
   export TF_VAR_policy_name="$unique_name"
+  export TF_VAR_role_name="$unique_name"
   export TF_VAR_security_group_name="$unique_name"
   export TF_VAR_name="$unique_name"
 

@@ -55,10 +55,10 @@ Para permitir auditoria e comparação entre execuções, os outputs devem usar 
 | Recurso         | Outputs obrigatórios                                        |
 |------------------|--------------------------------------------------------------|
 | S3               | `bucket_name`, `bucket_arn`, `bucket_id`                     |
-| IAM              | `policy_name`, `policy_arn`, `policy_id`                     |
+| IAM              | `policy_name`, `policy_arn`, `policy_id`, `role_name`, `role_arn` |
 | Security Group   | `security_group_name`, `security_group_arn`, `security_group_id` |
 
-Variáveis mínimas obrigatórias em todos os recursos: `environment`, `system`, `region`, `additional_tags`. Cada recurso ainda deve ter uma variável própria para seu nome ou finalidade (ex.: `purpose` no S3, `policy_name` no IAM, `security_group_name` no Security Group).
+Variáveis mínimas obrigatórias em todos os recursos: `environment`, `system`, `region`, `additional_tags`. Cada recurso ainda deve ter uma variável própria para seu nome ou finalidade (ex.: `purpose` no S3, `policy_name` no IAM, `security_group_name` no Security Group). No IAM, a variável que define o principal autorizado a assumir a Role deve se chamar exatamente `trusted_principal_arn` (string, um único ARN; não usar variante em lista nem outro nome).
 
 ## Estrutura obrigatória do README
 

@@ -1,23 +1,40 @@
+terraform {
+  required_version = ">= 1.5.0"
+}
+
+provider "aws" {
+  region = var.region
+}
+
 locals {
-  name_prefix = "${var.environment}-${var.system}-iam-${var.policy_name}"
+  base_name        = "${var.environment}-${var.system}-iam-${var.policy_name}"
+  iam_policy_name  = "${local.base_name}-policy"
+  iam_role_name    = "${local.base_name}-role"
 
-  mandatory_tags = {
-    Project     = "tcc-iac-ia"
-    Environment = var.environment
-    ManagedBy   = "terraform"
-    Owner       = "devops"
-    CostCenter  = "academic-research"
+  tags = merge(
+    {
+      Project     = "tcc-iac-ia"
+      Environment = var.environment
+      ManagedBy   = "terraform"
+      Owner       = "devops"
+      CostCenter  = "academic-research"
+    },
+    var.additional_tags
+  )
+}
+
+data "aws_iam_policy_document" "this" {
+  statement {
+    sid       = "AllowConfiguredActionsOnConfiguredResources"
+    effect    = "Allow"
+    actions   = var.allowed_actions
+    resources = var.allowed_resources
   }
-
-  tags = merge(local.mandatory_tags, var.additional_tags)
-
-  has_wildcard_action  = contains(var.allowed_actions, "*")
-  has_wildcard_resource = contains(var.allowed_resources, "*")
 }
 
 data "aws_iam_policy_document" "assume_role" {
   statement {
-    sid     = "AllowConfiguredPrincipalToAssume"
+    sid     = "AllowTrustedPrincipalAssumeRole"
     effect  = "Allow"
     actions = ["sts:AssumeRole"]
 
@@ -28,37 +45,25 @@ data "aws_iam_policy_document" "assume_role" {
   }
 }
 
-data "aws_iam_policy_document" "permissions" {
-  statement {
-    sid       = "AllowConfiguredActionsOnConfiguredResources"
-    effect    = "Allow"
-    actions   = var.allowed_actions
-    resources = var.allowed_resources
-  }
-}
-
 resource "aws_iam_policy" "this" {
-  name        = local.name_prefix
-  description = "Policy de menor privilegio gerenciada via Terraform para o sistema ${var.system} no ambiente ${var.environment}."
-  policy      = data.aws_iam_policy_document.permissions.json
-
-  tags = local.tags
+  name        = local.iam_policy_name
+  description = "Policy de minimo privilegio para ${var.system} (${var.policy_name}) no ambiente ${var.environment}"
+  policy      = data.aws_iam_policy_document.this.json
+  tags        = local.tags
 
   lifecycle {
     precondition {
-      condition     = !(local.has_wildcard_action && local.has_wildcard_resource)
-      error_message = "Nao e permitido combinar Action = \"*\" com Resource = \"*\" na mesma statement da policy."
+      condition     = !(contains(var.allowed_actions, "*") && contains(var.allowed_resources, "*"))
+      error_message = "Statement nao pode combinar Action = \"*\" com Resource = \"*\". Restrinja var.allowed_actions e/ou var.allowed_resources."
     }
   }
 }
 
 resource "aws_iam_role" "this" {
-  name                 = "${local.name_prefix}-role"
-  description          = "IAM Role de menor privilegio para o sistema ${var.system} no ambiente ${var.environment}."
-  assume_role_policy    = data.aws_iam_policy_document.assume_role.json
+  name                 = local.iam_role_name
+  assume_role_policy   = data.aws_iam_policy_document.assume_role.json
   max_session_duration = 3600
-
-  tags = local.tags
+  tags                 = local.tags
 }
 
 resource "aws_iam_role_policy_attachment" "this" {

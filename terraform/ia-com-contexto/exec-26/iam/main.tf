@@ -1,9 +1,17 @@
-locals {
-  name_prefix      = "${var.environment}-${var.system}"
-  policy_full_name = "${local.name_prefix}-iam-policy-${var.policy_name}"
-  role_full_name   = "${local.name_prefix}-iam-role-${var.policy_name}"
+terraform {
+  required_version = ">= 1.5.0"
+}
 
-  base_tags = {
+provider "aws" {
+  region = var.region
+}
+
+locals {
+  name_prefix = "${var.environment}-${var.system}"
+  policy_name = "${local.name_prefix}-iam-${var.policy_name}"
+  role_name   = "${local.name_prefix}-iam-role-${var.policy_name}"
+
+  required_tags = {
     Project     = "tcc-iac-ia"
     Environment = var.environment
     ManagedBy   = "terraform"
@@ -11,61 +19,53 @@ locals {
     CostCenter  = "academic-research"
   }
 
-  tags = merge(local.base_tags, var.additional_tags)
+  tags = merge(local.required_tags, var.additional_tags)
 }
 
-data "aws_iam_policy_document" "assume_role" {
-  statement {
-    sid     = "AllowTrustedPrincipalAssumeRole"
-    effect  = "Allow"
-    actions = ["sts:AssumeRole"]
+resource "aws_iam_policy" "this" {
+  name        = local.policy_name
+  description = "Policy de menor privilegio gerenciada via Terraform para ${local.name_prefix}."
 
-    principals {
-      type        = "AWS"
-      identifiers = [var.trusted_principal_arn]
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid      = "LeastPrivilegeAllow"
+        Effect   = "Allow"
+        Action   = var.allowed_actions
+        Resource = var.allowed_resources
+      }
+    ]
+  })
+
+  tags = local.tags
+
+  lifecycle {
+    precondition {
+      condition     = !(contains(var.allowed_actions, "*") && contains(var.allowed_resources, "*"))
+      error_message = "Nao e permitido combinar Action = \"*\" com Resource = \"*\" na mesma statement."
     }
-  }
-}
-
-data "aws_iam_policy_document" "permissions" {
-  statement {
-    sid       = "LeastPrivilegeAllow"
-    effect    = "Allow"
-    actions   = var.allowed_actions
-    resources = var.allowed_resources
   }
 }
 
 resource "aws_iam_role" "this" {
-  name                 = local.role_full_name
-  assume_role_policy   = data.aws_iam_policy_document.assume_role.json
-  max_session_duration = var.max_session_duration
+  name = local.role_name
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "TrustedPrincipalAssumeRole"
+        Effect = "Allow"
+        Principal = {
+          AWS = var.trusted_principal_arn
+        }
+        Action = "sts:AssumeRole"
+      }
+    ]
+  })
 
   tags = local.tags
-
-  lifecycle {
-    precondition {
-      condition     = var.trusted_principal_arn != "*"
-      error_message = "trusted_principal_arn nao pode ser \"*\". Informe um principal especifico na trust policy."
-    }
-  }
-}
-
-resource "aws_iam_policy" "this" {
-  name        = local.policy_full_name
-  description = var.policy_description
-  policy      = data.aws_iam_policy_document.permissions.json
-
-  tags = local.tags
-
-  lifecycle {
-    precondition {
-      condition = !(
-        contains(var.allowed_actions, "*") && contains(var.allowed_resources, "*")
-      )
-      error_message = "Nao e permitido combinar Action = \"*\" com Resource = \"*\" na mesma statement."
-    }
-  }
 }
 
 resource "aws_iam_role_policy_attachment" "this" {

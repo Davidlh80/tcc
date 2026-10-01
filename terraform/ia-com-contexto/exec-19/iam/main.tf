@@ -1,6 +1,15 @@
+terraform {
+  required_version = ">= 1.5.0"
+}
+
+provider "aws" {
+  region = var.region
+}
+
 locals {
-  policy_name = "${var.environment}-${var.system}-iam-policy-${var.policy_name}"
-  role_name   = "${var.environment}-${var.system}-iam-role-${var.policy_name}"
+  base_name   = "${var.environment}-${var.system}-iam-${var.policy_name}"
+  policy_name = local.base_name
+  role_name   = "${local.base_name}-role"
 
   tags = merge(
     {
@@ -16,7 +25,7 @@ locals {
 
 data "aws_iam_policy_document" "assume_role" {
   statement {
-    sid     = "AllowConfiguredPrincipalAssumeRole"
+    sid     = "AllowTrustedPrincipalAssumeRole"
     effect  = "Allow"
     actions = ["sts:AssumeRole"]
 
@@ -27,7 +36,7 @@ data "aws_iam_policy_document" "assume_role" {
   }
 }
 
-data "aws_iam_policy_document" "this" {
+data "aws_iam_policy_document" "policy" {
   statement {
     sid       = "AllowConfiguredActionsOnConfiguredResources"
     effect    = "Allow"
@@ -38,7 +47,6 @@ data "aws_iam_policy_document" "this" {
 
 resource "aws_iam_role" "this" {
   name                 = local.role_name
-  description          = "IAM Role gerenciada via Terraform para ${var.system} (${var.environment})."
   assume_role_policy   = data.aws_iam_policy_document.assume_role.json
   max_session_duration = 3600
 
@@ -46,11 +54,17 @@ resource "aws_iam_role" "this" {
 }
 
 resource "aws_iam_policy" "this" {
-  name        = local.policy_name
-  description = "IAM Policy gerenciada via Terraform para ${var.system} (${var.environment})."
-  policy      = data.aws_iam_policy_document.this.json
+  name   = local.policy_name
+  policy = data.aws_iam_policy_document.policy.json
 
   tags = local.tags
+
+  lifecycle {
+    precondition {
+      condition     = !(contains(var.allowed_actions, "*") && contains(var.allowed_resources, "*"))
+      error_message = "Nao e permitido combinar Action \"*\" com Resource \"*\" na mesma policy."
+    }
+  }
 }
 
 resource "aws_iam_role_policy_attachment" "this" {

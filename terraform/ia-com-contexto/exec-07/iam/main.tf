@@ -1,25 +1,29 @@
 locals {
-  mandatory_tags = {
-    Project     = "tcc-iac-ia"
-    Environment = var.environment
-    ManagedBy   = "terraform"
-    Owner       = "devops"
-    CostCenter  = "academic-research"
-  }
+  name_prefix = "${var.environment}-${var.system}"
+  policy_name = "${local.name_prefix}-iam-policy-${var.policy_name}"
+  role_name   = "${local.name_prefix}-iam-role-${var.policy_name}"
 
-  tags = merge(local.mandatory_tags, var.additional_tags)
-
-  principal_type = strcontains(var.assume_role_principal_arn, "arn:aws") ? "AWS" : "Service"
+  tags = merge(
+    {
+      Project     = "tcc-iac-ia"
+      Environment = var.environment
+      ManagedBy   = "terraform"
+      Owner       = "devops"
+      CostCenter  = "academic-research"
+    },
+    var.additional_tags
+  )
 }
 
 data "aws_iam_policy_document" "assume_role" {
   statement {
+    sid     = "AllowTrustedPrincipalAssumeRole"
     effect  = "Allow"
     actions = ["sts:AssumeRole"]
 
     principals {
-      type        = local.principal_type
-      identifiers = [var.assume_role_principal_arn]
+      type        = "AWS"
+      identifiers = [var.trusted_principal_arn]
     }
   }
 }
@@ -33,17 +37,25 @@ data "aws_iam_policy_document" "this" {
   }
 }
 
-resource "aws_iam_role" "this" {
-  name                 = var.role_name
-  assume_role_policy   = data.aws_iam_policy_document.assume_role.json
-  max_session_duration = 3600
+resource "aws_iam_policy" "this" {
+  name        = local.policy_name
+  description = "Policy gerenciada por Terraform para ${local.name_prefix}"
+  policy      = data.aws_iam_policy_document.this.json
 
   tags = local.tags
+
+  lifecycle {
+    precondition {
+      condition     = !(contains(var.allowed_actions, "*") && contains(var.allowed_resources, "*"))
+      error_message = "Nao e permitido combinar Action \"*\" com Resource \"*\" na mesma statement."
+    }
+  }
 }
 
-resource "aws_iam_policy" "this" {
-  name   = var.policy_name
-  policy = data.aws_iam_policy_document.this.json
+resource "aws_iam_role" "this" {
+  name                 = local.role_name
+  assume_role_policy   = data.aws_iam_policy_document.assume_role.json
+  max_session_duration = 3600
 
   tags = local.tags
 }

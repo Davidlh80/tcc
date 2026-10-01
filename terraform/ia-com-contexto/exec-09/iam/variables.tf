@@ -1,6 +1,6 @@
 variable "environment" {
-  type        = string
   description = "Ambiente de implantacao do recurso (dev, hml ou prd)."
+  type        = string
 
   validation {
     condition     = contains(["dev", "hml", "prd"], var.environment)
@@ -9,8 +9,8 @@ variable "environment" {
 }
 
 variable "system" {
+  description = "Nome do sistema ou projeto ao qual o recurso pertence, usado na composicao do nome padronizado."
   type        = string
-  description = "Nome do sistema/aplicacao dono do recurso, usado na nomenclatura padronizada."
 
   validation {
     condition     = length(var.system) > 0
@@ -19,20 +19,20 @@ variable "system" {
 }
 
 variable "region" {
-  type        = string
   description = "Regiao AWS onde os recursos serao provisionados."
+  type        = string
   default     = "us-east-1"
 }
 
 variable "additional_tags" {
+  description = "Tags adicionais a serem mescladas com as tags obrigatorias definidas pela organizacao."
   type        = map(string)
-  description = "Tags adicionais a serem mescladas as tags obrigatorias da organizacao."
   default     = {}
 }
 
 variable "policy_name" {
+  description = "Finalidade da IAM Policy/Role, utilizada na composicao do nome padronizado (ex.: readonly, deploy)."
   type        = string
-  description = "Finalidade/nome da policy, usado na nomenclatura padronizada do recurso (ex.: readonly, deploy)."
 
   validation {
     condition     = length(var.policy_name) > 0
@@ -41,31 +41,31 @@ variable "policy_name" {
 }
 
 variable "allowed_actions" {
+  description = "Lista de actions IAM permitidas na policy (Effect: Allow). Nao pode conter \"*\" simultaneamente com allowed_resources = [\"*\"]."
   type        = list(string)
-  description = "Lista de acoes IAM permitidas na statement Allow da policy."
 
   validation {
     condition     = length(var.allowed_actions) > 0
-    error_message = "allowed_actions deve conter ao menos uma acao."
+    error_message = "Informe ao menos uma action em allowed_actions."
   }
 }
 
 variable "allowed_resources" {
+  description = "Lista de ARNs/recursos permitidos na policy (Effect: Allow). Nao pode conter \"*\" simultaneamente com allowed_actions = [\"*\"]."
   type        = list(string)
-  description = "Lista de ARNs de recursos permitidos na statement Allow da policy."
 
   validation {
     condition     = length(var.allowed_resources) > 0
-    error_message = "allowed_resources deve conter ao menos um recurso."
+    error_message = "Informe ao menos um recurso em allowed_resources."
   }
 }
 
 variable "trusted_principal_arn" {
+  description = "ARN (ou principal de servico AWS) autorizado a assumir a IAM Role via trust policy. Nao pode ser \"*\"."
   type        = string
-  description = "ARN do principal (IAM User, Role ou conta) autorizado a assumir a role via trust policy. Nao pode ser \"*\"."
 
   validation {
-    condition     = var.trusted_principal_arn != "*" && can(regex("^arn:aws:iam::", var.trusted_principal_arn))
-    error_message = "trusted_principal_arn deve ser um ARN IAM valido (arn:aws:iam::...) e nao pode ser \"*\"."
+    condition     = var.trusted_principal_arn != "*" && length(var.trusted_principal_arn) > 0
+    error_message = "trusted_principal_arn nao pode ser vazio nem \"*\"; informe um ARN ou principal de servico especifico."
   }
 }

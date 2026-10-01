@@ -4,7 +4,7 @@ variable "environment" {
 
   validation {
     condition     = contains(["dev", "hml", "prd"], var.environment)
-    error_message = "O valor de environment deve ser 'dev', 'hml' ou 'prd'."
+    error_message = "O valor de environment deve ser dev, hml ou prd."
   }
 }
 
@@ -19,19 +19,19 @@ variable "system" {
 }
 
 variable "region" {
-  description = "Regiao AWS utilizada pelo provider."
+  description = "Regiao AWS onde os recursos serao provisionados."
   type        = string
   default     = "us-east-1"
 }
 
 variable "additional_tags" {
-  description = "Tags adicionais a serem mescladas com as tags obrigatorias da organizacao."
+  description = "Tags adicionais a serem mescladas as tags obrigatorias do recurso."
   type        = map(string)
   default     = {}
 }
 
 variable "policy_name" {
-  description = "Finalidade da policy, usada para compor o nome padronizado do recurso (ex.: readonly, deploy, logging)."
+  description = "Finalidade da IAM Policy/Role, usada para compor o nome padronizado (ex.: readonly, deploy)."
   type        = string
 
   validation {
@@ -40,32 +40,32 @@ variable "policy_name" {
   }
 }
 
-variable "trusted_principal_arn" {
-  description = "ARN do principal (usuario, role ou conta) autorizado a assumir a IAM Role. Nao pode ser um wildcard."
-  type        = string
-
-  validation {
-    condition     = var.trusted_principal_arn != "*" && can(regex("^arn:aws:iam::\\d{12}:(root|user/.+|role/.+)$", var.trusted_principal_arn))
-    error_message = "trusted_principal_arn deve ser um ARN IAM valido (root, user ou role) e nao pode ser \"*\"."
-  }
-}
-
 variable "allowed_actions" {
-  description = "Lista de acoes IAM permitidas na statement Allow da policy."
+  description = "Lista de IAM Actions permitidas na policy (statement com Effect Allow)."
   type        = list(string)
 
   validation {
     condition     = length(var.allowed_actions) > 0
-    error_message = "allowed_actions deve conter ao menos uma acao."
+    error_message = "allowed_actions deve conter pelo menos uma action."
   }
 }
 
 variable "allowed_resources" {
-  description = "Lista de recursos (ARNs) aos quais as acoes permitidas se aplicam."
+  description = "Lista de ARNs (ou \"*\") de recursos permitidos na policy (statement com Effect Allow)."
   type        = list(string)
 
   validation {
     condition     = length(var.allowed_resources) > 0
-    error_message = "allowed_resources deve conter ao menos um recurso."
+    error_message = "allowed_resources deve conter pelo menos um recurso."
+  }
+}
+
+variable "trusted_principal_arn" {
+  description = "ARN unico do principal (role, user ou root) autorizado a assumir a IAM Role via trust policy."
+  type        = string
+
+  validation {
+    condition     = can(regex("^arn:aws[a-zA-Z0-9-]*:iam::\\d{12}:(role|user|root)", var.trusted_principal_arn))
+    error_message = "trusted_principal_arn deve ser um ARN IAM valido, no formato arn:aws:iam::<account-id>:role|user/<nome> ou arn:aws:iam::<account-id>:root."
   }
 }
