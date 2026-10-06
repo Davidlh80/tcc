@@ -1,0 +1,6 @@
+scenario: manual
+participant_id: p06
+resource: s3
+started_at: "2026-10-05T19:48:00-03:00"
+finished_at: "2026-10-05T19:58:00-03:00"
+pauses: []
