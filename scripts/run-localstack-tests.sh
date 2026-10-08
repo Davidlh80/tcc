@@ -344,24 +344,53 @@ while IFS= read -r directory; do
             ;;
 
           iam)
-            identifier=$(
+            policy_identifier=$(
               read_output \
                 "$directory" \
                 policy_arn \
                 iam_policy_arn \
-                arn \
                 policy \
                 id || true
             )
 
-            if [ -n "$identifier" ] && \
+            if [ -n "$policy_identifier" ] && \
               aws \
                 --endpoint-url="$AWS_ENDPOINT_URL" \
                 iam get-policy \
-                --policy-arn "$identifier" >"$verify_log" 2>&1; then
+                --policy-arn "$policy_identifier" >"$verify_log" 2>&1; then
               verify_result=passed
             else
-              verify_result=failed
+              # Fallback: templates que anexam a policy como inline role
+              # policy (aws_iam_role_policy) nao expoe policy_arn - nesse
+              # caso o recurso criado de fato e a IAM Role.
+              role_identifier=$(
+                read_output \
+                  "$directory" \
+                  role_name \
+                  iam_role_name \
+                  name || true
+              )
+
+              if [ -z "$role_identifier" ]; then
+                role_arn=$(
+                  read_output \
+                    "$directory" \
+                    role_arn \
+                    iam_role_arn \
+                    arn || true
+                )
+                role_identifier="${role_arn##*/}"
+              fi
+
+              if [ -n "$role_identifier" ] && \
+                aws \
+                  --endpoint-url="$AWS_ENDPOINT_URL" \
+                  iam get-role \
+                  --role-name "$role_identifier" >"$verify_log" 2>&1; then
+                verify_result=passed
+              else
+                verify_result=failed
+              fi
             fi
             ;;
 
