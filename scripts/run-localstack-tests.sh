@@ -176,6 +176,18 @@ run_terraform_init() {
 
   rm -f "$directory/.terraform.lock.hcl"
 
+  # Resolve o lock com o terraform puro antes de chamar o tflocal: o
+  # tflocal decide quais endpoints de override incluir com base na
+  # versao do provider AWS lida do .terraform.lock.hcl, e sem um lock
+  # previo ele usa o conjunto padrao (compativel so com AWS provider
+  # < 6.0), quebrando templates que pedem uma major version mais nova.
+  if ! terraform -chdir="$directory" init \
+    -backend=false \
+    -input=false \
+    -no-color >>"$init_log" 2>&1; then
+    return 1
+  fi
+
   if ! tflocal -chdir="$directory" init \
     -backend=false \
     -input=false \
