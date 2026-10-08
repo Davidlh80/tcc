@@ -162,7 +162,7 @@ run_terraform_init() {
     return 0
   fi
 
-  if ! grep -qiE 'inconsistent dependency lock file|lock file does not match|match the version constraint' "$init_log"; then
+  if ! grep -qiE 'inconsistent dependency lock file|lock file does not match|match the version constraint|does not match configured version constraint|terraform init -upgrade' "$init_log"; then
     return 1
   fi
 
