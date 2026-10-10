@@ -57,4 +57,4 @@ terraform plan -var-file=terraform.tfvars
 
 Revise o plano antes de executar `terraform apply -var-file=terraform.tfvars`, que cria recursos na conta configurada. Este blueprint pode ser executado de forma independente na sua própria pasta.
 
-Consulte o [blueprint técnico](../../../docs/blueprints/iam.md) e o [fluxo de validações](../../../docs/como-executar-validacoes.md) para os critérios de segurança e análise com Checkov e Trivy.
+Consulte o [fluxo de validações](../../../docs/como-executar-validacoes.md) para os critérios de segurança e análise com Checkov e Trivy.
