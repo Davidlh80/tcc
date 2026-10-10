@@ -1,0 +1,26 @@
+environment         = "dev"
+system              = "tcc"
+region              = "us-east-1"
+security_group_name = "web"
+vpc_id              = "vpc-0123456789abcdef0"
+additional_tags     = {}
+
+ingress_rules = {
+  https_internal = {
+    description = "HTTPS da rede interna"
+    ip_protocol = "tcp"
+    from_port   = 443
+    to_port     = 443
+    cidr_ipv4   = "10.0.0.0/24"
+  }
+}
+
+egress_rules = {
+  https_internal = {
+    description = "HTTPS para dependencias internas"
+    ip_protocol = "tcp"
+    from_port   = 443
+    to_port     = 443
+    cidr_ipv4   = "10.0.1.0/24"
+  }
+}
