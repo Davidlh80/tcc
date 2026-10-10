@@ -1,0 +1,6 @@
+scenario: manual
+participant_id: p07
+resource: iam
+started_at: "2026-10-10T18:04:51-03:00"
+finished_at: "2026-10-10T18:06:44-03:00"
+pauses: []
