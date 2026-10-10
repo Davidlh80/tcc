@@ -1,6 +1,0 @@
-environment        = "dev"
-system             = "tcc"
-region             = "us-east-1"
-purpose            = "logs-123456789012"
-versioning_enabled = true
-additional_tags    = {}
