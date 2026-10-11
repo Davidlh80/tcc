@@ -1,41 +1,60 @@
-# IAM Role com IAM Policy dedicada anexada
+# IAM Policy anexada a IAM Role
 
-## Objetivo
+Blueprint Terraform para provisionar uma IAM Policy de minimo privilegio anexada a uma IAM Role na AWS, com trust policy restrita a um principal configuravel.
 
-Esta blueprint provisiona uma IAM Role na AWS com uma IAM Policy de privilegio minimo criada e anexada exclusivamente a ela, garantindo que a policy nunca fique solta (sem nenhum principal associado).
+## O que este modulo cria
 
-## Recursos criados
+- Uma `aws_iam_role` com uma trust policy (`assume_role_policy`) que permite `sts:AssumeRole` apenas para o principal informado em `trusted_principal_arn`. Nenhum wildcard (`"*"` ou `AWS: "*"`) e aceito nesse campo.
+- Uma `aws_iam_policy` com permissoes definidas por `policy_actions` e `policy_resources`. Nenhuma das duas listas pode conter `"*"`, evitando permissoes amplas ou administrativas acidentais.
+- Um `aws_iam_role_policy_attachment` que anexa a policy diretamente a role, garantindo que a policy nunca fique solta sem um principal associado.
 
-- `aws_iam_role.this`: IAM Role com trust policy (assume role policy) configuravel.
-- `aws_iam_policy.this`: IAM Policy com statement de privilegio minimo (sem wildcards em actions ou resources).
-- `aws_iam_role_policy_attachment.this`: anexa a policy criada diretamente a role criada.
+## Uso
 
-## Decisoes de seguranca
+```
+module "restricted_role" {
+  source = "./"
 
-- O trust policy (assume role) exige explicitamente ao menos um principal confiavel, seja um service principal AWS (`trusted_service_principals`) ou um ARN de conta/role/usuario (`trusted_principal_arns`). Um `precondition` na role impede a criacao de uma trust policy sem nenhum principal definido.
-- As variaveis `policy_actions` e `policy_resources` possuem validacoes que rejeitam o uso do wildcard `"*"`, forcando o consumidor do modulo a declarar actions e recursos explicitos.
-- Suporte opcional a `external_id` na condicao `sts:ExternalId`, recomendado para cenarios de assume role cross-account.
-- Suporte opcional a `permissions_boundary_arn` para reforcar o limite maximo de permissoes da role.
-- Nenhum valor sensivel ou credencial real e utilizado; todos os valores configuraveis sao expostos como variaveis com defaults seguros e ilustrativos.
+  role_name              = "minha-role"
+  policy_name            = "minha-policy"
+  trusted_principal_arn  = "arn:aws:iam::123456789012:role/outra-role"
+  policy_actions         = ["s3:GetObject", "s3:ListBucket"]
+  policy_resources       = ["arn:aws:s3:::meu-bucket", "arn:aws:s3:::meu-bucket/*"]
 
-## Uso basico
+  tags = {
+    Ambiente = "dev"
+  }
+}
+```
 
-Defina as variaveis conforme o cenario desejado, por exemplo:
+## Inputs principais
 
-  role_name                  = "minha-app-role"
-  trusted_service_principals = ["lambda.amazonaws.com"]
-  policy_actions              = ["s3:GetObject"]
-  policy_resources             = ["arn:aws:s3:::meu-bucket/*"]
+| Nome                     | Descricao                                                                 | Obrigatorio |
+|--------------------------|----------------------------------------------------------------------------|-------------|
+| `trusted_principal_arn`  | ARN do principal autorizado a assumir a role. Nao pode ser wildcard.      | Sim         |
+| `policy_resources`       | ARNs de recursos aos quais a policy se aplica. Nao pode ser `"*"`.        | Sim         |
+| `policy_actions`         | Actions permitidas pela policy. Nao pode conter `"*"`.                    | Nao         |
+| `role_name`              | Nome da IAM Role.                                                         | Nao         |
+| `policy_name`            | Nome da IAM Policy.                                                       | Nao         |
+| `max_session_duration`   | Duracao maxima da sessao assumida, em segundos (3600 a 43200).           | Nao         |
+| `tags`                   | Tags aplicadas a role e a policy.                                         | Nao         |
 
-## Validacao local
+## Outputs principais
 
-Este modulo nao utiliza backend remoto e nao depende de credenciais reais para validacao sintatica. E possivel validar com:
+- `role_arn`, `role_name`, `role_unique_id`
+- `policy_arn`, `policy_name`
+- `policy_attachment_id`
 
-  terraform init -backend=false
-  terraform validate
+## Seguranca
 
-## Outputs
+- A trust policy exige um principal especifico; valores com wildcard (`"*"`) sao rejeitados por validacao da variavel.
+- As actions e os resources da policy sao validados para impedir o uso de `"*"`, reduzindo o risco de permissoes administrativas ou excessivamente amplas.
+- Nenhum valor sensivel ou credencial e fixado no codigo; todos os valores configuraveis sao expostos via variaveis.
 
-- `role_name`, `role_arn`, `role_id`: identificadores da IAM Role criada.
-- `policy_name`, `policy_arn`: identificadores da IAM Policy criada.
-- `policy_attachment_id`: identificador do vinculo entre a policy e a role.
+## Validacao
+
+Este modulo pode ser validado sem credenciais reais e sem backend remoto:
+
+```
+terraform init -backend=false
+terraform validate
+```

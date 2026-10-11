@@ -1,58 +1,50 @@
 # Blueprint Terraform — Bucket S3
 
-Blueprint para provisionar um bucket Amazon S3 seguro por padrão.
+Provisiona um bucket Amazon S3 com configuracoes seguras por padrao:
 
-## Recursos criados
-
-- `aws_s3_bucket` — bucket S3 principal.
-- `aws_s3_bucket_versioning` — versionamento de objetos.
-- `aws_s3_bucket_server_side_encryption_configuration` — criptografia server-side (SSE-S3 por padrão, ou SSE-KMS se `kms_key_arn` for informado).
-- `aws_s3_bucket_ownership_controls` — força `BucketOwnerEnforced`, desabilitando ACLs.
-- `aws_s3_bucket_public_access_block` — bloqueia todo acesso público ao bucket.
+- Bloqueio total de acesso publico (`aws_s3_bucket_public_access_block`).
+- Criptografia em repouso habilitada (SSE-S3 por padrao, ou SSE-KMS se uma chave for informada).
+- Versionamento configuravel via variavel.
+- Propriedade de objetos forcada para o dono do bucket (`BucketOwnerEnforced`), eliminando o uso de ACLs.
+- Tags aplicadas ao recurso.
 
 ## Uso
 
-```hcl
+```
 module "bucket" {
   source      = "./"
-  bucket_name = "meu-bucket-exemplo-unico"
+  bucket_name = "meu-bucket-exemplo"
   tags = {
-    Owner = "time-plataforma"
+    ambiente = "dev"
   }
 }
 ```
 
-## Inputs
+## Variaveis
 
-| Nome | Descrição | Tipo | Default | Obrigatório |
-|---|---|---|---|---|
-| region | Região AWS onde os recursos serão provisionados | string | "us-east-1" | não |
-| bucket_name | Nome globalmente único do bucket S3 | string | — | sim |
-| enable_versioning | Habilita versionamento de objetos | bool | true | não |
-| force_destroy | Permite destruir o bucket mesmo com objetos dentro | bool | false | não |
-| kms_key_arn | ARN de chave KMS para SSE-KMS; se nulo, usa AES256 | string | null | não |
-| tags | Tags adicionais aplicadas ao bucket | map(string) | {} | não |
+| Nome                 | Descricao                                                      | Tipo          | Padrao  |
+|----------------------|------------------------------------------------------------------|---------------|---------|
+| `bucket_name`        | Nome globalmente unico do bucket S3                              | `string`      | -       |
+| `versioning_enabled` | Habilita versionamento de objetos                                | `bool`        | `true`  |
+| `force_destroy`      | Permite destruir o bucket mesmo com objetos                      | `bool`        | `false` |
+| `kms_key_arn`        | ARN de chave KMS para SSE-KMS; se nulo, usa AES256               | `string`      | `null`  |
+| `tags`               | Tags adicionais aplicadas ao bucket                               | `map(string)` | `{}`    |
+| `aws_region`         | Regiao AWS onde o bucket sera criado                              | `string`      | -       |
 
 ## Outputs
 
-| Nome | Descrição |
-|---|---|
-| bucket_id | Identificador (nome) do bucket |
-| bucket_arn | ARN do bucket |
-| bucket_domain_name | Nome de domínio do bucket |
-| bucket_regional_domain_name | Nome de domínio regional do bucket |
+| Nome                          | Descricao                                 |
+|-------------------------------|---------------------------------------------|
+| `bucket_id`                   | Nome (ID) do bucket criado                  |
+| `bucket_arn`                  | ARN do bucket criado                        |
+| `bucket_regional_domain_name` | Dominio regional do bucket                  |
+| `versioning_status`           | Status atual do versionamento do bucket     |
 
-## Segurança
-
-- Acesso público bloqueado em todas as dimensões (`aws_s3_bucket_public_access_block`).
-- ACLs desabilitadas via `BucketOwnerEnforced`, exigindo controle de acesso apenas por políticas IAM/bucket policy.
-- Criptografia server-side habilitada por padrão (AES256), com suporte opcional a SSE-KMS.
-- Versionamento habilitado por padrão para proteção contra sobrescrita/exclusão acidental.
-- `force_destroy` desabilitado por padrão para evitar perda acidental de dados.
-
-## Validação
+## Validacao
 
 ```
 terraform init -backend=false
 terraform validate
 ```
+
+Nao e necessario backend remoto nem credenciais reais para validacao sintatica.

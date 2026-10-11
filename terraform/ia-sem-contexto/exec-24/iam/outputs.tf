@@ -19,11 +19,11 @@ output "policy_name" {
 }
 
 output "policy_arn" {
-  description = "ARN da IAM Policy criada e anexada a role."
+  description = "ARN da IAM Policy criada."
   value       = aws_iam_policy.this.arn
 }
 
 output "policy_attachment_id" {
-  description = "ID do attachment entre a IAM Policy e a IAM Role."
+  description = "Identificador do anexo entre a IAM Policy e a IAM Role."
   value       = aws_iam_role_policy_attachment.this.id
 }

@@ -1,77 +1,49 @@
-# IAM Role com Policy Gerenciada Anexada
+# IAM Policy anexada a IAM Role
 
-## Visao geral
+Blueprint Terraform para provisionar uma IAM Role com uma trust policy restrita a principals configuraveis e uma IAM Policy gerenciada com permissoes limitadas, anexada diretamente a essa role.
 
-Esta blueprint provisiona:
+## Recursos criados
 
-- Uma IAM Role (`aws_iam_role.this`) com trust policy configuravel via variaveis.
-- Uma IAM Policy gerenciada (`aws_iam_policy.this`) com permissoes definidas pelo consumidor do modulo.
-- Um attachment (`aws_iam_role_policy_attachment.this`) que vincula a policy a role, garantindo que a policy nunca fique sem um principal associado.
+- `aws_iam_role.this`: role com assume role policy restrita aos ARNs informados em `trusted_principal_arns` (nunca `*` ou conta wildcard).
+- `aws_iam_policy.this`: policy gerenciada contendo apenas as acoes (`allowed_actions`) e recursos (`resource_arns`) configurados, sem wildcard total.
+- `aws_iam_role_policy_attachment.this`: anexa a policy a role, garantindo que a policy nunca fique solta sem principal associado.
 
-Nenhum valor sensivel ou credencial real e utilizado. Todos os parametros de dominio (identificadores de principal, ARNs de recursos, acoes permitidas) sao fornecidos via variaveis.
+## Decisoes de seguranca
 
-## Requisitos
+- A trust policy (`data.aws_iam_policy_document.assume_role`) exige uma lista nao vazia de principals especificos; validacoes de variavel bloqueiam `"*"` e ARNs de conta com wildcard (`arn:aws:iam::*:...`).
+- `allowed_actions` bloqueia, via validacao, o wildcard total (`*`) e wildcards de servico completo (ex.: `iam:*`, `s3:*`), reduzindo o risco de permissoes administrativas.
+- `resource_arns` nao aceita `*`, forcando o escopo das acoes a recursos especificos.
+- Suporte opcional a `sts:ExternalId` na trust policy (`external_id`) para mitigar o problema do confused deputy em cenarios de cross-account.
+- Tags sao aplicadas tanto na role quanto na policy para rastreabilidade.
 
-- Terraform >= 1.5.0
-- Provider `hashicorp/aws` ~> 5.0
-- Credenciais AWS validas apenas para `terraform plan`/`apply` (nao necessarias para `terraform validate`)
-
-## Uso basico
+## Uso
 
 ```
-module "app_role" {
+module "iam_role_with_policy" {
   source = "./"
 
-  role_name   = "minha-app-role"
-  policy_name = "minha-app-policy"
-
-  trusted_principal_type        = "Service"
-  trusted_principal_identifiers = ["ec2.amazonaws.com"]
-
-  allowed_actions = [
-    "logs:CreateLogGroup",
-    "logs:CreateLogStream",
-    "logs:PutLogEvents",
-  ]
-
-  allowed_resource_arns = [
-    "arn:aws:logs:us-east-1:111122223333:log-group:/app/minha-app:*",
-  ]
+  role_name               = "app-backend-role"
+  policy_name             = "app-backend-policy"
+  trusted_principal_arns  = ["arn:aws:iam::123456789012:role/ci-cd-deployer"]
+  allowed_actions         = ["s3:GetObject", "s3:ListBucket"]
+  resource_arns           = ["arn:aws:s3:::app-backend-bucket", "arn:aws:s3:::app-backend-bucket/*"]
 
   tags = {
-    Ambiente = "producao"
+    Environment = "staging"
+    Owner       = "team-backend"
   }
 }
 ```
 
-## Confianca entre contas (cross-account)
+## Variaveis principais
 
-Para permitir que outra conta AWS assuma a role, defina:
-
-```
-trusted_principal_type        = "AWS"
-trusted_principal_identifiers = ["arn:aws:iam::999988887777:root"]
-external_id                   = "um-valor-secreto-compartilhado"
-require_mfa                   = true
-```
-
-## Inputs principais
-
-| Nome | Descricao | Default |
+| Nome | Descricao | Obrigatorio |
 |---|---|---|
-| `aws_region` | Regiao AWS do provider | `us-east-1` |
-| `role_name` | Nome da IAM Role | `app-execution-role` |
-| `policy_name` | Nome da IAM Policy | `app-execution-policy` |
-| `trusted_principal_type` | Tipo do principal (`Service` ou `AWS`) | `Service` |
-| `trusted_principal_identifiers` | Identificadores do principal de confianca | obrigatorio |
-| `external_id` | External ID para assume role entre contas | `null` |
-| `require_mfa` | Exige MFA para assumir a role | `false` |
-| `max_session_duration` | Duracao maxima da sessao (segundos) | `3600` |
-| `permissions_boundary_arn` | ARN de permissions boundary | `null` |
-| `allowed_actions` | Acoes permitidas na policy | acoes minimas de CloudWatch Logs |
-| `allowed_resource_arns` | ARNs de recursos alvo das acoes permitidas | obrigatorio |
-| `denied_actions` | Acoes explicitamente negadas | `[]` |
-| `tags` | Tags adicionais | `{}` |
+| `trusted_principal_arns` | ARNs autorizados a assumir a role | Sim |
+| `allowed_actions` | Acoes permitidas pela policy | Nao (default minimo de leitura em S3) |
+| `resource_arns` | Recursos aos quais as acoes se aplicam | Nao (default aponta para bucket de exemplo) |
+| `external_id` | ExternalId exigido na trust policy | Nao |
+| `tags` | Tags aplicadas aos recursos | Nao |
 
 ## Outputs
 
@@ -79,17 +51,11 @@ require_mfa                   = true
 - `policy_name`, `policy_arn`
 - `policy_attachment_id`
 
-## Consideracoes de seguranca
-
-- `allowed_resource_arns` e obrigatorio e nao possui default com wildcard, forcando o consumidor a delimitar recursos explicitamente.
-- Evite usar `"*"` em `allowed_actions` ou `allowed_resource_arns`; prefira acoes e ARNs especificos por servico e recurso.
-- `require_mfa` e `external_id` reduzem o risco de "confused deputy" em cenarios cross-account.
-- `permissions_boundary_arn` permite aplicar um limite adicional de permissoes, recomendado em ambientes com controles centralizados de IAM.
-- A policy criada nunca existe de forma solta: o `aws_iam_role_policy_attachment` garante que ela esteja sempre associada a uma role com principal definido.
-
 ## Validacao
 
 ```
 terraform init -backend=false
 terraform validate
 ```
+
+Nenhuma credencial real e necessaria para rodar os comandos acima, pois nao ha chamadas a dados remotos da AWS.

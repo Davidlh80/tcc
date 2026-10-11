@@ -1,11 +1,11 @@
-variable "aws_region" {
+variable "region" {
   description = "Regiao AWS onde os recursos serao provisionados."
   type        = string
   default     = "us-east-1"
 }
 
 variable "vpc_id" {
-  description = "ID da VPC onde o Security Group sera criado."
+  description = "ID da VPC (criada pelo ambiente de teste) onde o Security Group sera provisionado."
   type        = string
 }
 
@@ -22,19 +22,7 @@ variable "description" {
 }
 
 variable "ingress_rules" {
-  description = "Lista de regras de entrada (ingress) do Security Group. Vazia por padrao para seguir o principio de menor privilegio."
-  type = list(object({
-    description = string
-    from_port   = number
-    to_port     = number
-    protocol    = string
-    cidr_blocks = list(string)
-  }))
-  default = []
-}
-
-variable "egress_rules" {
-  description = "Lista de regras de saida (egress) do Security Group. Por padrao permite todo o trafego de saida."
+  description = "Lista de regras de entrada explicitas do Security Group."
   type = list(object({
     description = string
     from_port   = number
@@ -44,17 +32,44 @@ variable "egress_rules" {
   }))
   default = [
     {
-      description = "Allow all outbound traffic"
-      from_port   = 0
-      to_port     = 0
-      protocol    = "-1"
+      description = "Permite trafego HTTPS de entrada a partir da rede interna"
+      from_port   = 443
+      to_port     = 443
+      protocol    = "tcp"
+      cidr_blocks = ["10.0.0.0/8"]
+    }
+  ]
+}
+
+variable "egress_rules" {
+  description = "Lista de regras de saida explicitas do Security Group."
+  type = list(object({
+    description = string
+    from_port   = number
+    to_port     = number
+    protocol    = string
+    cidr_blocks = list(string)
+  }))
+  default = [
+    {
+      description = "Permite trafego HTTPS de saida"
+      from_port   = 443
+      to_port     = 443
+      protocol    = "tcp"
+      cidr_blocks = ["0.0.0.0/0"]
+    },
+    {
+      description = "Permite resolucao DNS de saida (UDP 53)"
+      from_port   = 53
+      to_port     = 53
+      protocol    = "udp"
       cidr_blocks = ["0.0.0.0/0"]
     }
   ]
 }
 
 variable "tags" {
-  description = "Tags adicionais a serem aplicadas ao Security Group."
+  description = "Tags adicionais aplicadas ao Security Group."
   type        = map(string)
   default     = {}
 }

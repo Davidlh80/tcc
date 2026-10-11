@@ -1,5 +1,5 @@
-variable "region" {
-  description = "Regiao AWS onde os recursos serao provisionados (usada apenas para o provider)."
+variable "aws_region" {
+  description = "Região AWS onde os recursos IAM serão provisionados (IAM é global, mas o provider exige uma região)."
   type        = string
   default     = "us-east-1"
 }
@@ -7,7 +7,7 @@ variable "region" {
 variable "role_name" {
   description = "Nome da IAM Role a ser criada."
   type        = string
-  default     = "app-scoped-role"
+  default     = "example-restricted-role"
 
   validation {
     condition     = length(var.role_name) > 0 && length(var.role_name) <= 64
@@ -15,20 +15,20 @@ variable "role_name" {
   }
 }
 
-variable "role_description" {
-  description = "Descricao da IAM Role."
-  type        = string
-  default     = "Role com permissoes minimas concedidas via policy dedicada."
-}
-
 variable "role_path" {
-  description = "Path da IAM Role e da IAM Policy."
+  description = "Path da IAM Role."
   type        = string
   default     = "/"
 }
 
+variable "role_description" {
+  description = "Descrição da IAM Role."
+  type        = string
+  default     = "Role criada via Terraform com trust policy restrita e policy dedicada anexada."
+}
+
 variable "max_session_duration" {
-  description = "Duracao maxima (em segundos) da sessao assumida via sts:AssumeRole."
+  description = "Duração máxima (em segundos) da sessão assumida via sts:AssumeRole."
   type        = number
   default     = 3600
 
@@ -38,21 +38,42 @@ variable "max_session_duration" {
   }
 }
 
-variable "trusted_service_principals" {
-  description = "Lista de service principals da AWS autorizados a assumir a role (trust policy)."
+variable "permissions_boundary_arn" {
+  description = "ARN opcional de uma policy a ser usada como permissions boundary da role."
+  type        = string
+  default     = null
+}
+
+variable "trusted_principal_arns" {
+  description = "Lista de ARNs de principals (IAM role ou user) autorizados a assumir a role. Não é permitido usar '*' ou principals de conta inteira (root)."
   type        = list(string)
-  default     = ["ec2.amazonaws.com"]
+  default     = ["arn:aws:iam::123456789012:role/example-trusted-role"]
 
   validation {
-    condition     = length(var.trusted_service_principals) > 0
-    error_message = "Informe ao menos um principal de confianca; a policy nao pode ficar sem principal associado."
+    condition     = length(var.trusted_principal_arns) > 0
+    error_message = "trusted_principal_arns deve conter ao menos um ARN."
+  }
+
+  validation {
+    condition = alltrue([
+      for arn in var.trusted_principal_arns :
+      arn != "*" && can(regex("^arn:aws:iam::[0-9]{12}:(role|user)/.+$", arn))
+    ])
+    error_message = "Cada item de trusted_principal_arns deve ser um ARN específico de IAM role ou user (formato arn:aws:iam::<account-id>:role/... ou :user/...). Não é permitido '*' ou ARN de conta inteira (root)."
   }
 }
 
-variable "policy_name" {
-  description = "Nome da IAM Policy anexada a role."
+variable "external_id" {
+  description = "External ID opcional exigido na assume role policy, para reforçar o controle de quem pode assumir a role (ex.: cenários cross-account)."
   type        = string
-  default     = "app-scoped-policy"
+  default     = ""
+  sensitive   = true
+}
+
+variable "policy_name" {
+  description = "Nome da IAM Policy a ser criada e anexada à role."
+  type        = string
+  default     = "example-restricted-policy"
 
   validation {
     condition     = length(var.policy_name) > 0 && length(var.policy_name) <= 128
@@ -60,38 +81,42 @@ variable "policy_name" {
   }
 }
 
-variable "policy_description" {
-  description = "Descricao da IAM Policy."
+variable "policy_path" {
+  description = "Path da IAM Policy."
   type        = string
-  default     = "Policy com acoes e recursos explicitamente permitidos, sem uso de wildcard amplo."
+  default     = "/"
 }
 
-variable "allowed_actions" {
-  description = "Lista de acoes IAM explicitamente permitidas pela policy. Evite wildcards amplos como \"*\"."
+variable "policy_description" {
+  description = "Descrição da IAM Policy."
+  type        = string
+  default     = "Policy com permissões específicas, anexada exclusivamente à role criada por este módulo."
+}
+
+variable "policy_actions" {
+  description = "Lista de actions IAM permitidas pela policy. Não é permitido usar o wildcard total '*'."
   type        = list(string)
   default     = ["s3:GetObject", "s3:ListBucket"]
 
   validation {
-    condition     = length(var.allowed_actions) > 0 && !contains(var.allowed_actions, "*")
-    error_message = "allowed_actions nao pode ser vazio nem conter o wildcard \"*\"."
+    condition     = length(var.policy_actions) > 0 && !contains(var.policy_actions, "*")
+    error_message = "policy_actions deve conter ao menos uma action e não pode incluir o wildcard total '*'."
   }
 }
 
-variable "allowed_resources" {
-  description = "Lista de ARNs de recursos permitidos pela policy. Evite o wildcard \"*\" em producao."
+variable "policy_resources" {
+  description = "Lista de ARNs de recursos aos quais as actions se aplicam. Não é permitido usar o wildcard total '*' (todos os recursos)."
   type        = list(string)
-  default     = ["arn:aws:s3:::example-app-bucket", "arn:aws:s3:::example-app-bucket/*"]
+  default     = ["arn:aws:s3:::example-bucket", "arn:aws:s3:::example-bucket/*"]
 
   validation {
-    condition     = length(var.allowed_resources) > 0
-    error_message = "allowed_resources nao pode ser vazio."
+    condition     = length(var.policy_resources) > 0 && !contains(var.policy_resources, "*")
+    error_message = "policy_resources deve conter ao menos um ARN e não pode ser '*' (todos os recursos)."
   }
 }
 
 variable "tags" {
-  description = "Tags aplicadas a role e a policy."
+  description = "Mapa de tags aplicadas à IAM Role e à IAM Policy."
   type        = map(string)
-  default = {
-    ManagedBy = "terraform"
-  }
+  default     = {}
 }

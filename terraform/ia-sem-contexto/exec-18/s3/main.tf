@@ -1,29 +1,14 @@
-terraform {
-  required_version = ">= 1.5.0"
-}
-
-provider "aws" {
-  region = var.aws_region
-}
-
 resource "aws_s3_bucket" "this" {
   bucket        = var.bucket_name
   force_destroy = var.force_destroy
 
   tags = merge(
-    var.tags,
     {
-      Name = var.bucket_name
-    }
+      Name        = var.bucket_name
+      Environment = var.environment
+    },
+    var.tags
   )
-}
-
-resource "aws_s3_bucket_ownership_controls" "this" {
-  bucket = aws_s3_bucket.this.id
-
-  rule {
-    object_ownership = "BucketOwnerEnforced"
-  }
 }
 
 resource "aws_s3_bucket_public_access_block" "this" {
@@ -35,11 +20,11 @@ resource "aws_s3_bucket_public_access_block" "this" {
   restrict_public_buckets = true
 }
 
-resource "aws_s3_bucket_versioning" "this" {
+resource "aws_s3_bucket_ownership_controls" "this" {
   bucket = aws_s3_bucket.this.id
 
-  versioning_configuration {
-    status = var.enable_versioning ? "Enabled" : "Suspended"
+  rule {
+    object_ownership = "BucketOwnerEnforced"
   }
 }
 
@@ -51,20 +36,14 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "this" {
       sse_algorithm     = var.kms_key_arn != null ? "aws:kms" : "AES256"
       kms_master_key_id = var.kms_key_arn
     }
-    bucket_key_enabled = var.kms_key_arn != null ? true : false
+    bucket_key_enabled = var.kms_key_arn != null
   }
 }
 
-resource "aws_s3_bucket_lifecycle_configuration" "this" {
-  count  = var.enable_lifecycle_rule ? 1 : 0
+resource "aws_s3_bucket_versioning" "this" {
   bucket = aws_s3_bucket.this.id
 
-  rule {
-    id     = "expire-noncurrent-versions"
-    status = "Enabled"
-
-    noncurrent_version_expiration {
-      noncurrent_days = var.noncurrent_version_expiration_days
-    }
+  versioning_configuration {
+    status = var.versioning_enabled ? "Enabled" : "Suspended"
   }
 }

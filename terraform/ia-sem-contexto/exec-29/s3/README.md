@@ -1,64 +1,45 @@
-# Modulo Terraform — Bucket S3 (AWS)
+# Blueprint Terraform — Bucket S3
 
-Provisiona um bucket Amazon S3 com configuracoes seguras por padrao: acesso publico bloqueado, propriedade de objetos controlada pelo dono do bucket, versionamento habilitado e criptografia server-side ativa.
+Esta blueprint provisiona um bucket Amazon S3 com configuracoes seguras por padrao, incluindo bloqueio de acesso publico, criptografia server-side, versionamento configuravel e tagueamento.
 
 ## Recursos criados
 
-- `aws_s3_bucket`
-- `aws_s3_bucket_ownership_controls`
-- `aws_s3_bucket_versioning`
-- `aws_s3_bucket_server_side_encryption_configuration`
-- `aws_s3_bucket_public_access_block`
+- `aws_s3_bucket.this` — bucket S3 principal.
+- `aws_s3_bucket_public_access_block.this` — bloqueia todo acesso publico (ACLs e politicas).
+- `aws_s3_bucket_server_side_encryption_configuration.this` — habilita criptografia server-side (AES256 por padrao, ou SSE-KMS).
+- `aws_s3_bucket_versioning.this` — controla o versionamento do bucket via variavel.
 
-## Uso
+## Variaveis principais
 
-```hcl
-module "bucket" {
-  source = "./"
-
-  bucket_name = "meu-bucket-exemplo-2026"
-
-  tags = {
-    Ambiente = "producao"
-    Time     = "plataforma"
-  }
-}
-```
-
-## Inputs
-
-| Nome | Descricao | Tipo | Padrao | Obrigatorio |
-|---|---|---|---|---|
-| aws_region | Regiao AWS onde os recursos serao provisionados | string | "us-east-1" | nao |
-| bucket_name | Nome do bucket S3 (globalmente unico) | string | - | sim |
-| tags | Tags aplicadas ao bucket | map(string) | {} | nao |
-| force_destroy | Permite exclusao do bucket com objetos existentes | bool | false | nao |
-| versioning_enabled | Habilita versionamento de objetos | bool | true | nao |
-| sse_algorithm | Algoritmo de criptografia (`AES256` ou `aws:kms`) | string | "AES256" | nao |
-| kms_master_key_id | ARN/ID da chave KMS quando `sse_algorithm = "aws:kms"` | string | null | nao |
-| block_public_access | Bloqueia todo acesso publico ao bucket | bool | true | nao |
+| Nome | Descricao | Padrao |
+|---|---|---|
+| `aws_region` | Regiao AWS | `us-east-1` |
+| `bucket_name` | Nome unico do bucket | (obrigatorio) |
+| `environment` | Ambiente para tagueamento | `dev` |
+| `enable_versioning` | Habilita/suspende versionamento | `true` |
+| `sse_algorithm` | `AES256` ou `aws:kms` | `AES256` |
+| `kms_key_arn` | ARN da KMS key (quando `aws:kms`) | `null` |
+| `force_destroy` | Permite destruir bucket com objetos | `false` |
+| `tags` | Tags adicionais | `{}` |
 
 ## Outputs
 
-| Nome | Descricao |
-|---|---|
-| bucket_id | Nome (ID) do bucket criado |
-| bucket_arn | ARN do bucket criado |
-| bucket_domain_name | Dominio do bucket |
-| bucket_regional_domain_name | Dominio regional do bucket |
-| bucket_region | Regiao onde o bucket foi criado |
+- `bucket_id`
+- `bucket_arn`
+- `bucket_regional_domain_name`
+- `versioning_status`
+- `encryption_algorithm`
 
-## Seguranca
+## Uso
 
-- Acesso publico bloqueado por padrao (`block_public_access = true`).
-- Propriedade de objetos forcada para o dono do bucket (`BucketOwnerEnforced`), eliminando o uso de ACLs.
-- Criptografia server-side habilitada por padrao com `AES256`; pode ser alterada para `aws:kms` informando `kms_master_key_id`.
-- Versionamento habilitado por padrao para proteger contra sobrescrita/exclusao acidental de objetos.
-- `force_destroy` desabilitado por padrao para evitar perda acidental de dados.
-
-## Validacao
-
-```bash
+```
 terraform init -backend=false
 terraform validate
+terraform plan -var="bucket_name=meu-bucket-exemplo"
 ```
+
+## Observacoes de seguranca
+
+- O bloqueio de acesso publico esta sempre habilitado e nao e configuravel, por padrao de seguranca.
+- Para usar criptografia com KMS, defina `sse_algorithm = "aws:kms"` e informe `kms_key_arn`.
+- Nenhum backend remoto e configurado; para uso em produção, configure um backend remoto fora desta blueprint.

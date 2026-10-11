@@ -8,17 +8,12 @@ output "bucket_arn" {
   value       = aws_s3_bucket.this.arn
 }
 
-output "bucket_domain_name" {
-  description = "Nome de dominio do bucket S3."
-  value       = aws_s3_bucket.this.bucket_domain_name
-}
-
 output "bucket_regional_domain_name" {
-  description = "Nome de dominio regional do bucket S3."
+  description = "Nome de dominio regional do bucket S3, util para configuracao de outros recursos (ex.: CloudFront)."
   value       = aws_s3_bucket.this.bucket_regional_domain_name
 }
 
-output "bucket_region" {
-  description = "Regiao AWS onde o bucket S3 foi provisionado."
-  value       = aws_s3_bucket.this.region
+output "versioning_status" {
+  description = "Status atual do versionamento do bucket."
+  value       = aws_s3_bucket_versioning.this.versioning_configuration[0].status
 }

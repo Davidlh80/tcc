@@ -1,94 +1,75 @@
 # IAM Policy anexada a IAM Role
 
-Blueprint Terraform para provisionar uma IAM Role com uma trust policy (assume role) configuravel e uma IAM Policy customizada anexada a ela via `aws_iam_role_policy_attachment`. A policy nunca fica solta: ela e sempre criada e anexada a uma Role no mesmo apply.
+Blueprint Terraform para provisionar uma IAM Policy anexada a uma IAM Role na AWS, com trust policy restrita a um principal configurável e permissões escopadas.
 
 ## Recursos criados
 
-- `aws_iam_role.this` — Role com trust policy definida por `trusted_principal_type` / `trusted_principal_identifiers`.
-- `aws_iam_policy.this` — Policy customizada, construida a partir de `policy_statements`.
-- `aws_iam_role_policy_attachment.this` — Anexa a policy customizada a Role.
-- `aws_iam_role_policy_attachment.additional` — Anexa managed policies adicionais (opcional, via `additional_managed_policy_arns`).
+- `aws_iam_role.this` — Role com trust policy (assume role policy) restrita aos ARNs informados em `trusted_principal_arns`.
+- `aws_iam_policy.this` — Policy com permissões definidas por `policy_actions` e `policy_resources`.
+- `aws_iam_role_policy_attachment.this` — Anexa a policy à role, garantindo que ela nunca fique solta sem nenhum principal associado.
 
-## Decisoes de seguranca
+## Decisões de segurança
 
-- `policy_statements` nao possui valor default: e obrigatorio declarar explicitamente as actions e resources necessarios, evitando permissões implícitas.
-- Validacao bloqueia statements que combinem `actions = ["*"]` com `resources = ["*"]` na mesma statement.
-- `trusted_principal_identifiers` exige ao menos um principal — a Role nunca fica sem um trust definido.
-- `external_id` permite exigir `sts:ExternalId` na assume role, recomendado para cenarios cross-account.
-- `permissions_boundary_arn` (opcional) permite aplicar um limite adicional de permissoes.
-- `force_detach_policies = true` por padrao, para evitar Roles orfãs com policies presas ao destruir.
+- A trust policy nunca aceita `"*"` como principal: a variável `trusted_principal_arns` exige ao menos um ARN IAM válido (conta `root`, `user/` ou `role/`) e rejeita qualquer valor que não corresponda a esse formato.
+- `policy_actions` rejeita explicitamente a action `"*"`, evitando que a policy conceda permissão administrativa total.
+- `policy_resources` exige ao menos um ARN explícito; recomenda-se evitar `"*"` sempre que o serviço de destino permitir escopo por recurso.
+- Suporte opcional a `external_id` na trust policy para mitigar o problema do "confused deputy" em cenários de assume-role cross-account.
+- Tags são aplicadas tanto na role quanto na policy via variável `tags`.
 
 ## Uso
 
 ```hcl
-module "iam_role" {
+module "iam_role_policy" {
   source = "./"
 
-  role_name   = "ci-deploy-role"
-  policy_name = "ci-deploy-policy"
+  role_name   = "app-readonly-role"
+  policy_name = "app-readonly-policy"
 
-  trusted_principal_type         = "AWS"
-  trusted_principal_identifiers  = ["arn:aws:iam::123456789012:root"]
-  external_id                    = "troque-por-um-valor-unico-e-secreto"
+  trusted_principal_arns = [
+    "arn:aws:iam::123456789012:role/ci-deploy-role"
+  ]
 
-  policy_statements = [
-    {
-      sid       = "ReadDeployArtifacts"
-      effect    = "Allow"
-      actions   = ["s3:GetObject", "s3:ListBucket"]
-      resources = [
-        "arn:aws:s3:::meu-bucket-deploy",
-        "arn:aws:s3:::meu-bucket-deploy/*"
-      ]
-    }
+  policy_actions = [
+    "s3:GetObject",
+    "s3:ListBucket"
+  ]
+
+  policy_resources = [
+    "arn:aws:s3:::meu-bucket",
+    "arn:aws:s3:::meu-bucket/*"
   ]
 
   tags = {
-    Environment = "prod"
-    Owner       = "plataforma"
+    Environment = "dev"
+    ManagedBy   = "terraform"
   }
 }
 ```
 
-## Requisitos
+## Variáveis principais
 
-| Nome | Versao |
-|---|---|
-| terraform | >= 1.9.0 |
-| aws | ~> 5.0 |
+| Nome                     | Descrição                                                        | Obrigatória |
+|--------------------------|--------------------------------------------------------------------|-------------|
+| `role_name`              | Nome da IAM Role.                                                  | Sim         |
+| `policy_name`            | Nome da IAM Policy.                                                | Sim         |
+| `trusted_principal_arns` | ARNs autorizados a assumir a role (sem `"*"`).                     | Sim         |
+| `policy_actions`         | Actions permitidas pela policy (sem `"*"`).                        | Sim         |
+| `policy_resources`       | ARNs dos recursos alvo das actions.                                | Sim         |
+| `external_id`            | ExternalId opcional para condition da trust policy.                | Não         |
+| `max_session_duration`   | Duração máxima da sessão assumida (3600–43200s).                   | Não         |
+| `tags`                   | Tags aplicadas à role e à policy.                                  | Não         |
 
-## Inputs principais
+## Outputs
 
-| Nome | Descricao | Tipo | Default |
-|---|---|---|---|
-| aws_region | Regiao AWS do provider | string | "us-east-1" |
-| role_name | Nome da IAM Role | string | "app-role" |
-| policy_name | Nome da IAM Policy | string | "app-policy" |
-| trusted_principal_type | Tipo do principal da trust policy | string | "Service" |
-| trusted_principal_identifiers | Identificadores do principal confiavel | list(string) | ["ec2.amazonaws.com"] |
-| external_id | External ID exigido na assume role | string | null |
-| permissions_boundary_arn | ARN de permissions boundary | string | null |
-| policy_statements | Statements da IAM Policy (obrigatorio) | list(object) | — |
-| additional_managed_policy_arns | Managed policies extras a anexar | list(string) | [] |
-| tags | Tags adicionais | map(string) | {} |
+- `role_arn`, `role_name`, `role_unique_id`
+- `policy_arn`, `policy_id`, `policy_name`
+- `role_policy_attachment_id`
 
-## Outputs principais
-
-| Nome | Descricao |
-|---|---|
-| role_arn | ARN da IAM Role |
-| role_name | Nome da IAM Role |
-| policy_arn | ARN da IAM Policy |
-| policy_name | Nome da IAM Policy |
-| role_policy_attachment_id | ID do anexo policy-role |
-| assume_role_policy_json | JSON da trust policy aplicada |
-
-## Validacao local
+## Validação
 
 ```bash
 terraform init -backend=false
 terraform validate
-terraform fmt -check
 ```
 
-Nenhum backend remoto e nenhuma credencial real sao necessarios para `init` e `validate`.
+Não é necessário backend remoto nem credenciais reais da AWS para rodar `init` e `validate`, pois nenhum data source consulta a API da AWS em tempo de plan/validate.

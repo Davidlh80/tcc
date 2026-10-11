@@ -6,17 +6,19 @@ provider "aws" {
   region = var.aws_region
 }
 
+locals {
+  default_tags = {
+    ManagedBy = "Terraform"
+  }
+
+  tags = merge(local.default_tags, var.tags)
+}
+
 resource "aws_s3_bucket" "this" {
   bucket        = var.bucket_name
   force_destroy = var.force_destroy
 
-  tags = merge(
-    var.tags,
-    {
-      Name        = var.bucket_name
-      Environment = var.environment
-    }
-  )
+  tags = local.tags
 }
 
 resource "aws_s3_bucket_ownership_controls" "this" {
@@ -24,26 +26,6 @@ resource "aws_s3_bucket_ownership_controls" "this" {
 
   rule {
     object_ownership = "BucketOwnerEnforced"
-  }
-}
-
-resource "aws_s3_bucket_versioning" "this" {
-  bucket = aws_s3_bucket.this.id
-
-  versioning_configuration {
-    status = var.enable_versioning ? "Enabled" : "Suspended"
-  }
-}
-
-resource "aws_s3_bucket_server_side_encryption_configuration" "this" {
-  bucket = aws_s3_bucket.this.id
-
-  rule {
-    apply_server_side_encryption_by_default {
-      sse_algorithm     = var.kms_key_arn != null ? "aws:kms" : "AES256"
-      kms_master_key_id = var.kms_key_arn
-    }
-    bucket_key_enabled = var.kms_key_arn != null ? true : null
   }
 }
 
@@ -56,34 +38,22 @@ resource "aws_s3_bucket_public_access_block" "this" {
   restrict_public_buckets = true
 }
 
-data "aws_iam_policy_document" "this" {
-  statement {
-    sid    = "DenyInsecureTransport"
-    effect = "Deny"
+resource "aws_s3_bucket_server_side_encryption_configuration" "this" {
+  bucket = aws_s3_bucket.this.id
 
-    actions = ["s3:*"]
-
-    resources = [
-      aws_s3_bucket.this.arn,
-      "${aws_s3_bucket.this.arn}/*",
-    ]
-
-    principals {
-      type        = "*"
-      identifiers = ["*"]
+  rule {
+    apply_server_side_encryption_by_default {
+      sse_algorithm     = var.sse_algorithm
+      kms_master_key_id = var.sse_algorithm == "aws:kms" ? var.kms_key_arn : null
     }
-
-    condition {
-      test     = "Bool"
-      variable = "aws:SecureTransport"
-      values   = ["false"]
-    }
+    bucket_key_enabled = var.sse_algorithm == "aws:kms" ? true : null
   }
 }
 
-resource "aws_s3_bucket_policy" "this" {
+resource "aws_s3_bucket_versioning" "this" {
   bucket = aws_s3_bucket.this.id
-  policy = data.aws_iam_policy_document.this.json
 
-  depends_on = [aws_s3_bucket_public_access_block.this]
+  versioning_configuration {
+    status = var.enable_versioning ? "Enabled" : "Suspended"
+  }
 }

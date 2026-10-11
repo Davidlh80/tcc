@@ -3,9 +3,9 @@ execution_id: exec-16
 resource: security-group
 model: "sonnet"
 prompt_file: "prompts/ia-sem-contexto/prompt-security-group.md"
-started_at: "2026-09-13T05:57:42.448978-03:00"
-finished_at: "2026-09-13T05:58:18.660994-03:00"
-api_duration_ms: 36210
-total_duration_ms: 36212
-generated_at: "2026-09-13T05:58:18.660994-03:00"
+started_at: "2026-10-11T08:15:36.610151-03:00"
+finished_at: "2026-10-11T08:16:03.020476-03:00"
+api_duration_ms: 26406
+total_duration_ms: 26410
+generated_at: "2026-10-11T08:16:03.020476-03:00"
 generation_tool: "scripts/generate-blueprint"

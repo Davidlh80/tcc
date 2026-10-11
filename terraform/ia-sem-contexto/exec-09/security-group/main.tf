@@ -1,25 +1,9 @@
 terraform {
-  required_version = ">= 1.3"
-}
-
-provider "aws" {
-  region = var.region
-}
-
-locals {
-  name = "${var.name_prefix}-sg"
-
-  common_tags = merge(
-    {
-      Name      = local.name
-      ManagedBy = "terraform"
-    },
-    var.tags
-  )
+  required_version = ">= 1.5.0"
 }
 
 resource "aws_security_group" "this" {
-  name_prefix = "${var.name_prefix}-sg-"
+  name        = var.name
   description = var.description
   vpc_id      = var.vpc_id
 
@@ -45,7 +29,12 @@ resource "aws_security_group" "this" {
     }
   }
 
-  tags = local.common_tags
+  tags = merge(
+    {
+      Name = var.name
+    },
+    var.tags
+  )
 
   lifecycle {
     create_before_destroy = true

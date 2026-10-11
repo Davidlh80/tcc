@@ -12,7 +12,7 @@ Recurso desta execução: bucket Amazon S3.
 
 ## Ação
 
-Gere uma blueprint Terraform completa para provisionar um bucket S3 na AWS. Nomenclatura, tags, política de acesso público, criptografia, versionamento, variáveis, outputs e organização interna dos arquivos ficam inteiramente ao seu critério.
+Gere uma blueprint Terraform completa para provisionar um bucket S3 na AWS, cobrindo: criação do bucket; bloqueio de acesso público; habilitação de criptografia; versionamento configurável por variável; aplicação de tags; declaração de outputs relevantes. Nomenclatura, algoritmo de criptografia, chaves de tags, variáveis e outputs adicionais, e organização interna dos arquivos ficam ao seu critério.
 
 ## Formato de saída
 

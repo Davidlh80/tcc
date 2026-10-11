@@ -1,51 +1,39 @@
-variable "aws_region" {
-  description = "Região AWS onde o bucket será criado."
-  type        = string
-  default     = "us-east-1"
-}
-
 variable "bucket_name" {
-  description = "Nome globalmente único do bucket S3."
+  description = "Nome do bucket S3. Deve ser globalmente unico."
   type        = string
-
-  validation {
-    condition     = can(regex("^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$", var.bucket_name))
-    error_message = "O nome do bucket deve ter entre 3 e 63 caracteres, usando apenas letras minúsculas, números, pontos e hifens, começando e terminando com letra ou número."
-  }
 }
 
-variable "tags" {
-  description = "Mapa de tags adicionais a serem aplicadas ao bucket."
-  type        = map(string)
-  default     = {}
+variable "environment" {
+  description = "Nome do ambiente (ex.: dev, staging, prod), usado para tagging."
+  type        = string
+  default     = "dev"
 }
 
 variable "versioning_enabled" {
-  description = "Habilita o versionamento de objetos no bucket."
+  description = "Define se o versionamento do bucket deve estar habilitado."
   type        = bool
   default     = true
 }
 
+variable "sse_algorithm" {
+  description = "Algoritmo de criptografia server-side padrao do bucket. Valores aceitos: AES256 ou aws:kms."
+  type        = string
+  default     = "AES256"
+
+  validation {
+    condition     = contains(["AES256", "aws:kms"], var.sse_algorithm)
+    error_message = "sse_algorithm deve ser \"AES256\" ou \"aws:kms\"."
+  }
+}
+
 variable "kms_key_arn" {
-  description = "ARN de uma chave KMS para criptografia SSE-KMS. Se não informado, usa AES256 (SSE-S3)."
+  description = "ARN da chave KMS usada para criptografia quando sse_algorithm for aws:kms. Ignorado quando sse_algorithm for AES256."
   type        = string
   default     = null
 }
 
-variable "force_destroy" {
-  description = "Permite destruir o bucket mesmo que contenha objetos. Use com cautela."
-  type        = bool
-  default     = false
-}
-
-variable "enable_lifecycle_rule" {
-  description = "Habilita regra de ciclo de vida para expiração de objetos e versões antigas."
-  type        = bool
-  default     = false
-}
-
-variable "lifecycle_expiration_days" {
-  description = "Número de dias para expiração de objetos e versões não atuais, quando enable_lifecycle_rule é true."
-  type        = number
-  default     = 365
+variable "tags" {
+  description = "Tags adicionais a serem aplicadas ao bucket, mescladas com as tags padrao."
+  type        = map(string)
+  default     = {}
 }

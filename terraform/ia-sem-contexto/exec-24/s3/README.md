@@ -1,61 +1,53 @@
-# S3 Bucket - Blueprint Terraform
+# Blueprint Terraform - Bucket S3
 
 Blueprint Terraform para provisionamento de um bucket Amazon S3 com configuracoes seguras por padrao.
 
 ## Recursos criados
 
 - `aws_s3_bucket.this` - bucket S3 principal.
-- `aws_s3_bucket_versioning.this` - versionamento de objetos.
-- `aws_s3_bucket_server_side_encryption_configuration.this` - criptografia server-side (SSE-S3 por padrao ou SSE-KMS se `kms_key_arn` for informado).
-- `aws_s3_bucket_ownership_controls.this` - propriedade dos objetos definida como `BucketOwnerEnforced`, desabilitando ACLs.
+- `aws_s3_bucket_versioning.this` - versionamento configuravel via variavel.
+- `aws_s3_bucket_server_side_encryption_configuration.this` - criptografia server-side (SSE-S3 por padrao, ou SSE-KMS se uma chave for informada).
 - `aws_s3_bucket_public_access_block.this` - bloqueio total de acesso publico.
-
-## Postura de seguranca padrao
-
-- Acesso publico bloqueado em todas as dimensoes (ACLs e politicas).
-- ACLs desabilitadas via `BucketOwnerEnforced` (o controle de acesso ocorre exclusivamente por politicas de bucket/IAM).
-- Criptografia server-side habilitada por padrao (AES256), com suporte opcional a SSE-KMS.
-- Versionamento habilitado por padrao para protecao contra exclusao/sobrescrita acidental.
-- `force_destroy` desabilitado por padrao para evitar exclusao acidental de dados.
-
-## Uso
-
-```hcl
-module "bucket" {
-  source      = "./"
-  bucket_name = "meu-bucket-exemplo-unico"
-  environment = "production"
-}
-```
+- `aws_s3_bucket_ownership_controls.this` - forca a propriedade do objeto pelo dono do bucket (desabilita ACLs).
 
 ## Variaveis
 
-| Nome              | Tipo          | Padrao       | Descricao                                                  |
-|-------------------|---------------|--------------|-------------------------------------------------------------|
-| bucket_name       | string        | -            | Nome globalmente unico do bucket (obrigatorio).             |
-| environment       | string        | "production" | Nome do ambiente, usado em tags.                             |
-| force_destroy     | bool          | false        | Permite destruir o bucket mesmo com objetos.                 |
-| enable_versioning | bool          | true         | Habilita versionamento de objetos.                           |
-| kms_key_arn       | string        | null         | ARN de chave KMS para SSE-KMS; se null, usa SSE-S3 (AES256). |
-| tags              | map(string)   | {}           | Tags adicionais aplicadas ao bucket.                         |
+| Nome | Tipo | Padrao | Descricao |
+|---|---|---|---|
+| `bucket_name` | string | - | Nome do bucket S3 (obrigatorio). |
+| `versioning_enabled` | bool | `true` | Habilita ou suspende o versionamento. |
+| `force_destroy` | bool | `false` | Permite destruir o bucket mesmo com objetos. |
+| `kms_key_arn` | string | `null` | ARN de chave KMS para SSE-KMS; se omitido, usa AES256 (SSE-S3). |
+| `tags` | map(string) | `{}` | Tags aplicadas ao bucket. |
 
 ## Outputs
 
-| Nome                          | Descricao                                  |
-|-------------------------------|---------------------------------------------|
-| bucket_id                     | Identificador (nome) do bucket criado.       |
-| bucket_arn                    | ARN do bucket criado.                        |
-| bucket_domain_name            | Nome de dominio do bucket.                   |
-| bucket_regional_domain_name   | Nome de dominio regional do bucket.          |
+| Nome | Descricao |
+|---|---|
+| `bucket_id` | Nome (id) do bucket. |
+| `bucket_arn` | ARN do bucket. |
+| `bucket_domain_name` | Dominio padrao do bucket. |
+| `bucket_regional_domain_name` | Dominio regional do bucket. |
+| `versioning_status` | Status atual do versionamento. |
+
+## Uso
+
+```
+module "bucket" {
+  source      = "./"
+  bucket_name = "meu-bucket-exemplo-123456"
+
+  tags = {
+    Ambiente = "producao"
+  }
+}
+```
 
 ## Validacao
 
-```bash
+```
 terraform init -backend=false
 terraform validate
 ```
 
-## Requisitos
-
-- Terraform >= 1.5.0
-- Provider AWS ~> 5.0
+Nenhum backend remoto e nenhuma credencial real sao necessarios para a validacao sintatica.

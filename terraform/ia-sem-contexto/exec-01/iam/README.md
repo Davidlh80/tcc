@@ -1,55 +1,36 @@
-# IAM Role + IAM Policy (Terraform Blueprint)
+# IAM Role com IAM Policy anexada
 
-Blueprint Terraform para provisionar uma IAM Role na AWS com uma IAM Policy
-gerenciada anexada a ela via `aws_iam_role_policy_attachment`. A policy nunca
-existe desacoplada de um principal: ela e sempre criada e anexada na mesma
-aplicacao.
+Blueprint Terraform para provisionar uma IAM Role com uma IAM Policy dedicada anexada diretamente a ela, seguindo o principio de menor privilegio.
 
 ## Recursos criados
 
-- `aws_iam_role.this` — role com trust policy (assume role policy) configuravel.
-- `aws_iam_policy.this` — policy gerenciada com acoes e recursos definidos por variavel.
-- `aws_iam_role_policy_attachment.this` — anexa a policy a role.
+- `aws_iam_role.this`: IAM Role com trust policy (assume role policy) restrita a um unico principal configuravel.
+- `aws_iam_policy.this`: IAM Policy customizada com acoes e recursos definidos via variaveis.
+- `aws_iam_role_policy_attachment.this`: anexa a policy criada diretamente a role, garantindo que a policy nunca fique solta (sem principal associado).
+- `data.aws_iam_policy_document.assume_role`: gera a trust policy restrita ao `trusted_principal_arn`.
+- `data.aws_iam_policy_document.this`: gera o documento da policy com as acoes e recursos permitidos.
 
-## Decisoes de seguranca por padrao
+## Decisoes de seguranca
 
-- `allowed_actions` e obrigatoria e rejeita o wildcard total `"*"` via `validation`,
-  forcando a definicao explicita de acoes (least privilege).
-- `permissions_boundary_arn` e suportado (opcional) para reforcar o limite maximo
-  de permissoes da role.
-- `external_id` permite exigir um External ID na assume role policy, mitigando
-  o problema do "confused deputy" em cenarios de acesso cross-account.
-- `trusted_principal_type` e `trusted_principal_identifiers` tornam o principal
-  de confianca explicito e obrigatorio — nao ha wildcard de principal (`"*"`).
-- `max_session_duration` e limitado entre 3600 e 43200 segundos (limites validos da AWS).
-- Nenhum valor sensivel (account ID, ARNs reais, credenciais) esta hardcoded;
-  tudo e parametrizado via `variables.tf`.
+- A trust policy aceita exatamente um principal (`var.trusted_principal_arn`), validado para nunca ser `"*"` e sempre corresponder a um ARN IAM especifico (conta root, usuario ou role). Isso impede que qualquer conta ou principal arbitrario assuma a role.
+- Suporte opcional a `sts:ExternalId` (`require_external_id` / `external_id`) para cenarios de acesso cross-account de terceiros, mitigando o problema do "confused deputy".
+- `policy_actions` e `policy_resources` sao validados para rejeitar wildcards amplos (`"*"`, `"iam:*"`, `"*:*"`), forcando o uso de permissoes especificas.
+- Nenhuma policy gerenciada administrativa (ex.: `AdministratorAccess`) e utilizada; a policy e sempre customizada e escopada pelas variaveis.
+- `max_session_duration` e limitado entre 1h e 12h, dentro dos limites suportados pela AWS.
+- `force_detach_policies = true` garante que anexos de policy nao impecam a destruicao da role.
+- Nenhum valor sensivel (credenciais, segredos) e definido como default; `external_id`, quando usado, deve ser fornecido via variavel marcada como `sensitive`.
 
 ## Uso
 
 ```
-module "iam_role_with_policy" {
+module "iam_role" {
   source = "./"
 
-  role_name   = "app-service-role"
-  policy_name = "app-service-policy"
-
-  trusted_principal_type        = "Service"
-  trusted_principal_identifiers = ["lambda.amazonaws.com"]
-
-  allowed_actions = [
-    "s3:GetObject",
-    "s3:ListBucket",
-  ]
-
-  allowed_resources = [
-    "arn:aws:s3:::example-bucket",
-    "arn:aws:s3:::example-bucket/*",
-  ]
-
-  tags = {
-    Environment = "dev"
-  }
+  role_name              = "minha-app-role"
+  policy_name            = "minha-app-policy"
+  trusted_principal_arn  = "arn:aws:iam::123456789012:role/ci-cd-deployer"
+  policy_actions         = ["s3:GetObject", "s3:ListBucket"]
+  policy_resources       = ["arn:aws:s3:::meu-bucket", "arn:aws:s3:::meu-bucket/*"]
 }
 ```
 
@@ -57,30 +38,27 @@ module "iam_role_with_policy" {
 
 | Nome | Descricao | Default |
 |---|---|---|
-| `role_name` | Nome da IAM Role | `example-role` |
-| `policy_name` | Nome da IAM Policy | `example-policy` |
-| `trusted_principal_type` | Tipo do principal (`Service`, `AWS`, `Federated`) | `Service` |
-| `trusted_principal_identifiers` | Identificadores do principal confiavel | `["lambda.amazonaws.com"]` |
-| `allowed_actions` | Acoes IAM permitidas (obrigatorio, sem `"*"`) | — |
-| `allowed_resources` | ARNs dos recursos alvo (obrigatorio) | — |
-| `permissions_boundary_arn` | ARN da permissions boundary | `null` |
-| `external_id` | External ID exigido na assume role | `null` |
-| `max_session_duration` | Duracao maxima da sessao (segundos) | `3600` |
-| `tags` | Tags aplicadas aos recursos | `{}` |
+| `aws_region` | Regiao AWS do provider | `us-east-1` |
+| `role_name` | Nome da IAM Role | `example-application-role` |
+| `trusted_principal_arn` | Principal autorizado a assumir a role (obrigatorio) | — |
+| `require_external_id` / `external_id` | Exige `ExternalId` na trust policy | `false` / `""` |
+| `policy_name` | Nome da IAM Policy | `example-application-policy` |
+| `policy_actions` | Acoes permitidas pela policy | `["s3:GetObject", "s3:ListBucket"]` |
+| `policy_resources` | Recursos alvo das acoes | bucket de exemplo |
+| `max_session_duration` | Duracao maxima da sessao assumida | `3600` |
+| `tags` | Tags aplicadas a role e policy | `{ ManagedBy = "terraform" }` |
 
 ## Outputs
 
-- `role_arn`, `role_name`, `role_unique_id`
-- `policy_arn`, `policy_id`, `policy_name`
-- `role_policy_attachment_id`
+- `role_arn`, `role_name`, `role_id`
+- `policy_arn`, `policy_name`, `policy_id`
+- `assume_role_policy_json`
 
-## Validacao local
+## Validacao
 
 ```
 terraform init -backend=false
 terraform validate
 ```
 
-Nao ha backend remoto configurado e nenhuma credencial real e necessaria para
-`init`/`validate`. Para `plan`/`apply`, forneca `allowed_actions` e
-`allowed_resources` (variaveis sem default) e credenciais AWS validas.
+Nenhum backend remoto e configurado e nenhuma credencial real e necessaria para `init`/`validate`; apenas `trusted_principal_arn` precisa ser fornecido (pode ser um ARN de exemplo valido sintaticamente para fins de validacao).

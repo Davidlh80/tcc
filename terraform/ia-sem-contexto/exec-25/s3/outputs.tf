@@ -8,17 +8,17 @@ output "bucket_arn" {
   value       = aws_s3_bucket.this.arn
 }
 
-output "bucket_domain_name" {
-  description = "Nome de dominio padrao do bucket S3."
-  value       = aws_s3_bucket.this.bucket_domain_name
-}
-
 output "bucket_regional_domain_name" {
-  description = "Nome de dominio regional do bucket S3."
+  description = "Nome de dominio regional do bucket, util para configurar endpoints ou CloudFront."
   value       = aws_s3_bucket.this.bucket_regional_domain_name
 }
 
-output "bucket_versioning_status" {
-  description = "Status do versionamento configurado no bucket."
+output "versioning_status" {
+  description = "Status atual do versionamento do bucket."
   value       = aws_s3_bucket_versioning.this.versioning_configuration[0].status
+}
+
+output "sse_algorithm" {
+  description = "Algoritmo de criptografia do lado do servidor aplicado ao bucket."
+  value       = var.sse_algorithm
 }

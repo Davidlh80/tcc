@@ -5,39 +5,29 @@ variable "aws_region" {
 }
 
 variable "vpc_id" {
-  description = "ID da VPC (criada pelo ambiente de teste) onde o Security Group sera provisionado."
+  description = "ID da VPC (criada pelo ambiente de teste) onde o Security Group sera criado."
   type        = string
 
   validation {
-    condition     = can(regex("^vpc-[a-z0-9]+$", var.vpc_id))
-    error_message = "vpc_id deve ser um ID de VPC valido, no formato 'vpc-xxxxxxxx'."
+    condition     = can(regex("^vpc-[0-9a-f]{8,17}$", var.vpc_id))
+    error_message = "O valor de vpc_id deve ser um ID de VPC valido, no formato 'vpc-xxxxxxxx'."
   }
 }
 
 variable "name" {
   description = "Nome do Security Group."
   type        = string
-  default     = "sg-default"
-
-  validation {
-    condition     = length(var.name) > 0 && length(var.name) <= 255
-    error_message = "name deve ter entre 1 e 255 caracteres."
-  }
+  default     = "sg-managed-by-terraform"
 }
 
 variable "description" {
   description = "Descricao do Security Group."
   type        = string
-  default     = "Security Group gerenciado via Terraform."
-
-  validation {
-    condition     = length(var.description) > 0
-    error_message = "description nao pode ser vazia."
-  }
+  default     = "Security group gerenciado via Terraform."
 }
 
 variable "ingress_rules" {
-  description = "Lista de regras de entrada. Cada regra define portas, protocolo, descricao e CIDRs de origem permitidos."
+  description = "Lista de regras de entrada explicitas aplicadas ao Security Group."
   type = list(object({
     description = string
     from_port   = number
@@ -45,65 +35,46 @@ variable "ingress_rules" {
     protocol    = string
     cidr_blocks = list(string)
   }))
-  default = []
 
-  validation {
-    condition = alltrue([
-      for rule in var.ingress_rules : alltrue([
-        for cidr in rule.cidr_blocks : can(cidrhost(cidr, 0))
-      ])
-    ])
-    error_message = "Todos os cidr_blocks em ingress_rules devem ser blocos CIDR validos."
-  }
-
-  validation {
-    condition = alltrue([
-      for rule in var.ingress_rules :
-      rule.from_port >= 0 && rule.to_port <= 65535 && rule.from_port <= rule.to_port
-    ])
-    error_message = "As portas em ingress_rules devem estar entre 0 e 65535, com from_port menor ou igual a to_port."
-  }
-}
-
-variable "egress_rules" {
-  description = "Lista de regras de saida. Cada regra define portas, protocolo, descricao e CIDRs de destino permitidos."
-  type = list(object({
-    description = string
-    from_port   = number
-    to_port     = number
-    protocol    = string
-    cidr_blocks = list(string)
-  }))
   default = [
     {
-      description = "Permite todo o trafego de saida"
-      from_port   = 0
-      to_port     = 0
-      protocol    = "-1"
-      cidr_blocks = ["0.0.0.0/0"]
+      description = "Permite trafego HTTPS de entrada a partir da rede interna da VPC"
+      from_port   = 443
+      to_port     = 443
+      protocol    = "tcp"
+      cidr_blocks = ["10.0.0.0/16"]
     }
   ]
 
   validation {
-    condition = alltrue([
-      for rule in var.egress_rules : alltrue([
-        for cidr in rule.cidr_blocks : can(cidrhost(cidr, 0))
-      ])
-    ])
-    error_message = "Todos os cidr_blocks em egress_rules devem ser blocos CIDR validos."
-  }
-
-  validation {
-    condition = alltrue([
-      for rule in var.egress_rules :
-      rule.from_port >= 0 && rule.to_port <= 65535 && rule.from_port <= rule.to_port
-    ])
-    error_message = "As portas em egress_rules devem estar entre 0 e 65535, com from_port menor ou igual a to_port."
+    condition     = alltrue([for rule in var.ingress_rules : !contains(rule.cidr_blocks, "0.0.0.0/0") || (rule.from_port == rule.to_port && rule.from_port != 22 && rule.from_port != 3389)])
+    error_message = "Regras de entrada com origem 0.0.0.0/0 nao podem expor portas administrativas (22/3389)."
   }
 }
 
+variable "egress_rules" {
+  description = "Lista de regras de saida explicitas aplicadas ao Security Group."
+  type = list(object({
+    description = string
+    from_port   = number
+    to_port     = number
+    protocol    = string
+    cidr_blocks = list(string)
+  }))
+
+  default = [
+    {
+      description = "Permite trafego HTTPS de saida"
+      from_port   = 443
+      to_port     = 443
+      protocol    = "tcp"
+      cidr_blocks = ["0.0.0.0/0"]
+    }
+  ]
+}
+
 variable "tags" {
-  description = "Tags adicionais a serem aplicadas ao Security Group."
+  description = "Tags adicionais aplicadas ao Security Group."
   type        = map(string)
   default     = {}
 }

@@ -1,72 +1,59 @@
-# Blueprint Terraform — Bucket S3 (AWS)
+# Modulo Terraform: Bucket S3 Seguro
 
-Blueprint para provisionar um bucket Amazon S3 seguro por padrão, sem vínculo com padrões organizacionais específicos.
+## Descricao
 
-## Recursos criados
+Esta blueprint provisiona um bucket Amazon S3 com configuracoes de seguranca aplicadas por padrao:
 
-- `aws_s3_bucket` — bucket S3 principal.
-- `aws_s3_bucket_versioning` — versionamento de objetos.
-- `aws_s3_bucket_server_side_encryption_configuration` — criptografia server-side (SSE-S3 ou SSE-KMS).
-- `aws_s3_bucket_public_access_block` — bloqueio total de acesso público.
-- `aws_s3_bucket_ownership_controls` — ownership enforced pelo dono do bucket (desabilita ACLs).
-- `aws_s3_bucket_lifecycle_configuration` (opcional) — expiração de versões antigas e limpeza de uploads multipart incompletos.
-- `aws_s3_bucket_policy` — nega explicitamente qualquer acesso via transporte não criptografado (HTTP).
-
-## Decisões de segurança padrão
-
-- Acesso público bloqueado em todas as dimensões (`block_public_acls`, `block_public_policy`, `ignore_public_acls`, `restrict_public_buckets`).
-- ACLs desabilitadas via `BucketOwnerEnforced`.
-- Criptografia obrigatória em repouso (AES256 por padrão, ou SSE-KMS se `kms_key_arn` for informado).
-- Política de bucket nega qualquer requisição que não use TLS (`aws:SecureTransport = false`).
-- Versionamento habilitado por padrão para proteção contra sobrescrita/exclusão acidental.
-- `force_destroy` desabilitado por padrão para evitar exclusão acidental de dados.
+- Bloqueio total de acesso publico (`aws_s3_bucket_public_access_block`).
+- Criptografia do lado do servidor habilitada (SSE-S3 por padrao, ou SSE-KMS se uma chave for informada).
+- Versionamento configuravel por variavel (habilitado por padrao).
+- `Bucket Owner Enforced` para desabilitar ACLs e simplificar o controle de acesso via IAM/policies.
+- Tags configuraveis aplicadas ao recurso.
 
 ## Uso
 
 ```hcl
 module "bucket" {
-  source      = "./"
-  bucket_name = "meu-bucket-exemplo-12345"
-  aws_region  = "us-east-1"
+  source = "./"
+
+  bucket_name        = "minha-empresa-dados-123456"
+  versioning_enabled = true
 
   tags = {
-    ambiente = "producao"
+    Ambiente = "producao"
+    Time     = "plataforma"
   }
 }
 ```
 
-## Variáveis principais
+## Requisitos
 
-| Nome                                  | Descrição                                              | Padrão        |
-|----------------------------------------|---------------------------------------------------------|---------------|
-| `bucket_name`                          | Nome globalmente único do bucket (obrigatório)          | -             |
-| `aws_region`                           | Região AWS de provisionamento                            | `us-east-1`   |
-| `force_destroy`                        | Permite exclusão do bucket com objetos dentro           | `false`       |
-| `enable_versioning`                    | Habilita versionamento                                   | `true`        |
-| `kms_key_arn`                          | ARN de chave KMS para SSE-KMS (vazio = SSE-S3)          | `""`          |
-| `enable_lifecycle_rule`                | Habilita regra de ciclo de vida                          | `true`        |
-| `noncurrent_version_expiration_days`   | Dias até expirar versões não-atuais                      | `90`          |
-| `tags`                                 | Tags adicionais para o bucket                            | `{}`          |
+| Nome      | Versao    |
+|-----------|-----------|
+| terraform | >= 1.5.0  |
+| aws       | >= 5.0.0  |
+
+## Variaveis
+
+| Nome                 | Descricao                                                         | Tipo          | Padrao | Obrigatorio |
+|----------------------|--------------------------------------------------------------------|---------------|--------|-------------|
+| `bucket_name`        | Nome globalmente unico do bucket S3.                               | `string`      | -      | sim         |
+| `versioning_enabled` | Habilita o versionamento de objetos no bucket.                     | `bool`        | `true` | nao         |
+| `kms_key_arn`        | ARN de chave KMS para criptografia SSE-KMS. Nulo usa SSE-S3.       | `string`      | `null` | nao         |
+| `tags`               | Mapa de tags adicionais aplicadas ao bucket.                       | `map(string)` | `{}`   | nao         |
 
 ## Outputs
 
-| Nome                          | Descrição                                  |
-|-------------------------------|---------------------------------------------|
-| `bucket_id`                   | Nome do bucket criado                       |
-| `bucket_arn`                  | ARN do bucket criado                        |
-| `bucket_regional_domain_name` | Domínio regional do bucket                  |
-| `bucket_versioning_status`    | Status atual do versionamento               |
+| Nome                           | Descricao                                                  |
+|--------------------------------|--------------------------------------------------------------|
+| `bucket_id`                    | Identificador (nome) do bucket S3 criado.                   |
+| `bucket_arn`                   | ARN do bucket S3 criado.                                     |
+| `bucket_regional_domain_name`  | Nome de dominio regional do bucket.                          |
+| `versioning_status`            | Status atual do versionamento do bucket.                     |
 
-## Validação
+## Seguranca
 
-```bash
-terraform fmt
-terraform init -backend=false
-terraform validate
-```
-
-## Observações
-
-- Nenhuma credencial real é necessária para `init`/`validate`.
-- Nenhum backend remoto é configurado; para uso em produção, configure um backend adequado externamente ao módulo.
-- Ajuste `noncurrent_version_expiration_days` e `enable_lifecycle_rule` conforme a política de retenção de dados aplicável ao caso de uso.
+- Acesso publico e bloqueado em todas as camadas (ACLs e policies).
+- Criptografia do lado do servidor e obrigatoria para todos os objetos.
+- ACLs sao desabilitadas via `Bucket Owner Enforced`, reduzindo a superficie de erro de configuracao.
+- Nenhuma credencial ou valor sensivel esta fixado no codigo; todos os parametros sao expostos via variaveis.

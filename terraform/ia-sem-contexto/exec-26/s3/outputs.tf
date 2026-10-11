@@ -1,5 +1,5 @@
 output "bucket_id" {
-  description = "Nome (ID) do bucket S3 criado."
+  description = "Identificador (nome) do bucket S3 criado."
   value       = aws_s3_bucket.this.id
 }
 
@@ -18,7 +18,12 @@ output "bucket_regional_domain_name" {
   value       = aws_s3_bucket.this.bucket_regional_domain_name
 }
 
-output "bucket_region" {
-  description = "Regiao AWS onde o bucket foi criado."
-  value       = aws_s3_bucket.this.region
+output "versioning_status" {
+  description = "Status atual de versionamento configurado no bucket."
+  value       = aws_s3_bucket_versioning.this.versioning_configuration[0].status
+}
+
+output "encryption_algorithm" {
+  description = "Algoritmo de criptografia server-side aplicado por padrao ao bucket."
+  value       = aws_s3_bucket_server_side_encryption_configuration.this.rule[0].apply_server_side_encryption_by_default[0].sse_algorithm
 }

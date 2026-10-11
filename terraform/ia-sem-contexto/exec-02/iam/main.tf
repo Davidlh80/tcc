@@ -3,22 +3,22 @@ terraform {
 }
 
 provider "aws" {
-  region = var.aws_region
+  region = var.region
 }
 
 data "aws_iam_policy_document" "assume_role" {
   statement {
-    sid     = "AllowAssumeRoleFromTrustedPrincipals"
+    sid     = "AllowConfiguredPrincipalsToAssumeRole"
     effect  = "Allow"
     actions = ["sts:AssumeRole"]
 
     principals {
-      type        = "Service"
-      identifiers = var.trusted_service_principals
+      type        = "AWS"
+      identifiers = var.trusted_principal_arns
     }
 
     dynamic "condition" {
-      for_each = var.external_id != null ? [var.external_id] : []
+      for_each = var.external_id != "" ? [var.external_id] : []
       content {
         test     = "StringEquals"
         variable = "sts:ExternalId"
@@ -30,8 +30,8 @@ data "aws_iam_policy_document" "assume_role" {
 
 resource "aws_iam_role" "this" {
   name                 = var.role_name
-  path                 = var.role_path
-  description          = var.role_description
+  path                 = var.path
+  description          = "Role gerenciada via Terraform, com trust policy restrita a principals configurados."
   assume_role_policy   = data.aws_iam_policy_document.assume_role.json
   max_session_duration = var.max_session_duration
   permissions_boundary = var.permissions_boundary_arn
@@ -39,20 +39,20 @@ resource "aws_iam_role" "this" {
   tags = var.tags
 }
 
-data "aws_iam_policy_document" "this" {
+data "aws_iam_policy_document" "permissions" {
   statement {
-    sid       = "AllowScopedActionsOnScopedResources"
+    sid       = "AllowConfiguredActionsOnConfiguredResources"
     effect    = "Allow"
     actions   = var.allowed_actions
-    resources = var.allowed_resource_arns
+    resources = var.allowed_resources
   }
 }
 
 resource "aws_iam_policy" "this" {
   name        = var.policy_name
-  description = var.policy_description
-  path        = var.role_path
-  policy      = data.aws_iam_policy_document.this.json
+  path        = var.path
+  description = "Policy de permissoes minimas definida via Terraform, anexada exclusivamente a uma role especifica."
+  policy      = data.aws_iam_policy_document.permissions.json
 
   tags = var.tags
 }

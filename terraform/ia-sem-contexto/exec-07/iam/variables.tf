@@ -1,92 +1,89 @@
 variable "aws_region" {
-  description = "AWS region used by the provider for syntax validation and deployment."
+  description = "Região AWS onde o provider será configurado."
   type        = string
   default     = "us-east-1"
 }
 
 variable "role_name" {
-  description = "Name of the IAM role."
+  description = "Nome da IAM Role a ser criada."
   type        = string
-  default     = "app-role"
-
-  validation {
-    condition     = can(regex("^[\\w+=,.@-]{1,64}$", var.role_name))
-    error_message = "role_name must be 1-64 characters and use only letters, numbers, and the characters + = , . @ -."
-  }
+  default     = "app-service-role"
 }
 
 variable "role_description" {
-  description = "Description of the IAM role."
+  description = "Descrição da IAM Role."
   type        = string
-  default     = "Role managed by Terraform with least-privilege permissions."
+  default     = "Role de aplicacao com permissoes restritas, gerenciada via Terraform."
 }
 
 variable "policy_name" {
-  description = "Name of the IAM policy attached to the role."
+  description = "Nome da IAM Policy a ser criada e anexada à role."
   type        = string
-  default     = "app-policy"
-
-  validation {
-    condition     = can(regex("^[\\w+=,.@-]{1,128}$", var.policy_name))
-    error_message = "policy_name must be 1-128 characters and use only letters, numbers, and the characters + = , . @ -."
-  }
+  default     = "app-service-policy"
 }
 
 variable "policy_description" {
-  description = "Description of the IAM policy."
+  description = "Descrição da IAM Policy."
   type        = string
-  default     = "Least-privilege permissions policy managed by Terraform."
+  default     = "Policy com permissoes minimas necessarias, gerenciada via Terraform."
 }
 
 variable "path" {
-  description = "Path applied to both the IAM role and the IAM policy."
+  description = "Path utilizado tanto pela IAM Role quanto pela IAM Policy."
   type        = string
   default     = "/"
 }
 
 variable "max_session_duration" {
-  description = "Maximum session duration (in seconds) for the role. Must be between 3600 (1h) and 43200 (12h)."
+  description = "Duração máxima (em segundos) da sessão assumida via sts:AssumeRole."
   type        = number
   default     = 3600
 
   validation {
     condition     = var.max_session_duration >= 3600 && var.max_session_duration <= 43200
-    error_message = "max_session_duration must be between 3600 and 43200 seconds."
+    error_message = "max_session_duration deve estar entre 3600 e 43200 segundos."
   }
 }
 
-variable "permissions_boundary_arn" {
-  description = "Optional IAM permissions boundary ARN to attach to the role. Null disables it."
-  type        = string
-  default     = null
+variable "force_detach_policies" {
+  description = "Se true, permite que a role seja destruída mesmo com policies anexadas."
+  type        = bool
+  default     = false
 }
 
-variable "trusted_service_principals" {
-  description = "AWS service principals (e.g. ec2.amazonaws.com) allowed to assume the role. Empty list disables this trust statement."
+variable "trusted_principal_arn" {
+  description = "ARN completo do principal (conta, role ou usuário IAM) autorizado a assumir esta role via sts:AssumeRole. Nunca utilize \"*\" ou um principal irrestrito."
+  type        = string
+
+  validation {
+    condition     = var.trusted_principal_arn != "*" && can(regex("^arn:aws:iam::\\d{12}:(role|user|root)(/.+)?$", var.trusted_principal_arn))
+    error_message = "trusted_principal_arn deve ser um ARN IAM válido (conta, role ou usuário) e não pode ser \"*\"."
+  }
+}
+
+variable "allowed_actions" {
+  description = "Lista de ações IAM explicitamente permitidas pela policy. Não utilize ações administrativas amplas nem o wildcard \"*\"."
   type        = list(string)
-  default     = ["ec2.amazonaws.com"]
+  default     = ["s3:GetObject", "s3:ListBucket"]
+
+  validation {
+    condition     = length(var.allowed_actions) > 0 && !contains(var.allowed_actions, "*")
+    error_message = "allowed_actions deve conter ao menos uma ação e não pode incluir o wildcard \"*\"."
+  }
 }
 
-variable "trusted_account_arns" {
-  description = "IAM principal ARNs (accounts, roles, or users) allowed to assume the role for cross-account access. Empty list disables cross-account trust."
+variable "resource_arns" {
+  description = "Lista de ARNs dos recursos sobre os quais as ações da policy serão permitidas. Evite \"*\" sempre que possível."
   type        = list(string)
-  default     = []
-}
 
-variable "external_id" {
-  description = "Optional sts:ExternalId condition applied to cross-account assume-role trust statements. Recommended when trusted_account_arns is non-empty."
-  type        = string
-  default     = null
-}
-
-variable "bucket_name" {
-  description = "Name (not ARN) of the single S3 bucket the role is granted least-privilege read access to."
-  type        = string
-  default     = "example-app-data-bucket"
+  validation {
+    condition     = length(var.resource_arns) > 0
+    error_message = "Informe ao menos um ARN de recurso em resource_arns."
+  }
 }
 
 variable "tags" {
-  description = "Additional tags applied to the IAM role and IAM policy."
+  description = "Tags aplicadas à IAM Role e à IAM Policy."
   type        = map(string)
   default     = {}
 }

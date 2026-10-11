@@ -18,7 +18,7 @@ output "bucket_regional_domain_name" {
   value       = aws_s3_bucket.this.bucket_regional_domain_name
 }
 
-output "bucket_region" {
-  description = "Regiao AWS onde o bucket foi criado."
-  value       = aws_s3_bucket.this.region
+output "versioning_status" {
+  description = "Status efetivo do versionamento aplicado ao bucket."
+  value       = aws_s3_bucket_versioning.this.versioning_configuration[0].status
 }

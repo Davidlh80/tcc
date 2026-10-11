@@ -1,42 +1,35 @@
-variable "vpc_id" {
-  description = "ID da VPC onde o Security Group sera criado."
-  type        = string
-}
-
-variable "region" {
-  description = "Regiao AWS utilizada pelo provider."
+variable "aws_region" {
+  description = "Região AWS onde os recursos serão provisionados."
   type        = string
   default     = "us-east-1"
+}
+
+variable "vpc_id" {
+  description = "ID da VPC (criada pelo ambiente de teste) onde o Security Group será provisionado."
+  type        = string
+
+  validation {
+    condition     = can(regex("^vpc-[a-zA-Z0-9]+$", var.vpc_id))
+    error_message = "O valor de vpc_id deve seguir o formato vpc-xxxxxxxx."
+  }
 }
 
 variable "name" {
   description = "Nome do Security Group."
   type        = string
-  default     = "sg-example"
+  default     = "app-sg"
 }
 
 variable "description" {
-  description = "Descricao do Security Group."
+  description = "Descrição do Security Group."
   type        = string
-  default     = "Security Group gerenciado via Terraform"
+  default     = "Security group gerenciado via Terraform"
 }
 
 variable "ingress_rules" {
-  description = "Lista de regras de entrada (ingress) do Security Group. Vazia por padrao para seguranca."
+  description = "Lista de regras de entrada explícitas do Security Group."
   type = list(object({
-    description = optional(string, "")
-    from_port   = number
-    to_port     = number
-    protocol    = string
-    cidr_blocks = list(string)
-  }))
-  default = []
-}
-
-variable "egress_rules" {
-  description = "Lista de regras de saida (egress) do Security Group."
-  type = list(object({
-    description = optional(string, "")
+    description = string
     from_port   = number
     to_port     = number
     protocol    = string
@@ -44,10 +37,30 @@ variable "egress_rules" {
   }))
   default = [
     {
-      description = "Permite todo o trafego de saida"
-      from_port   = 0
-      to_port     = 0
-      protocol    = "-1"
+      description = "Acesso HTTPS a partir da rede interna"
+      from_port   = 443
+      to_port     = 443
+      protocol    = "tcp"
+      cidr_blocks = ["10.0.0.0/8"]
+    }
+  ]
+}
+
+variable "egress_rules" {
+  description = "Lista de regras de saída explícitas do Security Group."
+  type = list(object({
+    description = string
+    from_port   = number
+    to_port     = number
+    protocol    = string
+    cidr_blocks = list(string)
+  }))
+  default = [
+    {
+      description = "Saída HTTPS para atualizações e integrações externas"
+      from_port   = 443
+      to_port     = 443
+      protocol    = "tcp"
       cidr_blocks = ["0.0.0.0/0"]
     }
   ]

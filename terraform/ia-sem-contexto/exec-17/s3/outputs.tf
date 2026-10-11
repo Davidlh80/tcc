@@ -1,15 +1,15 @@
 output "bucket_id" {
-  description = "Identificador (nome) do bucket S3."
+  description = "Nome (ID) do bucket S3 criado."
   value       = aws_s3_bucket.this.id
 }
 
 output "bucket_arn" {
-  description = "ARN do bucket S3."
+  description = "ARN do bucket S3 criado."
   value       = aws_s3_bucket.this.arn
 }
 
 output "bucket_domain_name" {
-  description = "Nome de dominio do bucket S3."
+  description = "Nome de dominio padrao do bucket S3."
   value       = aws_s3_bucket.this.bucket_domain_name
 }
 
@@ -23,7 +23,7 @@ output "versioning_status" {
   value       = aws_s3_bucket_versioning.this.versioning_configuration[0].status
 }
 
-output "encryption_algorithm" {
-  description = "Algoritmo de criptografia server-side aplicado ao bucket."
-  value       = aws_s3_bucket_server_side_encryption_configuration.this.rule[0].apply_server_side_encryption_by_default[0].sse_algorithm
+output "sse_algorithm" {
+  description = "Algoritmo de criptografia do lado do servidor configurado para o bucket."
+  value       = var.sse_algorithm
 }

@@ -1,45 +1,50 @@
 variable "bucket_name" {
-  description = "Nome globalmente unico do bucket S3."
+  description = "Nome do bucket S3. Deve ser globalmente unico e seguir as regras de nomenclatura da AWS."
   type        = string
 
   validation {
     condition     = can(regex("^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$", var.bucket_name))
-    error_message = "O nome do bucket deve ter entre 3 e 63 caracteres, usando apenas letras minusculas, numeros, pontos e hifens."
+    error_message = "O nome do bucket deve ter entre 3 e 63 caracteres, usando apenas letras minusculas, numeros, pontos e hifens, iniciando e terminando com letra ou numero."
   }
 }
 
-variable "force_destroy" {
-  description = "Permite excluir o bucket mesmo que contenha objetos."
-  type        = bool
-  default     = false
+variable "environment" {
+  description = "Nome do ambiente (ex: dev, staging, prod), usado para tagueamento."
+  type        = string
+  default     = "dev"
 }
 
-variable "enable_versioning" {
-  description = "Habilita o versionamento de objetos no bucket."
+variable "versioning_enabled" {
+  description = "Define se o versionamento do bucket deve estar habilitado."
   type        = bool
   default     = true
 }
 
+variable "sse_algorithm" {
+  description = "Algoritmo de criptografia do lado do servidor. Valores aceitos: AES256 ou aws:kms."
+  type        = string
+  default     = "AES256"
+
+  validation {
+    condition     = contains(["AES256", "aws:kms"], var.sse_algorithm)
+    error_message = "sse_algorithm deve ser 'AES256' ou 'aws:kms'."
+  }
+}
+
 variable "kms_key_arn" {
-  description = "ARN de uma chave KMS para criptografia server-side. Se nulo, usa AES256 gerenciado pelo S3."
+  description = "ARN da chave KMS a ser usada quando sse_algorithm for 'aws:kms'. Ignorado caso contrario."
   type        = string
   default     = null
 }
 
-variable "tags" {
-  description = "Tags adicionais aplicadas ao bucket."
-  type        = map(string)
-  default     = {}
+variable "force_destroy" {
+  description = "Permite destruir o bucket mesmo que contenha objetos. Use com cautela."
+  type        = bool
+  default     = false
 }
 
-variable "lifecycle_rules" {
-  description = "Lista de regras de ciclo de vida do bucket."
-  type = list(object({
-    id                                  = string
-    enabled                             = bool
-    prefix                              = optional(string)
-    expiration_days                     = optional(number)
-    noncurrent_version_expiration_days  = optional(number)
-  }))
-  default = []
+variable "tags" {
+  description = "Tags adicionais a serem aplicadas ao bucket."
+  type        = map(string)
+  default     = {}
 }

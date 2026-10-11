@@ -12,7 +12,7 @@ Recurso desta execução: Security Group.
 
 ## Ação
 
-Gere uma blueprint Terraform completa para provisionar um Security Group na AWS, com o ID da VPC configurável por variável (o Security Group será testado dentro de uma VPC criada pelo próprio ambiente de teste, não pela VPC padrão da conta). Regras de entrada e saída, portas, origens (CIDRs), nomenclatura, tags, variáveis, outputs e organização interna dos arquivos ficam inteiramente ao seu critério.
+Gere uma blueprint Terraform completa para provisionar um Security Group na AWS, cobrindo: criação do Security Group; ID da VPC configurável por variável (o Security Group será testado dentro de uma VPC criada pelo próprio ambiente de teste, não pela VPC padrão da conta); declaração de regras explícitas de entrada e saída, evitando abertura irrestrita desnecessária; aplicação de tags; declaração de outputs relevantes. Portas específicas, origens (CIDRs), nomenclatura, variáveis e outputs adicionais, e organização interna dos arquivos ficam ao seu critério.
 
 ## Formato de saída
 

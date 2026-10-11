@@ -12,7 +12,7 @@ Recurso desta execução: IAM Policy anexada a uma IAM Role.
 
 ## Ação
 
-Gere uma blueprint Terraform completa para provisionar uma IAM Policy anexada a uma IAM Role na AWS (a policy não deve ficar solta, sem nenhum principal associado). Nível de privilégio, uso de wildcard, definição do principal de confiança (assume role), nomenclatura, tags, ações e recursos permitidos, variáveis, outputs e organização interna dos arquivos ficam inteiramente ao seu critério.
+Gere uma blueprint Terraform completa para provisionar uma IAM Policy anexada a uma IAM Role na AWS, cobrindo: criação da policy; criação da role com a policy anexada (a policy não deve ficar solta, sem nenhum principal associado); definição de uma trust policy (assume role policy) restrita a um principal configurável, sem permitir qualquer conta ou principal (`"*"` ou `AWS: "*"`); avaliação cuidadosa para evitar permissões administrativas e wildcard amplo quando possível; aplicação de tags quando suportado; declaração de outputs relevantes. Nomenclatura, ações e recursos específicos permitidos, variáveis e outputs adicionais, e organização interna dos arquivos ficam ao seu critério.
 
 ## Formato de saída
 

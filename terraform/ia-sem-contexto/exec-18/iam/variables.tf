@@ -1,46 +1,34 @@
 variable "aws_region" {
+  description = "Região AWS onde o provider será configurado."
   type        = string
-  description = "Regiao AWS onde os recursos serao provisionados."
   default     = "us-east-1"
 }
 
-variable "name" {
+variable "role_name" {
+  description = "Nome da IAM Role a ser criada."
   type        = string
-  description = "Nome base usado para compor os nomes da IAM Role e da IAM Policy (sufixos -role/-policy sao adicionados automaticamente)."
-  default     = "app"
 
   validation {
-    condition     = can(regex("^[a-zA-Z0-9+=,.@_-]{1,100}$", var.name))
-    error_message = "O nome deve conter apenas caracteres validos para IAM (letras, numeros, + = , . @ _ -) e ter entre 1 e 100 caracteres."
-  }
-}
-
-variable "iam_path" {
-  type        = string
-  description = "Path da IAM Role e da IAM Policy."
-  default     = "/"
-
-  validation {
-    condition     = can(regex("^/.*/$|^/$", var.iam_path))
-    error_message = "O path deve comecar e terminar com '/'."
+    condition     = length(var.role_name) > 0 && length(var.role_name) <= 64
+    error_message = "role_name deve ter entre 1 e 64 caracteres."
   }
 }
 
 variable "role_description" {
+  description = "Descrição da IAM Role."
   type        = string
-  description = "Descricao da IAM Role."
   default     = "IAM Role gerenciada via Terraform."
 }
 
-variable "policy_description" {
+variable "role_path" {
+  description = "Path da IAM Role."
   type        = string
-  description = "Descricao da IAM Policy."
-  default     = "IAM Policy gerenciada via Terraform, anexada a uma IAM Role."
+  default     = "/"
 }
 
 variable "max_session_duration" {
+  description = "Duração máxima, em segundos, de uma sessão assumida via sts:AssumeRole."
   type        = number
-  description = "Duracao maxima da sessao assumida (em segundos). Deve estar entre 3600 e 43200."
   default     = 3600
 
   validation {
@@ -49,66 +37,76 @@ variable "max_session_duration" {
   }
 }
 
-variable "permissions_boundary_arn" {
-  type        = string
-  description = "ARN de uma policy a ser usada como permissions boundary da role. Deixe null para nao aplicar boundary."
-  default     = null
-}
-
-variable "trusted_service_principals" {
+variable "trusted_principal_arns" {
+  description = "Lista de ARNs de principals (roles, users ou contas) autorizados a assumir esta role via sts:AssumeRole. O valor \"*\" (qualquer principal) não é permitido."
   type        = list(string)
-  description = "Lista de service principals AWS (ex: ec2.amazonaws.com) autorizados a assumir a role."
-  default     = ["ec2.amazonaws.com"]
+
+  validation {
+    condition     = length(var.trusted_principal_arns) > 0
+    error_message = "trusted_principal_arns deve conter ao menos um principal."
+  }
+
+  validation {
+    condition     = alltrue([for p in var.trusted_principal_arns : p != "*"])
+    error_message = "trusted_principal_arns não pode conter o valor \"*\" (qualquer principal)."
+  }
 }
 
-variable "trusted_aws_principals" {
-  type        = list(string)
-  description = "Lista de ARNs de contas/usuarios/roles AWS autorizados a assumir a role."
-  default     = []
-}
-
-variable "external_id" {
+variable "policy_name" {
+  description = "Nome da IAM Policy a ser criada."
   type        = string
-  description = "External ID exigido na assume role (recomendado para acesso cross-account de terceiros). Deixe null para nao exigir."
-  default     = null
+
+  validation {
+    condition     = length(var.policy_name) > 0 && length(var.policy_name) <= 128
+    error_message = "policy_name deve ter entre 1 e 128 caracteres."
+  }
 }
 
-variable "require_mfa_for_aws_principals" {
-  type        = bool
-  description = "Se verdadeiro, exige MFA para principals do tipo AWS assumirem a role."
-  default     = true
+variable "policy_description" {
+  description = "Descrição da IAM Policy."
+  type        = string
+  default     = "IAM Policy gerenciada via Terraform."
+}
+
+variable "policy_path" {
+  description = "Path da IAM Policy."
+  type        = string
+  default     = "/"
 }
 
 variable "policy_actions" {
+  description = "Lista de actions permitidas pela policy. O uso de \"*\" (todas as actions) não é permitido."
   type        = list(string)
-  description = "Lista de actions IAM permitidas pela policy. Evite wildcards amplos como '*'."
   default     = ["s3:GetObject", "s3:ListBucket"]
 
   validation {
-    condition     = length(var.policy_actions) > 0 && !contains(var.policy_actions, "*")
-    error_message = "policy_actions nao pode ser vazio nem conter o wildcard total '*'."
+    condition     = length(var.policy_actions) > 0
+    error_message = "policy_actions deve conter ao menos uma action."
+  }
+
+  validation {
+    condition     = alltrue([for a in var.policy_actions : a != "*"])
+    error_message = "policy_actions não pode conter o valor \"*\" (todas as actions)."
   }
 }
 
 variable "policy_resources" {
+  description = "Lista de ARNs de recursos aos quais as actions da policy se aplicam. O uso de \"*\" (qualquer recurso) não é permitido."
   type        = list(string)
-  description = "Lista de ARNs de recursos aos quais as actions se aplicam. Evite '*' irrestrito."
-  default     = ["arn:aws:s3:::example-bucket", "arn:aws:s3:::example-bucket/*"]
 
   validation {
-    condition     = length(var.policy_resources) > 0 && !contains(var.policy_resources, "*")
-    error_message = "policy_resources nao pode ser vazio nem conter o wildcard total '*'."
+    condition     = length(var.policy_resources) > 0
+    error_message = "policy_resources deve conter ao menos um recurso."
+  }
+
+  validation {
+    condition     = alltrue([for r in var.policy_resources : r != "*"])
+    error_message = "policy_resources não pode conter o valor \"*\" (qualquer recurso)."
   }
 }
 
-variable "require_secure_transport" {
-  type        = bool
-  description = "Se verdadeiro, adiciona condicao exigindo aws:SecureTransport=true na policy."
-  default     = true
-}
-
 variable "tags" {
+  description = "Tags aplicadas à IAM Role e à IAM Policy."
   type        = map(string)
-  description = "Tags adicionais aplicadas a IAM Role e a IAM Policy."
   default     = {}
 }

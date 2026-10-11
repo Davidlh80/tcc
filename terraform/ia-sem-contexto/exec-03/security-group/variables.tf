@@ -1,64 +1,65 @@
-variable "vpc_id" {
+variable "region" {
+  description = "Regiao AWS onde os recursos serao criados."
   type        = string
-  description = "ID da VPC (criada pelo ambiente de teste) onde o Security Group sera provisionado."
+  default     = "us-east-1"
+}
+
+variable "vpc_id" {
+  description = "ID da VPC onde o Security Group sera criado. Deve ser a VPC de teste do ambiente, nao a VPC padrao da conta."
+  type        = string
 
   validation {
-    condition     = can(regex("^vpc-[0-9a-f]+$", var.vpc_id))
-    error_message = "O valor de vpc_id deve seguir o formato de um ID de VPC valido da AWS, por exemplo: vpc-0123456789abcdef0."
+    condition     = length(var.vpc_id) > 0
+    error_message = "O valor de vpc_id nao pode ser vazio."
   }
 }
 
 variable "name" {
-  type        = string
   description = "Nome do Security Group."
-  default     = "app-sg"
-
-  validation {
-    condition     = length(var.name) > 0 && length(var.name) <= 255
-    error_message = "O nome deve ter entre 1 e 255 caracteres."
-  }
+  type        = string
+  default     = "sg-custom"
 }
 
 variable "description" {
-  type        = string
   description = "Descricao do Security Group."
-  default     = "Managed by Terraform"
+  type        = string
+  default     = "Security Group gerenciado via Terraform."
 }
 
 variable "ingress_rules" {
+  description = "Lista de regras de entrada (ingress) do Security Group. Por padrao, nenhuma regra de entrada e criada, exigindo configuracao explicita."
   type = list(object({
-    description = optional(string, "Ingress rule managed by Terraform")
+    description = string
     from_port   = number
     to_port     = number
     protocol    = string
     cidr_blocks = list(string)
   }))
-  description = "Lista de regras de entrada. Vazia por padrao para nao expor portas sem uma decisao explicita."
-  default     = []
+  default = []
 }
 
 variable "egress_rules" {
+  description = "Lista de regras de saida (egress) do Security Group."
   type = list(object({
-    description = optional(string, "Egress rule managed by Terraform")
+    description = string
     from_port   = number
     to_port     = number
     protocol    = string
     cidr_blocks = list(string)
   }))
-  description = "Lista de regras de saida."
   default = [
     {
-      description = "Allow all outbound traffic"
-      from_port   = 0
-      to_port     = 0
-      protocol    = "-1"
+      description = "Permite trafego HTTPS de saida para atualizacoes e chamadas a servicos externos."
+      from_port   = 443
+      to_port     = 443
+      protocol    = "tcp"
       cidr_blocks = ["0.0.0.0/0"]
     }
   ]
 }
 
 variable "tags" {
-  type        = map(string)
   description = "Tags adicionais aplicadas ao Security Group."
+  type        = map(string)
   default     = {}
 }

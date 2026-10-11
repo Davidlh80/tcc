@@ -1,39 +1,50 @@
 # IAM Policy anexada a IAM Role
 
-Blueprint Terraform autonoma, sem vinculo com padroes organizacionais especificos, para provisionar uma IAM Role e uma IAM Policy gerenciada anexada a ela. A policy nunca fica solta: e sempre criada junto com o `aws_iam_role_policy_attachment` que a vincula a role.
+Blueprint Terraform para provisionar uma IAM Role com uma trust policy (assume role policy) restrita a um unico principal configuravel, e uma IAM Policy com permissoes especificas anexada diretamente a essa role por meio de `aws_iam_role_policy_attachment`. A policy nunca existe desvinculada de um principal: ela e criada e anexada na mesma execucao.
 
 ## Recursos criados
 
-- `aws_iam_role.this`: role com trust policy (assume role policy) construida a partir de `aws_iam_policy_document`.
-- `aws_iam_policy.this`: policy gerenciada com o conjunto de permissoes definido pelo consumidor do modulo.
-- `aws_iam_role_policy_attachment.this`: anexa a policy a role.
+- `aws_iam_role.this`: role com `assume_role_policy` gerada a partir de `data.aws_iam_policy_document.assume_role`, restrita ao principal definido em `var.trusted_principal_arn`.
+- `aws_iam_policy.this`: policy gerada a partir de `data.aws_iam_policy_document.permissions`, limitada as actions e recursos definidos em `var.allowed_actions` e `var.resource_arns`.
+- `aws_iam_role_policy_attachment.this`: anexa a policy criada a role criada.
 
-## Decisoes de seguranca adotadas
+## Decisoes de seguranca
 
-- Nenhum valor sensivel ou credencial real e usado; toda configuracao e feita via variaveis.
-- O trust policy (quem pode assumir a role) e explicito e configuravel via `assume_role_service_principals` (principals de servico AWS) e, opcionalmente, `trusted_account_ids` para cenarios cross-account.
-- Quando `trusted_account_ids` e usado, recomenda-se preencher `external_id` para mitigar o problema do "confused deputy" em cenarios cross-account.
-- A variavel `policy_actions` bloqueia, via `validation`, o uso do wildcard total `"*"` como action, forcando a listagem explicita de permissoes (privilegio minimo).
-- `policy_resources` e obrigatoriamente uma lista nao vazia, evitando policies aplicadas a todos os recursos por omissao.
-- `max_session_duration` e limitado ao intervalo valido da AWS (3600 a 43200 segundos).
-- Nenhum backend remoto e configurado; o estado permanece local, adequado para validacao sintatica isolada.
-
-## Variaveis principais
-
-- `role_name`, `policy_name`, `role_path`: nomenclatura e path dos recursos IAM.
-- `assume_role_service_principals`: service principals autorizados a assumir a role (padrao: `ec2.amazonaws.com`).
-- `trusted_account_ids` e `external_id`: habilitam assume role cross-account de forma opcional e segura.
-- `policy_actions` e `policy_resources`: definem o escopo de permissoes concedido pela policy.
-- `max_session_duration`, `force_detach_policies`, `tags`: ajustes operacionais da role e da policy.
+- A trust policy aceita apenas um principal especifico (conta, usuario ou role); `"*"` ou ARNs que representem qualquer conta sao bloqueados por validacao da variavel `trusted_principal_arn`.
+- `allowed_actions` nao pode conter o wildcard `*` nem `iam:*`, evitando permissoes administrativas amplas.
+- `resource_arns` nao pode conter `*`, exigindo escopo explicito de recursos.
+- Nenhuma credencial ou valor sensivel real e utilizado; os valores padrao sao exemplos ilustrativos (`123456789012` e o ID de conta de exemplo padrao da documentacao da AWS).
+- Tags sao aplicadas tanto na role quanto na policy para rastreabilidade.
 
 ## Uso
 
-1. Ajuste as variaveis conforme o caso de uso real (principals de confianca, actions e resources necessarios).
-2. Execute `terraform init -backend=false` para inicializar o provider AWS sem backend remoto.
-3. Execute `terraform validate` para checagem sintatica e de consistencia interna, sem necessidade de credenciais reais.
-4. Para aplicar em um ambiente real, configure credenciais AWS validas e revise cuidadosamente `policy_actions` e `policy_resources` para o principio de privilegio minimo antes de `terraform apply`.
+```
+terraform init -backend=false
+terraform validate
+```
 
-## Observacoes
+Para provisionar de fato, ajuste `trusted_principal_arn`, `allowed_actions` e `resource_arns` para os valores reais do seu ambiente antes de executar `terraform plan`/`terraform apply` com credenciais validas.
 
-- Os valores padrao (bucket S3 de exemplo, principal EC2) sao apenas ilustrativos e devem ser substituidos por valores reais do ambiente de destino antes de qualquer uso em producao.
-- Este modulo nao presume nenhum padrao organizacional de nomenclatura, tags ou governanca; essas decisoes ficam a criterio de quem o consome.
+## Inputs principais
+
+| Nome | Descricao | Default |
+|---|---|---|
+| `aws_region` | Regiao do provider AWS | `us-east-1` |
+| `role_name` | Nome da IAM Role | `example-restricted-role` |
+| `policy_name` | Nome da IAM Policy | `example-least-privilege-policy` |
+| `trusted_principal_arn` | ARN do principal autorizado a assumir a role | ARN de exemplo |
+| `allowed_actions` | Actions permitidas na policy | `["s3:GetObject", "s3:ListBucket"]` |
+| `resource_arns` | Recursos aos quais as actions se aplicam | `["arn:aws:s3:::example-bucket/*"]` |
+| `max_session_duration` | Duracao maxima da sessao assumida (segundos) | `3600` |
+| `tags` | Tags aplicadas aos recursos | `{ ManagedBy = "terraform" }` |
+
+## Outputs
+
+| Nome | Descricao |
+|---|---|
+| `role_name` | Nome da IAM Role criada |
+| `role_arn` | ARN da IAM Role criada |
+| `role_id` | ID unico da IAM Role criada |
+| `policy_name` | Nome da IAM Policy criada |
+| `policy_arn` | ARN da IAM Policy criada |
+| `policy_attachment_id` | ID do attachment entre role e policy |

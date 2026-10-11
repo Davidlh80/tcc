@@ -8,17 +8,22 @@ output "bucket_arn" {
   value       = aws_s3_bucket.this.arn
 }
 
+output "bucket_domain_name" {
+  description = "Nome de dominio do bucket S3 (formato virtual-hosted-style)."
+  value       = aws_s3_bucket.this.bucket_domain_name
+}
+
 output "bucket_regional_domain_name" {
-  description = "Nome de domínio regional do bucket S3."
+  description = "Nome de dominio regional do bucket S3."
   value       = aws_s3_bucket.this.bucket_regional_domain_name
 }
 
 output "versioning_status" {
-  description = "Status atual do versionamento do bucket."
+  description = "Status atual do versionamento aplicado ao bucket."
   value       = aws_s3_bucket_versioning.this.versioning_configuration[0].status
 }
 
 output "encryption_algorithm" {
-  description = "Algoritmo de criptografia server-side aplicado ao bucket."
-  value       = aws_s3_bucket_server_side_encryption_configuration.this.rule[0].apply_server_side_encryption_by_default[0].sse_algorithm
+  description = "Algoritmo de criptografia do lado do servidor aplicado ao bucket."
+  value       = local.sse_algorithm
 }

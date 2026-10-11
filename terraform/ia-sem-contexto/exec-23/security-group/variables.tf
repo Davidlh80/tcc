@@ -1,33 +1,32 @@
-variable "aws_region" {
-  description = "Regiao AWS onde os recursos serao provisionados."
-  type        = string
-  default     = "us-east-1"
-}
-
 variable "vpc_id" {
-  description = "ID da VPC onde o Security Group sera criado."
+  description = "ID da VPC (criada pelo ambiente de teste) onde o Security Group sera provisionado."
   type        = string
 
   validation {
-    condition     = can(regex("^vpc-[0-9a-f]+$", var.vpc_id))
-    error_message = "O valor de vpc_id deve ser um ID de VPC valido, no formato vpc-xxxxxxxx."
+    condition     = can(regex("^vpc-", var.vpc_id))
+    error_message = "O valor de vpc_id deve ser um ID de VPC valido, iniciando com \"vpc-\"."
   }
 }
 
 variable "name" {
   description = "Nome do Security Group."
   type        = string
-  default     = "sg-default"
+  default     = "app-sg"
+
+  validation {
+    condition     = length(var.name) > 0
+    error_message = "O valor de name nao pode ser vazio."
+  }
 }
 
 variable "description" {
   description = "Descricao do Security Group."
   type        = string
-  default     = "Security Group gerenciado via Terraform."
+  default     = "Security group gerenciado via Terraform"
 }
 
 variable "ingress_rules" {
-  description = "Lista de regras de entrada (ingress) do Security Group. Vazio por padrao, ou seja, nenhum trafego de entrada e permitido ate que regras sejam explicitamente definidas."
+  description = "Lista de regras de entrada explicitas a serem aplicadas ao Security Group. Nenhuma regra e aberta por padrao."
   type = list(object({
     description = string
     from_port   = number
@@ -39,7 +38,7 @@ variable "ingress_rules" {
 }
 
 variable "egress_rules" {
-  description = "Lista de regras de saida (egress) do Security Group."
+  description = "Lista de regras de saida explicitas a serem aplicadas ao Security Group. Por padrao, permite apenas trafego HTTPS de saida."
   type = list(object({
     description = string
     from_port   = number
@@ -49,17 +48,17 @@ variable "egress_rules" {
   }))
   default = [
     {
-      description = "Permite todo o trafego de saida."
-      from_port   = 0
-      to_port     = 0
-      protocol    = "-1"
+      description = "Permite trafego HTTPS de saida"
+      from_port   = 443
+      to_port     = 443
+      protocol    = "tcp"
       cidr_blocks = ["0.0.0.0/0"]
     }
   ]
 }
 
 variable "tags" {
-  description = "Tags adicionais aplicadas ao Security Group."
+  description = "Tags adicionais a serem aplicadas ao Security Group."
   type        = map(string)
   default     = {}
 }

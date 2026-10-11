@@ -1,25 +1,14 @@
-provider "aws" {
-  region = var.aws_region
-}
-
 resource "aws_s3_bucket" "this" {
-  bucket        = var.bucket_name
-  force_destroy = var.force_destroy
+  bucket = var.bucket_name
 
   tags = merge(
     {
-      Name = var.bucket_name
+      Name        = var.bucket_name
+      Environment = var.environment
+      ManagedBy   = "terraform"
     },
     var.tags
   )
-}
-
-resource "aws_s3_bucket_ownership_controls" "this" {
-  bucket = aws_s3_bucket.this.id
-
-  rule {
-    object_ownership = "BucketOwnerEnforced"
-  }
 }
 
 resource "aws_s3_bucket_public_access_block" "this" {
@@ -44,30 +33,17 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "this" {
 
   rule {
     apply_server_side_encryption_by_default {
-      sse_algorithm     = var.kms_key_arn != null ? "aws:kms" : "AES256"
-      kms_master_key_id = var.kms_key_arn
+      sse_algorithm     = var.sse_algorithm
+      kms_master_key_id = var.sse_algorithm == "aws:kms" ? var.kms_key_arn : null
     }
-    bucket_key_enabled = var.kms_key_arn != null
+    bucket_key_enabled = var.sse_algorithm == "aws:kms" ? true : null
   }
 }
 
-resource "aws_s3_bucket_lifecycle_configuration" "this" {
-  count = var.enable_lifecycle_rule ? 1 : 0
-
+resource "aws_s3_bucket_ownership_controls" "this" {
   bucket = aws_s3_bucket.this.id
 
   rule {
-    id     = "expire-objects"
-    status = "Enabled"
-
-    filter {}
-
-    expiration {
-      days = var.lifecycle_expiration_days
-    }
-
-    noncurrent_version_expiration {
-      noncurrent_days = var.lifecycle_expiration_days
-    }
+    object_ownership = "BucketOwnerEnforced"
   }
 }

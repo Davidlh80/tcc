@@ -6,85 +6,45 @@ provider "aws" {
   region = var.aws_region
 }
 
-locals {
-  common_tags = merge(
-    var.tags,
-    {
-      ManagedBy = "terraform"
-    }
-  )
-}
-
 data "aws_iam_policy_document" "assume_role" {
-  dynamic "statement" {
-    for_each = length(var.trusted_service_principals) > 0 ? [1] : []
-
-    content {
-      sid     = "TrustedServicePrincipals"
-      effect  = "Allow"
-      actions = ["sts:AssumeRole"]
-
-      principals {
-        type        = "Service"
-        identifiers = var.trusted_service_principals
-      }
-    }
-  }
-
-  dynamic "statement" {
-    for_each = length(var.trusted_account_arns) > 0 ? [1] : []
-
-    content {
-      sid     = "TrustedAccountPrincipals"
-      effect  = "Allow"
-      actions = ["sts:AssumeRole"]
-
-      principals {
-        type        = "AWS"
-        identifiers = var.trusted_account_arns
-      }
-
-      dynamic "condition" {
-        for_each = var.external_id != "" ? [1] : []
-
-        content {
-          test     = "StringEquals"
-          variable = "sts:ExternalId"
-          values   = [var.external_id]
-        }
-      }
-    }
-  }
-}
-
-data "aws_iam_policy_document" "permissions" {
   statement {
-    sid       = "AllowedActions"
-    effect    = "Allow"
-    actions   = var.policy_actions
-    resources = var.policy_resources
+    sid     = "AllowConfiguredPrincipalToAssumeRole"
+    effect  = "Allow"
+    actions = ["sts:AssumeRole"]
+
+    principals {
+      type        = var.trust_principal_type
+      identifiers = var.trust_principal_identifiers
+    }
   }
 }
 
 resource "aws_iam_role" "this" {
   name                 = var.role_name
-  path                 = var.path
+  path                 = var.role_path
   description          = var.role_description
-  assume_role_policy    = data.aws_iam_policy_document.assume_role.json
+  assume_role_policy   = data.aws_iam_policy_document.assume_role.json
   max_session_duration = var.max_session_duration
-  permissions_boundary = var.permissions_boundary_arn != "" ? var.permissions_boundary_arn : null
-  force_detach_policies = var.force_detach_policies
 
-  tags = local.common_tags
+  tags = var.tags
+}
+
+data "aws_iam_policy_document" "permissions" {
+  statement {
+    sid       = "AllowConfiguredActions"
+    effect    = "Allow"
+    actions   = var.allowed_actions
+    resources = var.resource_arns
+  }
 }
 
 resource "aws_iam_policy" "this" {
   name        = var.policy_name
-  path        = var.path
+  path        = var.role_path
   description = var.policy_description
   policy      = data.aws_iam_policy_document.permissions.json
 
-  tags = local.common_tags
+  tags = var.tags
 }
 
 resource "aws_iam_role_policy_attachment" "this" {

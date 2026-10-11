@@ -1,85 +1,75 @@
-# IAM Role com IAM Policy anexada
+# IAM Policy anexada a IAM Role (blueprint)
 
-Blueprint Terraform para provisionar uma IAM Role na AWS com uma IAM Policy dedicada anexada a ela via `aws_iam_role_policy_attachment`. A policy nunca fica solta: ela e criada e imediatamente vinculada a role, que por sua vez so pode ser assumida pelo principal de confianca configurado.
+Blueprint Terraform que provisiona:
+
+- Uma **IAM Policy** com permissoes restritas (sem acoes administrativas, sem `Action = "*"` e sem `Resource = "*"` amplo). No exemplo padrao, a policy permite apenas escrever logs no CloudWatch Logs, escopada a conta, regiao e prefixo de log group configuraveis.
+- Uma **IAM Role** com uma **trust policy (assume role policy)** restrita a um ou mais principais configuraveis via `trusted_principal_arns`. A trust policy nunca aceita `"*"` como principal — isso e validado explicitamente na variavel.
+- Um **anexo (`aws_iam_role_policy_attachment`)** entre a policy e a role, garantindo que a policy nunca fique solta sem nenhum principal associado.
 
 ## Decisoes de seguranca
 
-- **Sem wildcards**: `allowed_actions`, `resource_arns` e `trusted_principal_identifiers` rejeitam o valor `"*"` via `validation` blocks, forcando escopo explicito de acoes, recursos e principais.
-- **Least privilege por padrao**: o exemplo padrao de `allowed_actions` cobre apenas leitura de objetos S3 (`s3:GetObject`, `s3:ListBucket`); ajuste conforme a necessidade real do workload.
-- **Trust policy explicita**: o assume role policy usa `aws_iam_policy_document` com `type`/`identifiers` configuraveis, evitando trust policies abertas (`Principal: "*"`).
-- **Suporte a External ID**: para cenarios cross-account, defina `external_id` para mitigar o problema do "confused deputy".
-- **Permissions boundary opcional**: `permissions_boundary_arn` permite aplicar um teto de permissoes adicional na role.
-- **Sessao limitada**: `max_session_duration` restringe o tempo maximo de uma sessao assumida (padrao de 1 hora, minimo permitido pela AWS).
-- **Sem credenciais reais**: o modulo nao depende de valores sensiveis fixos; tudo o que e configuravel e exposto via variaveis.
+- **Sem wildcard em principal da trust policy**: `trusted_principal_arns` possui validacao que rejeita lista vazia e rejeita o valor `"*"`.
+- **Sem permissoes administrativas**: a policy padrao concede apenas `logs:CreateLogGroup`, `logs:CreateLogStream` e `logs:PutLogEvents`, escopadas por ARN (conta, regiao e prefixo de log group).
+- **ExternalId opcional**: `assume_role_external_id` permite mitigar o problema do "confused deputy" ao assumir a role entre contas.
+- **`max_session_duration` limitado**: validado entre 900 e 43200 segundos (limites da API IAM).
+- **Tags configuraveis**: aplicadas tanto na role quanto na policy via `tags`.
 
 ## Uso
 
 ```hcl
-module "iam_role" {
+module "scoped_role" {
   source = "./"
 
-  role_name   = "app-readonly-s3-role"
-  policy_name = "app-readonly-s3-policy"
+  role_name   = "app-log-writer"
+  policy_name = "app-log-writer-policy"
 
-  trusted_principal_type        = "Service"
-  trusted_principal_identifiers = ["ec2.amazonaws.com"]
-
-  allowed_actions = [
-    "s3:GetObject",
-    "s3:ListBucket",
+  trusted_principal_arns = [
+    "arn:aws:iam::123456789012:role/ci-deployer",
   ]
 
-  resource_arns = [
-    "arn:aws:s3:::exemplo-bucket",
-    "arn:aws:s3:::exemplo-bucket/*",
-  ]
+  assume_role_external_id          = "optional-external-id"
+  cloudwatch_log_group_name_prefix = "/app/production/"
 
   tags = {
-    Environment = "dev"
+    Environment = "production"
     ManagedBy   = "terraform"
   }
 }
 ```
 
-## Requisitos
-
-| Nome | Versao |
-|---|---|
-| terraform | >= 1.5.0 |
-| aws | ~> 5.0 |
-
 ## Inputs
 
-| Nome | Descricao | Tipo | Default | Obrigatorio |
-|---|---|---|---|---|
-| aws_region | Regiao AWS usada pelo provider | string | "us-east-1" | nao |
-| role_name | Nome da IAM Role | string | "app-scoped-role" | nao |
-| role_description | Descricao da IAM Role | string | ver variables.tf | nao |
-| policy_name | Nome da IAM Policy | string | "app-scoped-policy" | nao |
-| policy_description | Descricao da IAM Policy | string | ver variables.tf | nao |
-| trusted_principal_type | Tipo do principal de confianca (Service ou AWS) | string | "Service" | nao |
-| trusted_principal_identifiers | Identificadores do principal de confianca | list(string) | ["ec2.amazonaws.com"] | nao |
-| external_id | External ID exigido no assume role | string | null | nao |
-| max_session_duration | Duracao maxima da sessao (segundos) | number | 3600 | nao |
-| permissions_boundary_arn | ARN da permissions boundary | string | null | nao |
-| allowed_actions | Acoes IAM permitidas na policy | list(string) | ["s3:GetObject", "s3:ListBucket"] | nao |
-| resource_arns | ARNs dos recursos alvo das acoes permitidas | list(string) | - | **sim** |
-| tags | Tags aplicadas na role e na policy | map(string) | { ManagedBy = "terraform" } | nao |
+| Nome | Descricao | Tipo | Default |
+|---|---|---|---|
+| `aws_region` | Regiao AWS usada pelo provider | `string` | `"us-east-1"` |
+| `role_name` | Nome da IAM Role | `string` | `"example-scoped-role"` |
+| `role_description` | Descricao da IAM Role | `string` | ver `variables.tf` |
+| `max_session_duration` | Duracao maxima da sessao assumida (segundos) | `number` | `3600` |
+| `policy_name` | Nome da IAM Policy | `string` | `"example-scoped-policy"` |
+| `policy_description` | Descricao da IAM Policy | `string` | ver `variables.tf` |
+| `trusted_principal_arns` | ARNs autorizados a assumir a role (sem `"*"`) | `list(string)` | obrigatorio |
+| `assume_role_external_id` | ExternalId exigido na trust policy (opcional) | `string` | `null` |
+| `cloudwatch_log_group_name_prefix` | Prefixo de log group permitido para escrita | `string` | `"/example-app/"` |
+| `tags` | Tags aplicadas aos recursos | `map(string)` | `{}` |
 
 ## Outputs
 
 | Nome | Descricao |
 |---|---|
-| role_name | Nome da IAM Role criada |
-| role_arn | ARN da IAM Role criada |
-| role_id | ID unico da IAM Role criada |
-| policy_name | Nome da IAM Policy criada |
-| policy_arn | ARN da IAM Policy criada |
-| policy_attachment_id | ID do attachment entre policy e role |
+| `role_arn` | ARN da IAM Role criada |
+| `role_name` | Nome da IAM Role criada |
+| `role_unique_id` | Unique ID da IAM Role criada |
+| `policy_arn` | ARN da IAM Policy criada |
+| `policy_name` | Nome da IAM Policy criada |
+| `policy_id` | ID da IAM Policy criada |
+| `role_policy_attachment_id` | ID do anexo entre role e policy |
 
 ## Validacao
 
 ```bash
+terraform fmt -check
 terraform init -backend=false
 terraform validate
 ```
+
+Nao e necessario fornecer credenciais reais para `init -backend=false` e `validate`. Para `plan`/`apply`, forneca credenciais AWS validas e um valor para `trusted_principal_arns`.

@@ -1,55 +1,50 @@
-provider "aws" {
-  region = var.aws_region
-}
-
 data "aws_iam_policy_document" "assume_role" {
   statement {
-    sid     = "AllowTrustedPrincipalToAssumeRole"
+    sid     = "AllowTrustedPrincipalAssumeRole"
     effect  = "Allow"
     actions = ["sts:AssumeRole"]
 
     principals {
-      type        = var.trusted_principal_type
-      identifiers = var.trusted_principal_identifiers
+      type        = "AWS"
+      identifiers = [var.trusted_principal_arn]
     }
 
     dynamic "condition" {
-      for_each = var.external_id != null ? [var.external_id] : []
+      for_each = var.require_external_id ? [1] : []
       content {
         test     = "StringEquals"
         variable = "sts:ExternalId"
-        values   = [condition.value]
+        values   = [var.external_id]
       }
     }
   }
 }
 
-data "aws_iam_policy_document" "permissions" {
-  statement {
-    sid       = "AllowConfiguredActionsOnConfiguredResources"
-    effect    = "Allow"
-    actions   = var.allowed_actions
-    resources = var.allowed_resources
-  }
-}
-
 resource "aws_iam_role" "this" {
   name                 = var.role_name
-  path                 = var.path
+  path                 = var.role_path
   description          = var.role_description
   assume_role_policy    = data.aws_iam_policy_document.assume_role.json
-  max_session_duration = var.max_session_duration
-  force_detach_policies = var.force_detach_policies
-  permissions_boundary  = var.permissions_boundary_arn
+  max_session_duration  = var.max_session_duration
+  force_detach_policies = true
 
   tags = var.tags
 }
 
+data "aws_iam_policy_document" "this" {
+  statement {
+    sid       = "AllowConfiguredActionsOnConfiguredResources"
+    effect    = "Allow"
+    actions   = var.policy_actions
+    resources = var.policy_resources
+  }
+}
+
 resource "aws_iam_policy" "this" {
   name        = var.policy_name
-  path        = var.path
+  path        = var.role_path
   description = var.policy_description
-  policy      = data.aws_iam_policy_document.permissions.json
+  policy      = data.aws_iam_policy_document.this.json
 
   tags = var.tags
 }

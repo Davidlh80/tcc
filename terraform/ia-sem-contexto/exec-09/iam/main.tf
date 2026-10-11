@@ -1,67 +1,52 @@
-terraform {
-  required_version = ">= 1.5.0"
-}
+data "aws_iam_policy_document" "assume_role" {
+  statement {
+    sid     = "AllowConfiguredPrincipalsToAssumeRole"
+    effect  = "Allow"
+    actions = ["sts:AssumeRole"]
 
-provider "aws" {
-  region = var.aws_region
-}
+    principals {
+      type        = "AWS"
+      identifiers = var.trusted_principal_arns
+    }
 
-locals {
-  assume_role_statement = merge(
-    {
-      Sid       = "AllowTrustedPrincipalAssumeRole"
-      Effect    = "Allow"
-      Principal = { Service = var.trusted_principal_service }
-      Action    = "sts:AssumeRole"
-    },
-    var.external_id != null ? {
-      Condition = {
-        StringEquals = {
-          "sts:ExternalId" = var.external_id
-        }
+    dynamic "condition" {
+      for_each = var.external_id != null ? [var.external_id] : []
+      content {
+        test     = "StringEquals"
+        variable = "sts:ExternalId"
+        values   = [condition.value]
       }
-    } : {}
-  )
-
-  common_tags = merge(
-    {
-      ManagedBy = "Terraform"
-      Component = "iam-role-policy"
-    },
-    var.tags
-  )
+    }
+  }
 }
 
 resource "aws_iam_role" "this" {
   name                 = var.role_name
+  path                 = var.role_path
   description          = var.role_description
+  assume_role_policy    = data.aws_iam_policy_document.assume_role.json
   max_session_duration = var.max_session_duration
+  permissions_boundary = var.permissions_boundary_arn
 
-  assume_role_policy = jsonencode({
-    Version   = "2012-10-17"
-    Statement = [local.assume_role_statement]
-  })
+  tags = var.tags
+}
 
-  tags = local.common_tags
+data "aws_iam_policy_document" "permissions" {
+  statement {
+    sid       = "AllowConfiguredActionsOnConfiguredResources"
+    effect    = "Allow"
+    actions   = var.allowed_actions
+    resources = var.allowed_resources
+  }
 }
 
 resource "aws_iam_policy" "this" {
   name        = var.policy_name
+  path        = var.role_path
   description = var.policy_description
+  policy      = data.aws_iam_policy_document.permissions.json
 
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Sid      = "AllowScopedActions"
-        Effect   = "Allow"
-        Action   = var.policy_actions
-        Resource = var.policy_resources
-      }
-    ]
-  })
-
-  tags = local.common_tags
+  tags = var.tags
 }
 
 resource "aws_iam_role_policy_attachment" "this" {

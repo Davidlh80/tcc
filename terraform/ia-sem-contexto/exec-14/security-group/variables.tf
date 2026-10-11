@@ -1,16 +1,16 @@
-variable "aws_region" {
-  description = "Regiao AWS onde os recursos serao criados."
+variable "region" {
+  description = "Região AWS onde os recursos serão criados."
   type        = string
   default     = "us-east-1"
 }
 
 variable "vpc_id" {
-  description = "ID da VPC onde o Security Group sera criado."
+  description = "ID da VPC (criada pelo ambiente de teste) onde o Security Group será provisionado."
   type        = string
 
   validation {
-    condition     = length(trimspace(var.vpc_id)) > 0
-    error_message = "O valor de vpc_id nao pode ser vazio."
+    condition     = can(regex("^vpc-[a-zA-Z0-9]+$", var.vpc_id))
+    error_message = "vpc_id deve ser um ID de VPC válido, iniciando com 'vpc-'."
   }
 }
 
@@ -20,21 +20,21 @@ variable "name" {
   default     = "sg-default"
 
   validation {
-    condition     = length(trimspace(var.name)) > 0
-    error_message = "O valor de name nao pode ser vazio."
+    condition     = length(var.name) > 0 && length(var.name) <= 255
+    error_message = "name deve ter entre 1 e 255 caracteres."
   }
 }
 
 variable "description" {
-  description = "Descricao do Security Group."
+  description = "Descrição do Security Group."
   type        = string
-  default     = "Security Group gerenciado via Terraform"
+  default     = "Security Group gerenciado via Terraform."
 }
 
 variable "ingress_rules" {
-  description = "Lista de regras de entrada do Security Group. Nenhuma regra de entrada e criada por padrao."
+  description = "Lista de regras de entrada explícitas. Vazia por padrão para evitar exposição desnecessária."
   type = list(object({
-    description = string
+    description = optional(string, "")
     from_port   = number
     to_port     = number
     protocol    = string
@@ -51,9 +51,9 @@ variable "ingress_rules" {
 }
 
 variable "egress_rules" {
-  description = "Lista de regras de saida do Security Group. Por padrao, permite todo o trafego de saida."
+  description = "Lista de regras de saída explícitas. Por padrão libera apenas HTTPS (443) de saída."
   type = list(object({
-    description = string
+    description = optional(string, "")
     from_port   = number
     to_port     = number
     protocol    = string
@@ -61,10 +61,10 @@ variable "egress_rules" {
   }))
   default = [
     {
-      description = "Permite todo o trafego de saida"
-      from_port   = 0
-      to_port     = 0
-      protocol    = "-1"
+      description = "Permite trafego HTTPS de saida"
+      from_port   = 443
+      to_port     = 443
+      protocol    = "tcp"
       cidr_blocks = ["0.0.0.0/0"]
     }
   ]
@@ -78,7 +78,7 @@ variable "egress_rules" {
 }
 
 variable "tags" {
-  description = "Tags adicionais aplicadas ao Security Group."
+  description = "Tags adicionais a serem aplicadas ao Security Group."
   type        = map(string)
   default     = {}
 }

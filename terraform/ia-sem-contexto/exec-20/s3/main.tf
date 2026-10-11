@@ -1,33 +1,14 @@
-terraform {
-  required_version = ">= 1.5.0"
-}
-
-provider "aws" {
-  region = var.aws_region
-}
-
-locals {
-  common_tags = merge(
-    var.tags,
-    {
-      ManagedBy = "Terraform"
-    }
-  )
-}
-
 resource "aws_s3_bucket" "this" {
-  bucket        = var.bucket_name
-  force_destroy = var.force_destroy
+  bucket = var.bucket_name
 
-  tags = local.common_tags
-}
-
-resource "aws_s3_bucket_ownership_controls" "this" {
-  bucket = aws_s3_bucket.this.id
-
-  rule {
-    object_ownership = "BucketOwnerEnforced"
-  }
+  tags = merge(
+    {
+      Name        = var.bucket_name
+      Environment = var.environment
+      ManagedBy   = "terraform"
+    },
+    var.tags
+  )
 }
 
 resource "aws_s3_bucket_public_access_block" "this" {
@@ -37,14 +18,6 @@ resource "aws_s3_bucket_public_access_block" "this" {
   block_public_policy     = true
   ignore_public_acls      = true
   restrict_public_buckets = true
-}
-
-resource "aws_s3_bucket_versioning" "this" {
-  bucket = aws_s3_bucket.this.id
-
-  versioning_configuration {
-    status = var.enable_versioning ? "Enabled" : "Suspended"
-  }
 }
 
 resource "aws_s3_bucket_server_side_encryption_configuration" "this" {
@@ -59,16 +32,18 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "this" {
   }
 }
 
-resource "aws_s3_bucket_lifecycle_configuration" "this" {
-  count  = var.enable_lifecycle_rule ? 1 : 0
+resource "aws_s3_bucket_versioning" "this" {
+  bucket = aws_s3_bucket.this.id
+
+  versioning_configuration {
+    status = var.versioning_enabled ? "Enabled" : "Suspended"
+  }
+}
+
+resource "aws_s3_bucket_ownership_controls" "this" {
   bucket = aws_s3_bucket.this.id
 
   rule {
-    id     = "abort-incomplete-multipart-uploads"
-    status = "Enabled"
-
-    abort_incomplete_multipart_upload {
-      days_after_initiation = var.abort_incomplete_multipart_upload_days
-    }
+    object_ownership = "BucketOwnerEnforced"
   }
 }

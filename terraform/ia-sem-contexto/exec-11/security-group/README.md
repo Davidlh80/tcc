@@ -1,69 +1,88 @@
-# Security Group (AWS)
+# Security Group — Blueprint Terraform
 
-Blueprint Terraform para provisionamento de um Security Group na AWS, associado a uma VPC informada via variavel.
+Blueprint Terraform para provisionamento de um Security Group na AWS, com regras explícitas de entrada e saída, VPC configurável e tags customizáveis.
+
+## Recursos criados
+
+- `aws_security_group.this`: Security Group com regras de ingress e egress definidas dinamicamente a partir de variáveis.
+
+## Pré-requisitos
+
+- Terraform `>= 1.5.0`
+- Provider AWS `~> 5.0`
+- Uma VPC previamente existente (criada pelo ambiente de teste), cujo ID deve ser informado via `var.vpc_id`.
 
 ## Uso
 
-```
+```hcl
 module "security_group" {
   source = "./"
 
-  vpc_id      = "vpc-xxxxxxxx"
-  name        = "sg-aplicacao"
-  description = "Security Group da aplicacao"
+  region = "us-east-1"
+  vpc_id = "vpc-0123456789abcdef0"
+  name   = "sg-app-exemplo"
 
   ingress_rules = [
     {
-      description = "HTTPS de qualquer origem"
+      description = "Permite HTTPS da rede interna"
       from_port   = 443
       to_port     = 443
-      protocol    = "tcp"
-      cidr_blocks = ["0.0.0.0/0"]
-    },
-    {
-      description = "SSH restrito a rede interna"
-      from_port   = 22
-      to_port     = 22
       protocol    = "tcp"
       cidr_blocks = ["10.0.0.0/16"]
     }
   ]
 
+  egress_rules = [
+    {
+      description = "Permite HTTPS de saida"
+      from_port   = 443
+      to_port     = 443
+      protocol    = "tcp"
+      cidr_blocks = ["0.0.0.0/0"]
+    }
+  ]
+
   tags = {
-    Environment = "dev"
-    Owner       = "equipe-infra"
+    Ambiente = "teste"
+    Projeto  = "tcc"
   }
 }
 ```
 
-## Requisitos
+## Boas práticas aplicadas
 
-- Terraform >= 1.5.0
-- Provider AWS ~> 5.0
+- Nenhuma regra de **entrada** permite o CIDR irrestrito `0.0.0.0/0` (validado via `validation` na variável `ingress_rules`).
+- Regras de entrada e saída são explícitas, por porta e protocolo, evitando liberação ampla desnecessária (ex.: `-1`/todas as portas).
+- O ID da VPC é configurável por variável e validado por formato (`vpc-xxxxxxxx`), permitindo uso em qualquer VPC do ambiente de teste.
+- Tags obrigatórias (`Name`) e customizáveis (`var.tags`) são aplicadas ao recurso.
+- `lifecycle.create_before_destroy` evita indisponibilidade do Security Group durante substituições.
 
 ## Inputs
 
-| Nome           | Descricao                                              | Tipo                  | Default                         |
-|----------------|---------------------------------------------------------|-----------------------|----------------------------------|
-| vpc_id         | ID da VPC onde o Security Group sera criado             | string                | (obrigatorio)                   |
-| name           | Nome do Security Group                                  | string                | "sg-default"                    |
-| description    | Descricao do Security Group                             | string                | "Security Group gerenciado via Terraform" |
-| ingress_rules  | Lista de regras de entrada (descricao, portas, protocolo, cidr_blocks) | list(object) | []                               |
-| egress_rules   | Lista de regras de saida (descricao, portas, protocolo, cidr_blocks)   | list(object) | permite todo trafego de saida    |
-| tags           | Tags adicionais aplicadas ao recurso                     | map(string)           | {}                               |
+| Nome            | Descrição                                               | Tipo           | Default                  |
+| --------------- | -------------------------------------------------------- | -------------- | ------------------------- |
+| `region`         | Região AWS onde os recursos serão provisionados          | `string`       | `"us-east-1"`             |
+| `vpc_id`         | ID da VPC onde o Security Group será criado              | `string`       | — (obrigatório)           |
+| `name`           | Nome do Security Group                                    | `string`       | `"sg-app-exemplo"`        |
+| `description`    | Descrição do Security Group                               | `string`       | ver `variables.tf`        |
+| `ingress_rules`  | Lista de regras de entrada                                 | `list(object)` | ver `variables.tf`        |
+| `egress_rules`   | Lista de regras de saída                                   | `list(object)` | ver `variables.tf`        |
+| `tags`           | Tags adicionais aplicadas ao recurso                      | `map(string)`  | `{}`                      |
 
 ## Outputs
 
-| Nome                  | Descricao                                 |
-|-----------------------|--------------------------------------------|
-| security_group_id     | ID do Security Group criado                |
-| security_group_arn    | ARN do Security Group criado               |
-| security_group_name   | Nome do Security Group criado              |
-| vpc_id                | ID da VPC associada ao Security Group      |
+| Nome                      | Descrição                                   |
+| ------------------------- | --------------------------------------------- |
+| `security_group_id`       | ID do Security Group criado                   |
+| `security_group_arn`      | ARN do Security Group criado                  |
+| `security_group_name`     | Nome do Security Group criado                 |
+| `security_group_vpc_id`   | ID da VPC associada ao Security Group         |
+| `security_group_owner_id` | ID da conta AWS proprietária do recurso       |
 
-## Boas praticas aplicadas
+## Validação
 
-- Nenhuma regra de entrada e definida por padrao (`ingress_rules = []`), evitando exposicao acidental de portas.
-- A regra de saida padrao permite todo o trafego, seguindo o comportamento padrao de Security Groups na AWS, mas pode ser sobrescrita via `egress_rules`.
-- `vpc_id` e obrigatorio e configuravel, permitindo uso em qualquer VPC, inclusive VPCs criadas por outros modulos ou ambientes de teste.
-- `create_before_destroy` habilitado no lifecycle para reduzir impacto em substituicoes do recurso.
+```bash
+terraform init -backend=false
+terraform validate
+terraform fmt -check
+```

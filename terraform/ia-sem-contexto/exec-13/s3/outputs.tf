@@ -9,16 +9,21 @@ output "bucket_arn" {
 }
 
 output "bucket_domain_name" {
-  description = "Nome de domínio do bucket S3."
+  description = "Nome de dominio do bucket S3."
   value       = aws_s3_bucket.this.bucket_domain_name
 }
 
 output "bucket_regional_domain_name" {
-  description = "Nome de domínio regional do bucket S3."
+  description = "Nome de dominio regional do bucket S3."
   value       = aws_s3_bucket.this.bucket_regional_domain_name
 }
 
-output "bucket_region" {
-  description = "Região onde o bucket foi provisionado."
-  value       = aws_s3_bucket.this.region
+output "versioning_status" {
+  description = "Status configurado para o versionamento do bucket (Enabled ou Suspended)."
+  value       = var.versioning_enabled ? "Enabled" : "Suspended"
+}
+
+output "encryption_algorithm" {
+  description = "Algoritmo de criptografia server-side aplicado ao bucket."
+  value       = var.kms_key_arn != null ? "aws:kms" : "AES256"
 }

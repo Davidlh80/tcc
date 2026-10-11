@@ -9,23 +9,13 @@ output "role_name" {
 }
 
 output "role_id" {
-  description = "ID unico interno da IAM Role."
-  value       = aws_iam_role.this.id
-}
-
-output "role_unique_id" {
-  description = "Unique ID (formato IAM) da role criada."
+  description = "ID unico da IAM Role criada."
   value       = aws_iam_role.this.unique_id
 }
 
 output "policy_arn" {
-  description = "ARN da IAM Policy criada e anexada a role."
+  description = "ARN da IAM Policy criada."
   value       = aws_iam_policy.this.arn
-}
-
-output "policy_id" {
-  description = "ID da IAM Policy criada."
-  value       = aws_iam_policy.this.id
 }
 
 output "policy_name" {
@@ -33,7 +23,12 @@ output "policy_name" {
   value       = aws_iam_policy.this.name
 }
 
+output "policy_id" {
+  description = "ID unico da IAM Policy criada."
+  value       = aws_iam_policy.this.policy_id
+}
+
 output "assume_role_policy_json" {
-  description = "Documento JSON de trust policy (assume role) renderizado para a role."
+  description = "Documento JSON da trust policy (assume role policy) aplicada a role."
   value       = data.aws_iam_policy_document.assume_role.json
 }

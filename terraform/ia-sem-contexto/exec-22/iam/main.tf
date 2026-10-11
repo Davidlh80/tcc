@@ -3,22 +3,22 @@ terraform {
 }
 
 provider "aws" {
-  region = var.region
+  region = var.aws_region
 }
 
 data "aws_iam_policy_document" "assume_role" {
   statement {
-    sid     = "AllowAssumeRoleByTrustedPrincipal"
+    sid     = "AllowAssumeRoleFromTrustedPrincipal"
     effect  = "Allow"
     actions = ["sts:AssumeRole"]
 
     principals {
-      type        = var.trusted_principal_type
-      identifiers = var.trusted_principal_identifiers
+      type        = "AWS"
+      identifiers = [var.trusted_principal_arn]
     }
 
     dynamic "condition" {
-      for_each = var.external_id != "" ? [var.external_id] : []
+      for_each = var.external_id != null ? [var.external_id] : []
       content {
         test     = "StringEquals"
         variable = "sts:ExternalId"
@@ -30,30 +30,33 @@ data "aws_iam_policy_document" "assume_role" {
 
 resource "aws_iam_role" "this" {
   name                  = var.role_name
-  path                  = var.path
+  path                  = var.role_path
   description           = var.role_description
-  assume_role_policy     = data.aws_iam_policy_document.assume_role.json
-  max_session_duration   = var.max_session_duration
-  permissions_boundary   = var.permissions_boundary_arn
-  force_detach_policies  = var.force_detach_policies
+  assume_role_policy    = data.aws_iam_policy_document.assume_role.json
+  max_session_duration  = var.max_session_duration
+  permissions_boundary  = var.permissions_boundary_arn
+  force_detach_policies = var.force_detach_policies
 
   tags = var.tags
 }
 
-data "aws_iam_policy_document" "role_policy" {
-  statement {
-    sid       = "AllowConfiguredActionsOnConfiguredResources"
-    effect    = "Allow"
-    actions   = var.allowed_actions
-    resources = var.resource_arns
+data "aws_iam_policy_document" "permissions" {
+  dynamic "statement" {
+    for_each = var.policy_statements
+    content {
+      sid       = statement.value.sid
+      effect    = statement.value.effect
+      actions   = statement.value.actions
+      resources = statement.value.resources
+    }
   }
 }
 
 resource "aws_iam_policy" "this" {
   name        = var.policy_name
-  path        = var.path
-  description = "Managed policy attached to role ${var.role_name}; scope limited to the actions and resources defined via variables."
-  policy      = data.aws_iam_policy_document.role_policy.json
+  path        = var.role_path
+  description = var.policy_description
+  policy      = data.aws_iam_policy_document.permissions.json
 
   tags = var.tags
 }

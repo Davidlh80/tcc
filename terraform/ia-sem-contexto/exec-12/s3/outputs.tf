@@ -9,11 +9,16 @@ output "bucket_arn" {
 }
 
 output "bucket_domain_name" {
-  description = "Domain name padrão do bucket S3."
+  description = "Nome de dominio do bucket S3."
   value       = aws_s3_bucket.this.bucket_domain_name
 }
 
 output "bucket_regional_domain_name" {
-  description = "Domain name regional do bucket S3."
+  description = "Nome de dominio regional do bucket S3."
   value       = aws_s3_bucket.this.bucket_regional_domain_name
+}
+
+output "versioning_status" {
+  description = "Status atual do versionamento do bucket."
+  value       = aws_s3_bucket_versioning.this.versioning_configuration[0].status
 }

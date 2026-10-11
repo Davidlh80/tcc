@@ -1,68 +1,35 @@
+variable "aws_region" {
+  description = "Regiao AWS onde os recursos IAM serao avaliados pelo provider."
+  type        = string
+  default     = "us-east-1"
+}
+
 variable "role_name" {
   description = "Nome da IAM Role a ser criada."
   type        = string
-  default     = "app-execution-role"
+  default     = "example-app-role"
+}
+
+variable "role_path" {
+  description = "Path usado tanto para a IAM Role quanto para a IAM Policy."
+  type        = string
+  default     = "/"
 }
 
 variable "role_description" {
   description = "Descricao da IAM Role."
   type        = string
-  default     = "Role de execucao com permissoes minimas definidas via Terraform."
+  default     = "Role de aplicacao com permissoes minimas definidas por configuracao."
 }
 
 variable "policy_name" {
-  description = "Nome da IAM Policy gerenciada a ser criada e anexada a role."
+  description = "Nome da IAM Policy gerenciada anexada a role."
   type        = string
-  default     = "app-execution-policy"
-}
-
-variable "policy_description" {
-  description = "Descricao da IAM Policy."
-  type        = string
-  default     = "Policy com permissoes minimas necessarias para a role associada."
-}
-
-variable "path" {
-  description = "Path da IAM Role e da IAM Policy."
-  type        = string
-  default     = "/"
-}
-
-variable "trusted_principal_type" {
-  description = "Tipo do principal de confianca no trust policy (Service ou AWS)."
-  type        = string
-  default     = "Service"
-
-  validation {
-    condition     = contains(["Service", "AWS"], var.trusted_principal_type)
-    error_message = "trusted_principal_type deve ser \"Service\" ou \"AWS\"."
-  }
-}
-
-variable "trusted_principal_identifiers" {
-  description = "Lista de identificadores do principal de confianca (ex: [\"ec2.amazonaws.com\"] para Service, ou [\"arn:aws:iam::123456789012:root\"] para AWS)."
-  type        = list(string)
-
-  validation {
-    condition     = length(var.trusted_principal_identifiers) > 0
-    error_message = "trusted_principal_identifiers deve conter ao menos um identificador."
-  }
-}
-
-variable "external_id" {
-  description = "External ID exigido no assume role, usado em cenarios de confianca entre contas. Deixe null para nao exigir."
-  type        = string
-  default     = null
-}
-
-variable "require_mfa" {
-  description = "Se true, exige MFA presente na sessao para assumir a role (aplicavel principalmente quando o principal e do tipo AWS)."
-  type        = bool
-  default     = false
+  default     = "example-app-policy"
 }
 
 variable "max_session_duration" {
-  description = "Duracao maxima, em segundos, da sessao assumida da role."
+  description = "Duracao maxima (em segundos) de uma sessao assumida da role."
   type        = number
   default     = 3600
 
@@ -72,40 +39,68 @@ variable "max_session_duration" {
   }
 }
 
-variable "permissions_boundary_arn" {
-  description = "ARN opcional de uma permissions boundary a ser aplicada na role."
-  type        = string
-  default     = null
-}
-
-variable "allowed_actions" {
-  description = "Lista de acoes IAM permitidas na policy anexada a role. Evite wildcards amplos (ex: \"*\")."
-  type        = list(string)
-  default = [
-    "logs:CreateLogGroup",
-    "logs:CreateLogStream",
-    "logs:PutLogEvents",
-  ]
-}
-
-variable "allowed_resource_arns" {
-  description = "Lista de ARNs de recursos aos quais as allowed_actions se aplicam. Nao deve conter \"*\" em ambientes de producao."
+variable "trusted_principal_arns" {
+  description = "Lista de ARNs de principals (contas, roles ou usuarios) autorizados a assumir a role. Nao pode conter '*' ou ARNs de conta com wildcard."
   type        = list(string)
 
   validation {
-    condition     = length(var.allowed_resource_arns) > 0
-    error_message = "allowed_resource_arns deve conter ao menos um ARN de recurso."
+    condition     = length(var.trusted_principal_arns) > 0
+    error_message = "trusted_principal_arns deve conter ao menos um principal."
+  }
+
+  validation {
+    condition = alltrue([
+      for arn in var.trusted_principal_arns :
+      arn != "*" && !can(regex("^arn:aws:iam::\\*:", arn))
+    ])
+    error_message = "trusted_principal_arns nao pode conter '*' nem ARNs de conta com wildcard (arn:aws:iam::*:...)."
   }
 }
 
-variable "denied_actions" {
-  description = "Lista opcional de acoes explicitamente negadas (Deny) sobre todos os recursos, como camada extra de protecao."
+variable "external_id" {
+  description = "ExternalId opcional exigido na trust policy para mitigar o problema do 'confused deputy'. Deixe null para nao exigir."
+  type        = string
+  default     = null
+  sensitive   = true
+}
+
+variable "allowed_actions" {
+  description = "Lista de acoes IAM permitidas pela policy. Nao pode conter wildcard total ('*') nem acoes administrativas amplas (ex.: 'iam:*')."
   type        = list(string)
-  default     = []
+  default     = ["s3:GetObject", "s3:ListBucket"]
+
+  validation {
+    condition     = length(var.allowed_actions) > 0
+    error_message = "allowed_actions deve conter ao menos uma acao."
+  }
+
+  validation {
+    condition = alltrue([
+      for action in var.allowed_actions :
+      action != "*" && !can(regex("^[A-Za-z0-9]+:\\*$", action))
+    ])
+    error_message = "allowed_actions nao pode conter '*' nem wildcard de servico completo (ex.: 'iam:*', 's3:*')."
+  }
+}
+
+variable "resource_arns" {
+  description = "Lista de ARNs de recursos aos quais as acoes permitidas se aplicam. Nao pode conter '*'."
+  type        = list(string)
+  default     = ["arn:aws:s3:::example-bucket", "arn:aws:s3:::example-bucket/*"]
+
+  validation {
+    condition     = length(var.resource_arns) > 0
+    error_message = "resource_arns deve conter ao menos um recurso."
+  }
+
+  validation {
+    condition     = !contains(var.resource_arns, "*")
+    error_message = "resource_arns nao pode conter '*'."
+  }
 }
 
 variable "tags" {
-  description = "Tags adicionais aplicadas a role e a policy."
+  description = "Tags aplicadas a role e a policy."
   type        = map(string)
   default     = {}
 }

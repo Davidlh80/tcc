@@ -1,58 +1,24 @@
-# Security Group
+# Security Group - Blueprint Terraform
 
-Blueprint Terraform para provisionamento de um Security Group na AWS, associado a uma VPC configuravel via variavel.
+## Descricao
 
-## Recursos criados
+Este modulo provisiona um Security Group na AWS dentro de uma VPC especifica, informada via variavel. Nenhuma regra de entrada ou saida e criada por padrao: todas as regras devem ser declaradas explicitamente pelo consumidor do modulo, evitando aberturas irrestritas (como `0.0.0.0/0` em todas as portas) sem necessidade real.
 
-- `aws_security_group.this`: Security Group com regras de entrada e saida configuraveis via variaveis.
+## Requisitos
 
-## Postura de seguranca
+- Terraform >= 1.5.0
+- Provider AWS >= 5.0
+- Uma VPC existente (preferencialmente criada pelo proprio ambiente, nao a VPC default da conta)
 
-- Por padrao, nenhuma regra de entrada e criada (`ingress_rules = []`), evitando exposicao acidental de portas.
-- Por padrao, o trafego de saida e liberado totalmente (`0.0.0.0/0`), padrao comum em ambientes AWS. Restrinja `egress_rules` se necessario para o seu caso de uso.
-- Nenhum CIDR aberto (`0.0.0.0/0`) e definido por padrao para entrada. Ao configurar `ingress_rules`, evite usar `0.0.0.0/0` em portas sensiveis (ex.: 22, 3389) e prefira CIDRs restritos.
-
-## Variaveis
-
-| Nome            | Descricao                                              | Tipo                 | Padrao                          |
-|-----------------|---------------------------------------------------------|----------------------|----------------------------------|
-| `vpc_id`        | ID da VPC onde o Security Group sera criado             | `string`             | (obrigatorio)                    |
-| `name`          | Nome do Security Group                                   | `string`             | `"app-sg"`                        |
-| `description`   | Descricao do Security Group                              | `string`             | `"Security Group gerenciado via Terraform"` |
-| `ingress_rules` | Lista de regras de entrada                                | `list(object)`       | `[]`                               |
-| `egress_rules`  | Lista de regras de saida                                  | `list(object)`       | libera todo trafego de saida     |
-| `tags`          | Tags adicionais                                           | `map(string)`        | `{}`                               |
-
-### Formato de cada regra (`ingress_rules` / `egress_rules`)
+## Uso
 
 ```
-{
-  description = string (opcional)
-  from_port   = number
-  to_port     = number
-  protocol    = string
-  cidr_blocks = list(string)
-}
-```
-
-## Outputs
-
-| Nome                  | Descricao                                |
-|-----------------------|--------------------------------------------|
-| `security_group_id`   | ID do Security Group criado                |
-| `security_group_arn`  | ARN do Security Group criado               |
-| `security_group_name` | Nome do Security Group criado              |
-| `vpc_id`               | ID da VPC associada ao Security Group      |
-
-## Exemplo de uso
-
-```hcl
-module "sg" {
+module "security_group" {
   source = "./"
 
   vpc_id      = "vpc-0123456789abcdef0"
-  name        = "web-sg"
-  description = "Security Group para servidores web"
+  name        = "sg-app-web"
+  description = "Security Group para a camada web da aplicacao"
 
   ingress_rules = [
     {
@@ -60,15 +26,56 @@ module "sg" {
       from_port   = 443
       to_port     = 443
       protocol    = "tcp"
-      cidr_blocks = ["203.0.113.0/24"]
+      cidr_blocks = ["0.0.0.0/0"]
+    },
+    {
+      description = "SSH restrito a rede corporativa"
+      from_port   = 22
+      to_port     = 22
+      protocol    = "tcp"
+      cidr_blocks = ["10.0.0.0/16"]
+    }
+  ]
+
+  egress_rules = [
+    {
+      description = "Saida HTTPS para atualizacoes e APIs externas"
+      from_port   = 443
+      to_port     = 443
+      protocol    = "tcp"
+      cidr_blocks = ["0.0.0.0/0"]
     }
   ]
 
   tags = {
-    Environment = "producao"
+    Environment = "dev"
+    Owner       = "equipe-plataforma"
   }
 }
 ```
+
+## Variaveis
+
+| Nome            | Descricao                                                                 | Tipo   | Padrao          | Obrigatorio |
+|-----------------|-----------------------------------------------------------------------------|--------|-----------------|-------------|
+| aws_region      | Regiao AWS utilizada pelo provider                                         | string | "us-east-1"     | nao         |
+| vpc_id          | ID da VPC onde o Security Group sera criado                                | string | -               | sim         |
+| name            | Nome do Security Group                                                     | string | "sg-app"        | nao         |
+| description     | Descricao do Security Group                                                | string | ver variables.tf| nao         |
+| ingress_rules   | Lista de regras de entrada explicitas                                      | list(object) | []        | nao         |
+| egress_rules    | Lista de regras de saida explicitas                                        | list(object) | []        | nao         |
+| tags            | Tags adicionais aplicadas ao recurso                                        | map(string) | {}         | nao         |
+
+Cada item de `ingress_rules` e `egress_rules` aceita os campos: `description`, `from_port`, `to_port`, `protocol`, `cidr_blocks` (opcional) e `security_groups` (opcional, para referenciar outro Security Group como origem/destino).
+
+## Outputs
+
+| Nome                 | Descricao                                   |
+|----------------------|----------------------------------------------|
+| security_group_id    | ID do Security Group criado                  |
+| security_group_arn   | ARN do Security Group criado                  |
+| security_group_name  | Nome do Security Group criado                 |
+| vpc_id               | ID da VPC associada ao Security Group         |
 
 ## Validacao
 
@@ -76,3 +83,10 @@ module "sg" {
 terraform init -backend=false
 terraform validate
 ```
+
+## Boas praticas aplicadas
+
+- Nenhuma regra de entrada/saida e criada por padrao, exigindo declaracao explicita.
+- Validacao de formato do `vpc_id` e de consistencia de portas nas regras.
+- Uso de `security_groups` como origem/destino, permitindo restringir o trafego a outros Security Groups em vez de CIDRs amplos quando aplicavel.
+- Tags consistentes, com `Name` derivado automaticamente da variavel `name` e combinavel com tags adicionais.
