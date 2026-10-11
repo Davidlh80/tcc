@@ -146,6 +146,12 @@ Você pode usar uma destas duas opções:
 
 Para este TCC, a opção mais prática costuma ser a de colaboradores quando o grupo for pequeno e próximo.
 
+## Uso de ferramentas de IA (cenário manual)
+
+Você pode usar qualquer ferramenta de apoio, incluindo assistentes de IA, para tirar dúvidas, pedir sugestões de trechos ou ajudar a depurar erros. O que não é permitido é pedir a um assistente de IA para gerar o template completo e simplesmente copiá-lo: a estrutura, as decisões de implementação e o código final precisam ser compreendidos, revisados e assumidos por você. Declare no formulário de coleta se usou alguma ferramenta de IA e para que a usou.
+
+Esta regra vale a partir do participante p08; os participantes p01 a p07 foram coletados sob a orientação anterior e não têm esse campo preenchido no formulário.
+
 ## Formulário de coleta
 
-Registrar recurso, horários, pausas, dificuldade percebida, experiência prévia com Terraform/IaC e observações relevantes para a análise comparativa.
+Registrar recurso, horários, pausas, dificuldade percebida, experiência prévia com Terraform/IaC, uso de ferramentas de IA (se houve, qual e para quê) e observações relevantes para a análise comparativa.
