@@ -1,29 +1,52 @@
 variable "aws_region" {
-  description = "Regiao AWS onde o provider ira operar."
   type        = string
+  description = "Região AWS onde os recursos IAM serão provisionados (IAM é global, mas o provider exige uma região)."
   default     = "us-east-1"
 }
 
 variable "role_name" {
-  description = "Nome da IAM Role a ser criada."
   type        = string
-  default     = "app-role"
-
-  validation {
-    condition     = can(regex("^[\\w+=,.@-]{1,64}$", var.role_name))
-    error_message = "role_name deve ter entre 1 e 64 caracteres validos para nomes de IAM Role (letras, numeros e + = , . @ _ -)."
-  }
+  description = "Nome da IAM Role a ser criada."
+  default     = "example-role"
 }
 
 variable "role_description" {
-  description = "Descricao da IAM Role."
   type        = string
-  default     = "Role de aplicacao com permissoes minimas de logging."
+  description = "Descrição da IAM Role."
+  default     = "Role de exemplo com permissoes escopadas e trust policy restrita."
+}
+
+variable "policy_name" {
+  type        = string
+  description = "Nome da IAM Policy a ser criada e anexada à role."
+  default     = "example-policy"
+}
+
+variable "policy_description" {
+  type        = string
+  description = "Descrição da IAM Policy."
+  default     = "Policy de exemplo com permissoes minimas, sem wildcard amplo."
+}
+
+variable "trusted_principal_arn" {
+  type        = string
+  description = "ARN do principal IAM (conta root, role ou user) autorizado a assumir esta role. Nao e permitido usar wildcard (\"*\")."
+
+  validation {
+    condition     = var.trusted_principal_arn != "*" && can(regex("^arn:aws:iam::[0-9]{12}:(root|(role|user)/.+)$", var.trusted_principal_arn))
+    error_message = "trusted_principal_arn deve ser um ARN IAM especifico (root, role ou user) e nao pode ser \"*\"."
+  }
+}
+
+variable "external_id" {
+  type        = string
+  description = "ExternalId opcional exigido na assume role policy (condicao sts:ExternalId). Use null para desabilitar."
+  default     = null
 }
 
 variable "max_session_duration" {
-  description = "Duracao maxima (em segundos) da sessao assumida via sts:AssumeRole."
   type        = number
+  description = "Duracao maxima (em segundos) de uma sessao assumida da role."
   default     = 3600
 
   validation {
@@ -32,70 +55,30 @@ variable "max_session_duration" {
   }
 }
 
-variable "permissions_boundary_arn" {
-  description = "ARN de uma policy a ser usada como permissions boundary da role. Deixe null para nao aplicar boundary."
-  type        = string
-  default     = null
-}
-
-variable "force_detach_policies" {
-  description = "Se verdadeiro, forca o desanexo de policies ao destruir a role."
-  type        = bool
-  default     = true
-}
-
-variable "trusted_service_principals" {
-  description = "Lista de service principals da AWS autorizados a assumir a role (ex.: ec2.amazonaws.com). Pelo menos um principal (service ou AWS) deve ser informado."
+variable "policy_actions" {
   type        = list(string)
-  default     = ["ec2.amazonaws.com"]
-}
-
-variable "trusted_aws_principals" {
-  description = "Lista de ARNs de contas ou principals AWS autorizados a assumir a role. Pelo menos um principal (service ou AWS) deve ser informado."
-  type        = list(string)
-  default     = []
-}
-
-variable "policy_name" {
-  description = "Nome da IAM Policy a ser criada e anexada a role."
-  type        = string
-  default     = "app-role-policy"
+  description = "Lista de actions IAM permitidas pela policy. Nao pode ficar vazia nem conter wildcard amplo (\"*\")."
+  default     = ["s3:GetObject", "s3:ListBucket"]
 
   validation {
-    condition     = can(regex("^[\\w+=,.@-]{1,128}$", var.policy_name))
-    error_message = "policy_name deve ter entre 1 e 128 caracteres validos para nomes de IAM Policy (letras, numeros e + = , . @ _ -)."
+    condition     = length(var.policy_actions) > 0 && !contains(var.policy_actions, "*")
+    error_message = "policy_actions nao pode ser vazio e nao pode conter o wildcard \"*\"."
   }
 }
 
-variable "policy_description" {
-  description = "Descricao da IAM Policy."
-  type        = string
-  default     = "Policy com permissoes minimas de CloudWatch Logs, escopada a um log group especifico."
-}
-
-variable "log_group_name" {
-  description = "Nome do CloudWatch Log Group ao qual as permissoes da policy serao restritas."
-  type        = string
-  default     = "/app/example"
-}
-
-variable "policy_actions" {
-  description = "Lista de actions IAM permitidas pela policy, restritas ao recurso definido por log_group_name. Nao utilize wildcards amplos (ex.: \"*\")."
+variable "policy_resources" {
   type        = list(string)
-  default = [
-    "logs:CreateLogGroup",
-    "logs:CreateLogStream",
-    "logs:PutLogEvents",
-  ]
+  description = "Lista de ARNs de recursos aos quais as actions se aplicam. Nao pode ficar vazia nem conter wildcard amplo (\"*\")."
+  default     = ["arn:aws:s3:::example-bucket", "arn:aws:s3:::example-bucket/*"]
 
   validation {
-    condition     = length(var.policy_actions) > 0
-    error_message = "policy_actions deve conter ao menos uma action."
+    condition     = length(var.policy_resources) > 0 && !contains(var.policy_resources, "*")
+    error_message = "policy_resources nao pode ser vazio e nao pode conter o wildcard \"*\"."
   }
 }
 
 variable "tags" {
-  description = "Tags aplicadas a role e a policy."
   type        = map(string)
+  description = "Tags aplicadas aos recursos IAM suportados (role e policy)."
   default     = {}
 }

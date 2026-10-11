@@ -8,9 +8,9 @@ output "role_name" {
   value       = aws_iam_role.this.name
 }
 
-output "role_unique_id" {
+output "role_id" {
   description = "ID unico da IAM Role criada."
-  value       = aws_iam_role.this.unique_id
+  value       = aws_iam_role.this.id
 }
 
 output "policy_arn" {
@@ -23,7 +23,12 @@ output "policy_name" {
   value       = aws_iam_policy.this.name
 }
 
+output "policy_id" {
+  description = "ID unico da IAM Policy criada."
+  value       = aws_iam_policy.this.id
+}
+
 output "assume_role_policy_json" {
-  description = "Documento JSON do assume role policy aplicado a role (trust policy)."
+  description = "Documento JSON da trust policy (assume role policy) aplicada a role."
   value       = data.aws_iam_policy_document.assume_role.json
 }

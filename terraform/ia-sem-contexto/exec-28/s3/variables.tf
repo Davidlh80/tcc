@@ -1,39 +1,44 @@
 variable "bucket_name" {
+  description = "Nome globalmente unico do bucket S3 a ser criado."
   type        = string
-  description = "Nome global do bucket S3 (deve seguir as regras de nomenclatura da AWS)."
 
   validation {
-    condition     = can(regex("^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$", var.bucket_name))
-    error_message = "bucket_name deve ter entre 3 e 63 caracteres, apenas letras minusculas, numeros, pontos e hifens, comecando e terminando com letra ou numero."
+    condition     = length(var.bucket_name) >= 3 && length(var.bucket_name) <= 63
+    error_message = "O nome do bucket deve ter entre 3 e 63 caracteres."
   }
 }
 
-variable "environment" {
-  type        = string
-  description = "Nome do ambiente (ex: dev, staging, prod), usado apenas para tags."
-  default     = "dev"
-}
-
-variable "enable_versioning" {
+variable "versioning_enabled" {
+  description = "Define se o versionamento de objetos do bucket deve ficar habilitado."
   type        = bool
-  description = "Habilita versionamento de objetos no bucket."
   default     = true
 }
 
-variable "kms_key_arn" {
+variable "sse_algorithm" {
+  description = "Algoritmo de criptografia server-side padrao do bucket. Valores aceitos: AES256 ou aws:kms."
   type        = string
-  description = "ARN de uma chave KMS customer-managed para criptografia SSE-KMS. Se nulo, usa criptografia SSE-S3 (AES256)."
+  default     = "AES256"
+
+  validation {
+    condition     = contains(["AES256", "aws:kms"], var.sse_algorithm)
+    error_message = "sse_algorithm deve ser \"AES256\" ou \"aws:kms\"."
+  }
+}
+
+variable "kms_key_arn" {
+  description = "ARN da chave KMS usada para criptografia quando sse_algorithm for \"aws:kms\". Ignorado para AES256."
+  type        = string
   default     = null
 }
 
 variable "force_destroy" {
+  description = "Permite destruir o bucket mesmo que contenha objetos. Use com cautela."
   type        = bool
-  description = "Permite destruir o bucket mesmo que contenha objetos. Recomendado manter false em producao."
   default     = false
 }
 
 variable "tags" {
+  description = "Mapa de tags adicionais a serem aplicadas ao bucket."
   type        = map(string)
-  description = "Tags adicionais a serem aplicadas ao bucket."
   default     = {}
 }

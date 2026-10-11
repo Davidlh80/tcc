@@ -1,65 +1,61 @@
-# Blueprint Terraform — Amazon S3 Bucket
+# Blueprint Terraform - Bucket S3
 
-Blueprint autônomo, sem vínculo com padrões organizacionais específicos, para provisionamento de um bucket Amazon S3 seguro por padrão.
+Blueprint para provisionamento de um bucket Amazon S3 seguro por padrao, com bloqueio de acesso publico, criptografia obrigatoria, versionamento configuravel e tags.
 
 ## Recursos criados
 
-- `aws_s3_bucket` — bucket S3 principal.
-- `aws_s3_bucket_ownership_controls` — força `BucketOwnerEnforced`, desabilitando ACLs.
-- `aws_s3_bucket_public_access_block` — bloqueia acesso público (ACLs e políticas), habilitado por padrão.
-- `aws_s3_bucket_versioning` — versionamento de objetos, habilitado por padrão.
-- `aws_s3_bucket_server_side_encryption_configuration` — criptografia server-side padrão (AES256 ou aws:kms), com `bucket_key_enabled = true`.
-
-## Decisões de segurança padrão
-
-- Acesso público totalmente bloqueado (`block_public_access = true`).
-- ACLs desabilitadas via `BucketOwnerEnforced` (o proprietário do bucket é sempre o dono dos objetos).
-- Criptografia server-side habilitada por padrão com AES256; suporte a KMS via variável.
-- Versionamento habilitado por padrão para proteção contra sobrescrita/exclusão acidental.
-- `force_destroy = false` por padrão, evitando exclusão acidental de dados em produção.
+- `aws_s3_bucket.this` - bucket S3 principal.
+- `aws_s3_bucket_versioning.this` - controla o versionamento do bucket.
+- `aws_s3_bucket_server_side_encryption_configuration.this` - criptografia do lado do servidor (AES256 por padrao, ou SSE-KMS se `kms_key_arn` for informado).
+- `aws_s3_bucket_public_access_block.this` - bloqueia todo acesso publico ao bucket.
+- `aws_s3_bucket_ownership_controls.this` - forca propriedade do bucket sobre os objetos, desabilitando ACLs.
 
 ## Uso
 
 ```
 module "s3_bucket" {
-  source      = "./"
-  bucket_name = "meu-bucket-exemplo-12345"
-  environment = "prod"
+  source       = "./"
+  bucket_name  = "meu-bucket-exemplo-123"
+  project_name = "meu-projeto"
+
+  enable_versioning = true
 
   tags = {
-    Owner = "time-plataforma"
+    Owner = "equipe-plataforma"
   }
 }
 ```
 
-## Inputs
+## Variaveis principais
 
-| Nome                  | Descrição                                                        | Tipo          | Default       |
-|-----------------------|-------------------------------------------------------------------|---------------|---------------|
-| aws_region            | Região AWS de provisionamento                                     | string        | "us-east-1"   |
-| bucket_name           | Nome globalmente único do bucket                                  | string        | (obrigatório) |
-| environment           | Nome do ambiente, usado em tags                                   | string        | "dev"         |
-| tags                  | Tags adicionais                                                   | map(string)   | {}            |
-| force_destroy         | Permite destruir bucket com objetos                               | bool          | false         |
-| enable_versioning     | Habilita versionamento                                             | bool          | true          |
-| block_public_access   | Bloqueia acesso público                                            | bool          | true          |
-| sse_algorithm         | Algoritmo de criptografia padrão (AES256 ou aws:kms)              | string        | "AES256"      |
-| kms_key_arn           | ARN da chave KMS (usado apenas se sse_algorithm = "aws:kms")      | string        | null          |
+| Nome                | Descricao                                             | Default        |
+|----------------------|--------------------------------------------------------|----------------|
+| `bucket_name`        | Nome globalmente unico do bucket                       | obrigatorio    |
+| `project_name`       | Nome do projeto, usado na tag padrao `Project`          | `"sem-projeto"`|
+| `enable_versioning`  | Habilita ou suspende o versionamento                   | `true`         |
+| `kms_key_arn`        | ARN de chave KMS para SSE-KMS (opcional)               | `null`         |
+| `force_destroy`      | Permite destruir o bucket com objetos dentro            | `false`        |
+| `tags`               | Tags adicionais mescladas com as tags padrao            | `{}`           |
 
 ## Outputs
 
-| Nome                          | Descrição                                  |
-|-------------------------------|---------------------------------------------|
-| bucket_id                     | Nome (ID) do bucket criado                  |
-| bucket_arn                    | ARN do bucket criado                         |
-| bucket_domain_name            | Domain name padrão do bucket                 |
-| bucket_regional_domain_name   | Domain name regional do bucket               |
+- `bucket_id` - nome (ID) do bucket.
+- `bucket_arn` - ARN do bucket.
+- `bucket_domain_name` - dominio do bucket.
+- `bucket_regional_domain_name` - dominio regional do bucket.
+- `versioning_status` - status atual do versionamento.
 
-## Validação
+## Validacao
 
 ```
 terraform init -backend=false
 terraform validate
+terraform fmt -check
 ```
 
-Este blueprint não utiliza backend remoto e não depende de credenciais reais para validação sintática.
+## Seguranca
+
+- Acesso publico bloqueado por padrao via `aws_s3_bucket_public_access_block`.
+- Criptografia do lado do servidor obrigatoria (AES256 ou SSE-KMS).
+- ACLs desabilitadas via `BucketOwnerEnforced`, forcando controle de acesso exclusivamente por politicas IAM/bucket policy.
+- `force_destroy` desabilitado por padrao para evitar perda acidental de dados.

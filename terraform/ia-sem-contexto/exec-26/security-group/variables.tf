@@ -1,9 +1,9 @@
 variable "vpc_id" {
-  description = "ID da VPC onde o Security Group sera criado."
+  description = "ID da VPC (criada pelo ambiente de teste) onde o Security Group sera provisionado."
   type        = string
 
   validation {
-    condition     = can(regex("^vpc-[a-f0-9]+$", var.vpc_id))
+    condition     = can(regex("^vpc-[a-z0-9]+$", var.vpc_id))
     error_message = "O valor de vpc_id deve ser um ID de VPC valido, no formato vpc-xxxxxxxx."
   }
 }
@@ -11,78 +11,73 @@ variable "vpc_id" {
 variable "name" {
   description = "Nome do Security Group."
   type        = string
-  default     = "sg-managed-by-terraform"
+  default     = "sg-custom"
 }
 
 variable "description" {
   description = "Descricao do Security Group."
   type        = string
-  default     = "Security group gerenciado via Terraform"
+  default     = "Security Group gerenciado via Terraform com regras explicitas de entrada e saida."
 }
 
 variable "ingress_rules" {
-  description = "Lista de regras de entrada (ingress) do Security Group."
+  description = "Lista de regras de entrada explicitas. Vazio por padrao (sem acesso de entrada liberado)."
   type = list(object({
-    description = optional(string, "")
-    from_port   = number
-    to_port     = number
-    protocol    = string
-    cidr_blocks = list(string)
+    description      = string
+    from_port         = number
+    to_port           = number
+    protocol          = string
+    cidr_blocks       = optional(list(string), [])
+    ipv6_cidr_blocks  = optional(list(string), [])
   }))
   default = []
 
   validation {
-    condition     = alltrue([for r in var.ingress_rules : r.from_port <= r.to_port])
-    error_message = "Em cada regra de ingress_rules, from_port deve ser menor ou igual a to_port."
+    condition = alltrue([
+      for rule in var.ingress_rules : rule.from_port <= rule.to_port
+    ])
+    error_message = "Em cada regra de ingress, from_port deve ser menor ou igual a to_port."
   }
 
   validation {
     condition = alltrue([
-      for r in var.ingress_rules :
-      r.from_port >= -1 && r.from_port <= 65535 && r.to_port >= -1 && r.to_port <= 65535
+      for rule in var.ingress_rules : !contains(coalesce(rule.cidr_blocks, []), "0.0.0.0/0")
     ])
-    error_message = "As portas em ingress_rules devem estar entre -1 (todas/ICMP) e 65535."
-  }
-
-  validation {
-    condition = alltrue([
-      for r in var.ingress_rules :
-      !contains(r.cidr_blocks, "0.0.0.0/0") || (
-        (r.from_port > 22 || r.to_port < 22) &&
-        (r.from_port > 3389 || r.to_port < 3389)
-      )
-    ])
-    error_message = "Nao e permitido liberar as portas 22 (SSH) ou 3389 (RDP) para 0.0.0.0/0 em ingress_rules."
+    error_message = "Regras de ingress nao devem usar 0.0.0.0/0. Especifique CIDRs restritos."
   }
 }
 
 variable "egress_rules" {
-  description = "Lista de regras de saida (egress) do Security Group. Se vazia, nenhum trafego de saida sera permitido."
+  description = "Lista de regras de saida explicitas."
   type = list(object({
-    description = optional(string, "")
-    from_port   = number
-    to_port     = number
-    protocol    = string
-    cidr_blocks = list(string)
+    description      = string
+    from_port         = number
+    to_port           = number
+    protocol          = string
+    cidr_blocks       = optional(list(string), [])
+    ipv6_cidr_blocks  = optional(list(string), [])
   }))
-  default = []
-
-  validation {
-    condition     = alltrue([for r in var.egress_rules : r.from_port <= r.to_port])
-    error_message = "Em cada regra de egress_rules, from_port deve ser menor ou igual a to_port."
-  }
+  default = [
+    {
+      description      = "Permite saida HTTPS para a internet"
+      from_port         = 443
+      to_port           = 443
+      protocol          = "tcp"
+      cidr_blocks       = ["0.0.0.0/0"]
+      ipv6_cidr_blocks  = []
+    }
+  ]
 
   validation {
     condition = alltrue([
-      for r in var.egress_rules :
-      r.from_port >= -1 && r.from_port <= 65535 && r.to_port >= -1 && r.to_port <= 65535
+      for rule in var.egress_rules : rule.from_port <= rule.to_port
     ])
-    error_message = "As portas em egress_rules devem estar entre -1 (todas/ICMP) e 65535."
+    error_message = "Em cada regra de egress, from_port deve ser menor ou igual a to_port."
   }
 }
 
 variable "tags" {
-  description = "Tags adicionais para o Security Group."
+  description = "Tags adicionais a serem aplicadas ao Security Group."
   type        = map(string)
   default     = {}
 }

@@ -10,15 +10,13 @@ resource "aws_s3_bucket" "this" {
   bucket        = var.bucket_name
   force_destroy = var.force_destroy
 
-  tags = var.tags
-}
-
-resource "aws_s3_bucket_ownership_controls" "this" {
-  bucket = aws_s3_bucket.this.id
-
-  rule {
-    object_ownership = "BucketOwnerEnforced"
-  }
+  tags = merge(
+    {
+      Name      = var.bucket_name
+      ManagedBy = "terraform"
+    },
+    var.tags
+  )
 }
 
 resource "aws_s3_bucket_public_access_block" "this" {
@@ -43,9 +41,18 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "this" {
 
   rule {
     apply_server_side_encryption_by_default {
-      sse_algorithm     = var.kms_key_arn != null ? "aws:kms" : "AES256"
-      kms_master_key_id = var.kms_key_arn
+      sse_algorithm     = var.sse_algorithm
+      kms_master_key_id = var.sse_algorithm == "aws:kms" ? var.kms_key_id : null
     }
-    bucket_key_enabled = var.kms_key_arn != null ? true : null
+
+    bucket_key_enabled = var.sse_algorithm == "aws:kms" ? true : false
+  }
+}
+
+resource "aws_s3_bucket_ownership_controls" "this" {
+  bucket = aws_s3_bucket.this.id
+
+  rule {
+    object_ownership = "BucketOwnerEnforced"
   }
 }

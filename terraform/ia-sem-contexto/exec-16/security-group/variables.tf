@@ -1,16 +1,5 @@
-variable "region" {
-  description = "Regiao AWS onde os recursos serao provisionados."
-  type        = string
-  default     = "us-east-1"
-}
-
-variable "vpc_id" {
-  description = "ID da VPC onde o Security Group sera criado."
-  type        = string
-}
-
 variable "name" {
-  description = "Nome base do Security Group."
+  description = "Nome do Security Group."
   type        = string
   default     = "app-sg"
 }
@@ -21,8 +10,13 @@ variable "description" {
   default     = "Security Group gerenciado via Terraform"
 }
 
+variable "vpc_id" {
+  description = "ID da VPC onde o Security Group sera criado. Deve ser a VPC provisionada pelo ambiente de teste, nao a VPC default da conta."
+  type        = string
+}
+
 variable "ingress_rules" {
-  description = "Lista de regras de entrada (ingress) do Security Group."
+  description = "Lista de regras de entrada explicitas. Cada regra define protocolo, portas, CIDRs de origem e descricao."
   type = list(object({
     description = string
     from_port   = number
@@ -32,17 +26,22 @@ variable "ingress_rules" {
   }))
   default = [
     {
-      description = "Permite trafego HTTPS de dentro da VPC"
+      description = "Acesso HTTPS a partir da rede interna"
       from_port   = 443
       to_port     = 443
       protocol    = "tcp"
       cidr_blocks = ["10.0.0.0/16"]
     }
   ]
+
+  validation {
+    condition     = alltrue([for rule in var.ingress_rules : !contains(rule.cidr_blocks, "0.0.0.0/0")])
+    error_message = "Regras de entrada nao devem permitir acesso irrestrito (0.0.0.0/0)."
+  }
 }
 
 variable "egress_rules" {
-  description = "Lista de regras de saida (egress) do Security Group."
+  description = "Lista de regras de saida explicitas. Cada regra define protocolo, portas, CIDRs de destino e descricao."
   type = list(object({
     description = string
     from_port   = number
@@ -52,10 +51,10 @@ variable "egress_rules" {
   }))
   default = [
     {
-      description = "Permite todo trafego de saida"
-      from_port   = 0
-      to_port     = 0
-      protocol    = "-1"
+      description = "Saida HTTPS para atualizacoes e chamadas externas"
+      from_port   = 443
+      to_port     = 443
+      protocol    = "tcp"
       cidr_blocks = ["0.0.0.0/0"]
     }
   ]

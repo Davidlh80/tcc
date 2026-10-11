@@ -1,23 +1,12 @@
-data "aws_caller_identity" "current" {}
-
 data "aws_iam_policy_document" "assume_role" {
   statement {
-    sid     = "AllowAssumeRole"
+    sid     = "AllowConfiguredPrincipalsToAssumeRole"
     effect  = "Allow"
     actions = ["sts:AssumeRole"]
 
     principals {
-      type        = var.assume_role_principal_type
-      identifiers = var.assume_role_principal_identifiers
-    }
-
-    dynamic "condition" {
-      for_each = var.assume_role_external_id != null ? [var.assume_role_external_id] : []
-      content {
-        test     = "StringEquals"
-        variable = "sts:ExternalId"
-        values   = [condition.value]
-      }
+      type        = "AWS"
+      identifiers = var.trusted_principal_arns
     }
   }
 }
@@ -25,44 +14,29 @@ data "aws_iam_policy_document" "assume_role" {
 resource "aws_iam_role" "this" {
   name                 = var.role_name
   path                 = var.path
-  description          = var.description
-  assume_role_policy    = data.aws_iam_policy_document.assume_role.json
-  max_session_duration  = var.max_session_duration
-  force_detach_policies = var.force_detach_policies
-  permissions_boundary  = var.permissions_boundary_arn
+  description          = var.role_description
+  assume_role_policy   = data.aws_iam_policy_document.assume_role.json
+  max_session_duration = var.max_session_duration
 
-  tags = merge(
-    {
-      "ManagedBy" = "terraform"
-    },
-    var.tags
-  )
+  tags = var.tags
 }
 
-data "aws_iam_policy_document" "this" {
-  dynamic "statement" {
-    for_each = var.policy_statements
-    content {
-      sid       = statement.value.sid
-      effect    = statement.value.effect
-      actions   = statement.value.actions
-      resources = statement.value.resources
-    }
+data "aws_iam_policy_document" "permissions" {
+  statement {
+    sid       = "AllowConfiguredActionsOnConfiguredResources"
+    effect    = "Allow"
+    actions   = var.allowed_actions
+    resources = var.allowed_resources
   }
 }
 
 resource "aws_iam_policy" "this" {
   name        = var.policy_name
   path        = var.path
-  description = "Custom least-privilege policy attached to IAM role ${var.role_name}, owned by account ${data.aws_caller_identity.current.account_id}."
-  policy      = data.aws_iam_policy_document.this.json
+  description = var.policy_description
+  policy      = data.aws_iam_policy_document.permissions.json
 
-  tags = merge(
-    {
-      "ManagedBy" = "terraform"
-    },
-    var.tags
-  )
+  tags = var.tags
 }
 
 resource "aws_iam_role_policy_attachment" "this" {

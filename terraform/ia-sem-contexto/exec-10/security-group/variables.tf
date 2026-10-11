@@ -1,27 +1,27 @@
 variable "vpc_id" {
-  description = "ID da VPC onde o Security Group sera criado."
+  description = "ID da VPC (criada pelo ambiente de teste) onde o Security Group sera provisionado."
   type        = string
 
   validation {
-    condition     = can(regex("^vpc-[a-z0-9]+$", var.vpc_id))
-    error_message = "O valor de vpc_id deve seguir o formato 'vpc-xxxxxxxx'."
+    condition     = can(regex("^vpc-", var.vpc_id))
+    error_message = "O valor de vpc_id deve ser um identificador de VPC valido, iniciando com \"vpc-\"."
   }
 }
 
 variable "name" {
   description = "Nome do Security Group."
   type        = string
-  default     = "example-sg"
+  default     = "tcc-security-group"
 }
 
 variable "description" {
   description = "Descricao do Security Group."
   type        = string
-  default     = "Security Group gerenciado via Terraform."
+  default     = "Security group gerenciado via Terraform"
 }
 
 variable "ingress_rules" {
-  description = "Lista de regras de entrada (ingress) do Security Group."
+  description = "Lista de regras de entrada explicitas. Nenhuma regra e criada por padrao."
   type = list(object({
     description = string
     from_port   = number
@@ -30,26 +30,10 @@ variable "ingress_rules" {
     cidr_blocks = list(string)
   }))
   default = []
-
-  validation {
-    condition = alltrue([
-      for rule in var.ingress_rules : contains(["tcp", "udp", "icmp", "-1"], rule.protocol)
-    ])
-    error_message = "O protocolo de cada regra de ingress deve ser um dos valores: tcp, udp, icmp ou -1."
-  }
-
-  validation {
-    condition = alltrue(flatten([
-      for rule in var.ingress_rules : [
-        for cidr in rule.cidr_blocks : can(cidrhost(cidr, 0))
-      ]
-    ]))
-    error_message = "Todos os CIDRs informados em ingress_rules devem ser blocos CIDR validos."
-  }
 }
 
 variable "egress_rules" {
-  description = "Lista de regras de saida (egress) do Security Group."
+  description = "Lista de regras de saida explicitas. Por padrao, permite apenas HTTPS (443/tcp) para a internet."
   type = list(object({
     description = string
     from_port   = number
@@ -59,29 +43,13 @@ variable "egress_rules" {
   }))
   default = [
     {
-      description = "Permite todo o trafego de saida."
-      from_port   = 0
-      to_port     = 0
-      protocol    = "-1"
+      description = "Permite trafego HTTPS de saida"
+      from_port   = 443
+      to_port     = 443
+      protocol    = "tcp"
       cidr_blocks = ["0.0.0.0/0"]
     }
   ]
-
-  validation {
-    condition = alltrue([
-      for rule in var.egress_rules : contains(["tcp", "udp", "icmp", "-1"], rule.protocol)
-    ])
-    error_message = "O protocolo de cada regra de egress deve ser um dos valores: tcp, udp, icmp ou -1."
-  }
-
-  validation {
-    condition = alltrue(flatten([
-      for rule in var.egress_rules : [
-        for cidr in rule.cidr_blocks : can(cidrhost(cidr, 0))
-      ]
-    ]))
-    error_message = "Todos os CIDRs informados em egress_rules devem ser blocos CIDR validos."
-  }
 }
 
 variable "tags" {

@@ -1,16 +1,16 @@
-terraform {
-  required_version = ">= 1.5.0"
+provider "aws" {
+  region = var.aws_region
 }
 
 data "aws_iam_policy_document" "assume_role" {
   statement {
-    sid     = "AllowAssumeRole"
+    sid     = "AllowConfiguredPrincipalsToAssumeRole"
     effect  = "Allow"
     actions = ["sts:AssumeRole"]
 
     principals {
-      type        = var.trusted_principal_type
-      identifiers = var.trusted_principal_identifiers
+      type        = "AWS"
+      identifiers = var.trusted_principal_arns
     }
 
     dynamic "condition" {
@@ -21,66 +21,33 @@ data "aws_iam_policy_document" "assume_role" {
         values   = [condition.value]
       }
     }
-
-    dynamic "condition" {
-      for_each = var.require_mfa ? [true] : []
-      content {
-        test     = "Bool"
-        variable = "aws:MultiFactorAuthPresent"
-        values   = ["true"]
-      }
-    }
   }
 }
 
 resource "aws_iam_role" "this" {
   name                 = var.role_name
-  path                 = var.path
+  path                 = var.role_path
   description          = var.role_description
   assume_role_policy   = data.aws_iam_policy_document.assume_role.json
   max_session_duration = var.max_session_duration
-  permissions_boundary = var.permissions_boundary_arn
-  force_detach_policies = true
-
-  tags = merge(
-    {
-      "ManagedBy" = "terraform"
-    },
-    var.tags
-  )
+  tags                 = var.tags
 }
 
-data "aws_iam_policy_document" "role_policy" {
+data "aws_iam_policy_document" "this" {
   statement {
-    sid       = "AllowConfiguredActions"
+    sid       = "AllowConfiguredActionsOnConfiguredResources"
     effect    = "Allow"
     actions   = var.allowed_actions
-    resources = var.allowed_resource_arns
-  }
-
-  dynamic "statement" {
-    for_each = length(var.denied_actions) > 0 ? [1] : []
-    content {
-      sid       = "DenyConfiguredActions"
-      effect    = "Deny"
-      actions   = var.denied_actions
-      resources = ["*"]
-    }
+    resources = var.resource_arns
   }
 }
 
 resource "aws_iam_policy" "this" {
   name        = var.policy_name
-  path        = var.path
-  description = var.policy_description
-  policy      = data.aws_iam_policy_document.role_policy.json
-
-  tags = merge(
-    {
-      "ManagedBy" = "terraform"
-    },
-    var.tags
-  )
+  path        = var.role_path
+  description = "Policy com permissoes restritas as acoes e recursos configurados nas variaveis allowed_actions e resource_arns."
+  policy      = data.aws_iam_policy_document.this.json
+  tags        = var.tags
 }
 
 resource "aws_iam_role_policy_attachment" "this" {

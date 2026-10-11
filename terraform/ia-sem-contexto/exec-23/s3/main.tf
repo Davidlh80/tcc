@@ -1,26 +1,13 @@
-terraform {
-  required_version = ">= 1.5.0"
-}
-
-provider "aws" {
-  region = var.aws_region
-}
-
-locals {
-  tags = merge(
-    {
-      Name      = var.bucket_name
-      ManagedBy = "Terraform"
-    },
-    var.tags
-  )
-}
-
 resource "aws_s3_bucket" "this" {
   bucket        = var.bucket_name
   force_destroy = var.force_destroy
 
-  tags = local.tags
+  tags = merge(
+    {
+      Name = var.bucket_name
+    },
+    var.tags
+  )
 }
 
 resource "aws_s3_bucket_ownership_controls" "this" {
@@ -44,7 +31,7 @@ resource "aws_s3_bucket_versioning" "this" {
   bucket = aws_s3_bucket.this.id
 
   versioning_configuration {
-    status = var.enable_versioning ? "Enabled" : "Suspended"
+    status = var.versioning_enabled ? "Enabled" : "Suspended"
   }
 }
 
@@ -53,39 +40,9 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "this" {
 
   rule {
     apply_server_side_encryption_by_default {
-      sse_algorithm     = var.kms_key_arn != null ? "aws:kms" : "AES256"
-      kms_master_key_id = var.kms_key_arn
+      sse_algorithm     = var.sse_algorithm
+      kms_master_key_id = var.sse_algorithm == "aws:kms" ? var.kms_master_key_id : null
     }
-    bucket_key_enabled = var.kms_key_arn != null
+    bucket_key_enabled = var.sse_algorithm == "aws:kms" ? true : null
   }
-}
-
-data "aws_iam_policy_document" "deny_insecure_transport" {
-  statement {
-    sid       = "DenyInsecureTransport"
-    effect    = "Deny"
-    actions   = ["s3:*"]
-    resources = [
-      aws_s3_bucket.this.arn,
-      "${aws_s3_bucket.this.arn}/*"
-    ]
-
-    principals {
-      type        = "AWS"
-      identifiers = ["*"]
-    }
-
-    condition {
-      test     = "Bool"
-      variable = "aws:SecureTransport"
-      values   = ["false"]
-    }
-  }
-}
-
-resource "aws_s3_bucket_policy" "this" {
-  bucket = aws_s3_bucket.this.id
-  policy = data.aws_iam_policy_document.deny_insecure_transport.json
-
-  depends_on = [aws_s3_bucket_public_access_block.this]
 }

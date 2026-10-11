@@ -1,84 +1,83 @@
-# IAM Policy anexada a IAM Role
+# IAM Role com Policy Anexada
 
-Blueprint Terraform que provisiona uma IAM Role com trust policy explicita e uma IAM Policy com permissoes explicitas, anexada diretamente a essa role via `aws_iam_role_policy_attachment`. A policy nunca fica solta: o attachment e um recurso obrigatorio do modulo.
+Blueprint Terraform para provisionar uma IAM Role na AWS com uma IAM Policy dedicada anexada a ela. A policy nao fica solta: ela e criada e vinculada a role por meio de `aws_iam_role_policy_attachment`. A trust policy (assume role policy) da role e restrita aos principals informados em `trusted_principal_arns`, sem permitir `"*"` como principal.
 
-## O que este blueprint cria
+## Recursos criados
 
-- `aws_iam_role.this`: role com `assume_role_policy` gerado a partir de `data.aws_iam_policy_document.assume_role`, aceitando service principals e/ou account principals (cross-account), com suporte opcional a `sts:ExternalId`.
-- `aws_iam_policy.this`: policy gerada a partir de `data.aws_iam_policy_document.permissions`, com statements definidos via `var.policy_statements`.
-- `aws_iam_role_policy_attachment.this`: vincula a policy a role.
+- `aws_iam_role.this`: IAM Role com trust policy restrita a principals configurados.
+- `aws_iam_policy.this`: IAM Policy com as actions e recursos configurados (sem wildcard `"*"` em actions).
+- `aws_iam_role_policy_attachment.this`: anexa a policy criada a role criada.
 
-## Decisoes de seguranca por padrao
+## Boas praticas aplicadas
 
-- Nenhum principal coringa (`*`) e aceito na trust policy; e obrigatorio informar ao menos um service principal ou account principal (validado via `precondition` na role).
-- `policy_statements` bloqueia `actions` e `resources` com valor `"*"` (validado via `validation` na variavel), forcando o autor a listar permissoes explicitas.
-- Suporte a `permissions_boundary_arn` para reforcar o principio de menor privilegio.
-- `assume_role_account_principals` (cross-account) vazio por padrao; quando usado, recomenda-se preencher `external_id` para mitigar o problema do "confused deputy".
-- Tags padrao (`ManagedBy = "terraform"`) aplicadas automaticamente, alem das tags informadas em `var.tags`.
+- A trust policy nao aceita `"*"` como principal (validado via `variable` `trusted_principal_arns`).
+- A policy criada nao permite `actions = ["*"]` (validado via `variable` `allowed_actions`).
+- Suporte opcional a `ExternalId` na trust policy para mitigar confused deputy (`require_external_id` e `external_id`).
+- `max_session_duration` limitado ao intervalo permitido pela AWS (3600 a 43200 segundos).
+- Tags aplicadas tanto na role quanto na policy via `var.tags`.
+- Nenhum valor sensivel fixo no codigo; valores sensiveis (como `external_id`) sao passados via variavel marcada como `sensitive`.
 
-## Uso basico
+## Uso
 
-```hcl
-module "iam_role_policy" {
+```
+module "iam_role_with_policy" {
   source = "./"
 
-  role_name   = "app-service-role"
-  policy_name = "app-service-policy"
+  role_name   = "app-execution-role"
+  policy_name = "app-execution-policy"
 
-  assume_role_service_principals = ["ec2.amazonaws.com"]
+  trusted_principal_arns = [
+    "arn:aws:iam::123456789012:role/ci-cd-deployer"
+  ]
 
-  policy_statements = [
-    {
-      sid       = "AllowS3ReadOnly"
-      effect    = "Allow"
-      actions   = ["s3:GetObject", "s3:ListBucket"]
-      resources = [
-        "arn:aws:s3:::meu-bucket",
-        "arn:aws:s3:::meu-bucket/*"
-      ]
-    }
+  allowed_actions = [
+    "s3:GetObject",
+    "s3:ListBucket"
+  ]
+
+  allowed_resources = [
+    "arn:aws:s3:::minha-aplicacao-bucket",
+    "arn:aws:s3:::minha-aplicacao-bucket/*"
   ]
 
   tags = {
-    Environment = "dev"
-    Owner       = "time-plataforma"
+    ambiente = "producao"
+    projeto  = "minha-aplicacao"
   }
 }
 ```
 
-## Cross-account (assume role por outra conta)
+## Inputs principais
 
-```hcl
-assume_role_service_principals  = []
-assume_role_account_principals  = ["arn:aws:iam::111111111111:root"]
-external_id                     = "um-valor-secreto-combinado"
-```
+| Nome | Descricao | Tipo | Default |
+|---|---|---|---|
+| role_name | Nome da IAM Role | string | - |
+| policy_name | Nome da IAM Policy | string | - |
+| trusted_principal_arns | ARNs autorizados a assumir a role (sem `"*"`) | list(string) | - |
+| allowed_actions | Actions permitidas pela policy (sem `"*"`) | list(string) | `["s3:GetObject", "s3:ListBucket"]` |
+| allowed_resources | Recursos aos quais as actions se aplicam | list(string) | bucket de exemplo |
+| require_external_id | Exige ExternalId na trust policy | bool | `false` |
+| external_id | Valor do ExternalId (sensivel) | string | `""` |
+| max_session_duration | Duracao maxima da sessao assumida em segundos | number | `3600` |
+| tags | Tags aplicadas aos recursos | map(string) | `{}` |
 
-## Validacao local
+## Outputs principais
+
+| Nome | Descricao |
+|---|---|
+| role_arn | ARN da IAM Role criada |
+| role_name | Nome da IAM Role criada |
+| policy_arn | ARN da IAM Policy criada |
+| policy_name | Nome da IAM Policy criada |
+| role_policy_attachment_id | ID do attachment entre role e policy |
+
+## Validacao
+
+Este codigo foi escrito para ser validado localmente, sem backend remoto e sem credenciais reais:
 
 ```
 terraform init -backend=false
 terraform validate
 ```
 
-Nao e necessario backend remoto nem credenciais reais para validar a sintaxe; apenas `apply` exige credenciais AWS validas.
-
-## Principais variaveis
-
-| Nome | Descricao | Default |
-|---|---|---|
-| `role_name` / `policy_name` | Nomes da role e da policy | `app-service-role` / `app-service-policy` |
-| `path` | Path IAM aplicado a role e policy | `/` |
-| `assume_role_service_principals` | Services autorizados a assumir a role | `["ec2.amazonaws.com"]` |
-| `assume_role_account_principals` | ARNs de contas/roles externos autorizados | `[]` |
-| `external_id` | External ID para cross-account | `null` |
-| `max_session_duration` | Duracao maxima da sessao (segundos) | `3600` |
-| `permissions_boundary_arn` | ARN de permissions boundary | `null` |
-| `policy_statements` | Lista de statements da policy | statement de exemplo (S3 read-only) |
-| `tags` | Tags adicionais | `{}` |
-
-## Outputs
-
-- `role_arn`, `role_name`, `role_unique_id`
-- `policy_arn`, `policy_name`
-- `policy_attachment_id`
+Antes de aplicar em um ambiente real, revise `allowed_actions` e `allowed_resources` para garantir aderencia ao principio de menor privilegio no contexto especifico do seu workload.

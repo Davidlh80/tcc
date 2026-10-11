@@ -3,9 +3,9 @@ execution_id: exec-25
 resource: s3
 model: "sonnet"
 prompt_file: "prompts/ia-sem-contexto/prompt-s3.md"
-started_at: "2026-09-13T11:01:25.262578-03:00"
-finished_at: "2026-09-13T11:47:43.080323-03:00"
-api_duration_ms: 203349
-total_duration_ms: 203360
-generated_at: "2026-09-13T11:47:43.080323-03:00"
+started_at: "2026-10-11T08:19:17.122474-03:00"
+finished_at: "2026-10-11T08:19:58.243284-03:00"
+api_duration_ms: 41118
+total_duration_ms: 41120
+generated_at: "2026-10-11T08:19:58.243284-03:00"
 generation_tool: "scripts/generate-blueprint"

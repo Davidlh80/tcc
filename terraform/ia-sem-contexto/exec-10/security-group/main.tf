@@ -1,17 +1,3 @@
-terraform {
-  required_version = ">= 1.5.0"
-}
-
-locals {
-  common_tags = merge(
-    {
-      Name      = var.name
-      ManagedBy = "terraform"
-    },
-    var.tags
-  )
-}
-
 resource "aws_security_group" "this" {
   name        = var.name
   description = var.description
@@ -21,10 +7,10 @@ resource "aws_security_group" "this" {
     for_each = var.ingress_rules
     content {
       description = ingress.value.description
-      from_port   = ingress.value.from_port
-      to_port     = ingress.value.to_port
-      protocol    = ingress.value.protocol
-      cidr_blocks = ingress.value.cidr_blocks
+      from_port    = ingress.value.from_port
+      to_port      = ingress.value.to_port
+      protocol     = ingress.value.protocol
+      cidr_blocks  = ingress.value.cidr_blocks
     }
   }
 
@@ -32,14 +18,19 @@ resource "aws_security_group" "this" {
     for_each = var.egress_rules
     content {
       description = egress.value.description
-      from_port   = egress.value.from_port
-      to_port     = egress.value.to_port
-      protocol    = egress.value.protocol
-      cidr_blocks = egress.value.cidr_blocks
+      from_port    = egress.value.from_port
+      to_port      = egress.value.to_port
+      protocol     = egress.value.protocol
+      cidr_blocks  = egress.value.cidr_blocks
     }
   }
 
-  tags = local.common_tags
+  tags = merge(
+    {
+      Name = var.name
+    },
+    var.tags
+  )
 
   lifecycle {
     create_before_destroy = true

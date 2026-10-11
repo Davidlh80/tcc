@@ -1,54 +1,28 @@
-variable "region" {
+variable "aws_region" {
   description = "Regiao AWS onde os recursos serao provisionados."
   type        = string
   default     = "us-east-1"
 }
 
 variable "vpc_id" {
-  description = "ID da VPC (criada pelo ambiente de teste) onde o Security Group sera criado."
+  description = "ID da VPC onde o Security Group sera criado. Deve ser o ID de uma VPC existente no ambiente de teste, e nao a VPC default da conta."
   type        = string
-
-  validation {
-    condition     = can(regex("^vpc-[a-zA-Z0-9]+$", var.vpc_id))
-    error_message = "O valor de vpc_id deve ser um ID de VPC valido, iniciando com \"vpc-\"."
-  }
 }
 
 variable "name" {
   description = "Nome do Security Group."
   type        = string
-  default     = "example-sg"
+  default     = "app-sg"
 }
 
 variable "description" {
   description = "Descricao do Security Group."
   type        = string
-  default     = "Managed by Terraform"
+  default     = "Security group gerenciado via Terraform"
 }
 
 variable "ingress_rules" {
-  description = "Lista de regras de entrada (ingress) do Security Group. Vazia por padrao (nenhum trafego de entrada liberado)."
-  type = list(object({
-    description = string
-    from_port   = number
-    to_port     = number
-    protocol    = string
-    cidr_blocks = list(string)
-  }))
-  default = []
-
-  validation {
-    condition = alltrue([
-      for rule in var.ingress_rules : alltrue([
-        for cidr in rule.cidr_blocks : can(cidrhost(cidr, 0))
-      ])
-    ])
-    error_message = "Todos os cidr_blocks informados em ingress_rules devem ser blocos CIDR validos."
-  }
-}
-
-variable "egress_rules" {
-  description = "Lista de regras de saida (egress) do Security Group."
+  description = "Lista de regras explicitas de entrada do Security Group."
   type = list(object({
     description = string
     from_port   = number
@@ -58,22 +32,33 @@ variable "egress_rules" {
   }))
   default = [
     {
-      description = "Permite todo o trafego de saida"
-      from_port   = 0
-      to_port     = 0
-      protocol    = "-1"
+      description = "Permite HTTPS a partir da rede interna"
+      from_port   = 443
+      to_port     = 443
+      protocol    = "tcp"
+      cidr_blocks = ["10.0.0.0/8"]
+    }
+  ]
+}
+
+variable "egress_rules" {
+  description = "Lista de regras explicitas de saida do Security Group."
+  type = list(object({
+    description = string
+    from_port   = number
+    to_port     = number
+    protocol    = string
+    cidr_blocks = list(string)
+  }))
+  default = [
+    {
+      description = "Permite trafego de saida HTTPS"
+      from_port   = 443
+      to_port     = 443
+      protocol    = "tcp"
       cidr_blocks = ["0.0.0.0/0"]
     }
   ]
-
-  validation {
-    condition = alltrue([
-      for rule in var.egress_rules : alltrue([
-        for cidr in rule.cidr_blocks : can(cidrhost(cidr, 0))
-      ])
-    ])
-    error_message = "Todos os cidr_blocks informados em egress_rules devem ser blocos CIDR validos."
-  }
 }
 
 variable "tags" {

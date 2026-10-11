@@ -9,7 +9,7 @@ output "security_group_arn" {
 }
 
 output "security_group_name" {
-  description = "Nome efetivo do Security Group (gerado a partir do name_prefix)."
+  description = "Nome do Security Group criado."
   value       = aws_security_group.this.name
 }
 

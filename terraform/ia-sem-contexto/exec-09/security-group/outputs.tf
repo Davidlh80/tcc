@@ -9,16 +9,21 @@ output "security_group_arn" {
 }
 
 output "security_group_name" {
-  description = "Nome efetivo do Security Group criado."
+  description = "Nome do Security Group criado."
   value       = aws_security_group.this.name
 }
 
-output "vpc_id" {
+output "security_group_vpc_id" {
   description = "ID da VPC associada ao Security Group."
   value       = aws_security_group.this.vpc_id
 }
 
-output "owner_id" {
-  description = "ID da conta AWS proprietaria do Security Group."
-  value       = aws_security_group.this.owner_id
+output "security_group_ingress_rules" {
+  description = "Regras de entrada efetivamente aplicadas ao Security Group."
+  value       = var.ingress_rules
+}
+
+output "security_group_egress_rules" {
+  description = "Regras de saída efetivamente aplicadas ao Security Group."
+  value       = var.egress_rules
 }

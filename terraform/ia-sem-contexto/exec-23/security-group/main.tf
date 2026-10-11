@@ -1,5 +1,5 @@
-provider "aws" {
-  region = var.aws_region
+terraform {
+  experiments = []
 }
 
 resource "aws_security_group" "this" {
@@ -30,10 +30,10 @@ resource "aws_security_group" "this" {
   }
 
   tags = merge(
+    var.tags,
     {
       Name = var.name
-    },
-    var.tags
+    }
   )
 
   lifecycle {

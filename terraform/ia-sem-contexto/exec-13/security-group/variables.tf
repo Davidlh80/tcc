@@ -1,18 +1,23 @@
 variable "aws_region" {
-  description = "Regiao AWS utilizada pelo provider."
+  description = "Regiao AWS onde os recursos serao provisionados."
   type        = string
   default     = "us-east-1"
 }
 
 variable "vpc_id" {
-  description = "ID da VPC onde o Security Group sera criado."
+  description = "ID da VPC onde o Security Group sera criado. Deve ser a VPC provisionada pelo ambiente de teste, e nao a VPC padrao da conta."
   type        = string
+
+  validation {
+    condition     = length(var.vpc_id) > 0
+    error_message = "vpc_id deve ser informado e nao pode ser uma string vazia."
+  }
 }
 
 variable "name" {
-  description = "Nome base do Security Group (usado como prefixo do recurso e na tag Name)."
+  description = "Nome do Security Group."
   type        = string
-  default     = "app-sg"
+  default     = "sg-app"
 }
 
 variable "description" {
@@ -22,35 +27,9 @@ variable "description" {
 }
 
 variable "ingress_rules" {
-  description = "Lista de regras de entrada (ingress). Por padrao, nenhuma porta e liberada (deny all)."
+  description = "Lista de regras de entrada explicitas. Evite cidr_blocks com 0.0.0.0/0 exceto quando estritamente necessario."
   type = list(object({
-    description = optional(string, "")
-    from_port   = number
-    to_port     = number
-    protocol    = string
-    cidr_blocks = list(string)
-  }))
-  default = []
-
-  validation {
-    condition = alltrue([
-      for rule in var.ingress_rules : rule.from_port <= rule.to_port
-    ])
-    error_message = "Em cada regra de ingress_rules, from_port deve ser menor ou igual a to_port."
-  }
-
-  validation {
-    condition = alltrue([
-      for rule in var.ingress_rules : length(rule.cidr_blocks) > 0
-    ])
-    error_message = "Cada regra de ingress_rules deve conter ao menos um CIDR em cidr_blocks."
-  }
-}
-
-variable "egress_rules" {
-  description = "Lista de regras de saida (egress). Por padrao, libera todo o trafego de saida."
-  type = list(object({
-    description = optional(string, "")
+    description = string
     from_port   = number
     to_port     = number
     protocol    = string
@@ -58,20 +37,40 @@ variable "egress_rules" {
   }))
   default = [
     {
-      description = "Allow all outbound traffic"
-      from_port   = 0
-      to_port     = 0
-      protocol    = "-1"
-      cidr_blocks = ["0.0.0.0/0"]
+      description = "HTTPS a partir da rede interna da VPC"
+      from_port   = 443
+      to_port     = 443
+      protocol    = "tcp"
+      cidr_blocks = ["10.0.0.0/16"]
     }
   ]
+}
 
-  validation {
-    condition = alltrue([
-      for rule in var.egress_rules : length(rule.cidr_blocks) > 0
-    ])
-    error_message = "Cada regra de egress_rules deve conter ao menos um CIDR em cidr_blocks."
-  }
+variable "egress_rules" {
+  description = "Lista de regras de saida explicitas. Evite liberar todo o trafego de saida sem necessidade real."
+  type = list(object({
+    description = string
+    from_port   = number
+    to_port     = number
+    protocol    = string
+    cidr_blocks = list(string)
+  }))
+  default = [
+    {
+      description = "HTTPS para repositorios de pacotes e APIs externas"
+      from_port   = 443
+      to_port     = 443
+      protocol    = "tcp"
+      cidr_blocks = ["0.0.0.0/0"]
+    },
+    {
+      description = "DNS para resolucao de nomes dentro da VPC"
+      from_port   = 53
+      to_port     = 53
+      protocol    = "udp"
+      cidr_blocks = ["10.0.0.0/16"]
+    }
+  ]
 }
 
 variable "tags" {

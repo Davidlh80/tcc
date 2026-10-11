@@ -1,3 +1,11 @@
+terraform {
+  required_version = ">= 1.5.0"
+}
+
+provider "aws" {
+  region = var.aws_region
+}
+
 resource "aws_security_group" "this" {
   name        = var.name
   description = var.description
@@ -26,11 +34,10 @@ resource "aws_security_group" "this" {
   }
 
   tags = merge(
+    var.tags,
     {
-      Name      = var.name
-      ManagedBy = "terraform"
-    },
-    var.tags
+      Name = var.name
+    }
   )
 
   lifecycle {

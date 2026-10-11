@@ -1,63 +1,44 @@
-variable "aws_region" {
-  type        = string
-  description = "Regiao AWS onde o bucket sera provisionado."
-  default     = "us-east-1"
-}
-
 variable "bucket_name" {
+  description = "Nome do bucket S3 a ser criado. Deve ser globalmente unico e seguir as regras de nomenclatura da AWS."
   type        = string
-  description = "Nome globalmente unico do bucket S3."
 
   validation {
     condition     = can(regex("^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$", var.bucket_name))
-    error_message = "O nome do bucket deve ter entre 3 e 63 caracteres, apenas letras minusculas, numeros, pontos e hifens, e nao pode comecar ou terminar com hifen ou ponto."
+    error_message = "O nome do bucket deve ter entre 3 e 63 caracteres, usar apenas letras minusculas, numeros, pontos e hifens, e nao pode comecar ou terminar com hifen ou ponto."
   }
 }
 
 variable "force_destroy" {
+  description = "Se verdadeiro, permite destruir o bucket mesmo que contenha objetos. Recomendado manter falso em producao."
   type        = bool
-  description = "Permite excluir o bucket mesmo que contenha objetos. Use com cautela."
   default     = false
 }
 
 variable "versioning_enabled" {
-  type        = bool
   description = "Habilita o versionamento de objetos no bucket."
+  type        = bool
   default     = true
 }
 
+variable "sse_algorithm" {
+  description = "Algoritmo de criptografia server-side padrao do bucket. Valores aceitos: AES256 ou aws:kms."
+  type        = string
+  default     = "AES256"
+
+  validation {
+    condition     = contains(["AES256", "aws:kms"], var.sse_algorithm)
+    error_message = "O valor de sse_algorithm deve ser AES256 ou aws:kms."
+  }
+}
+
 variable "kms_key_arn" {
+  description = "ARN da chave KMS usada para criptografia quando sse_algorithm for aws:kms. Ignorado quando sse_algorithm for AES256."
   type        = string
-  description = "ARN de uma chave KMS para criptografia SSE-KMS. Se vazio, usa criptografia padrao AES256 (SSE-S3)."
-  default     = ""
-}
-
-variable "logging_target_bucket" {
-  type        = string
-  description = "Nome do bucket de destino para logs de acesso. Se vazio, o logging nao e habilitado."
-  default     = ""
-}
-
-variable "logging_target_prefix" {
-  type        = string
-  description = "Prefixo aplicado aos objetos de log de acesso, quando o logging esta habilitado."
-  default     = "log/"
-}
-
-variable "lifecycle_rules" {
-  description = "Lista de regras de ciclo de vida do bucket."
-  type = list(object({
-    id                                 = string
-    enabled                            = bool
-    prefix                             = optional(string, "")
-    expiration_days                    = optional(number)
-    noncurrent_version_expiration_days = optional(number)
-  }))
-  default = []
+  default     = null
 }
 
 variable "tags" {
+  description = "Mapa de tags a serem aplicadas ao bucket."
   type        = map(string)
-  description = "Tags a serem aplicadas ao bucket."
   default     = {}
 }

@@ -9,8 +9,8 @@ output "role_name" {
 }
 
 output "role_id" {
-  description = "ID único (unique ID) da IAM Role criada."
-  value       = aws_iam_role.this.id
+  description = "ID unico da IAM Role criada."
+  value       = aws_iam_role.this.unique_id
 }
 
 output "policy_arn" {
@@ -23,7 +23,12 @@ output "policy_name" {
   value       = aws_iam_policy.this.name
 }
 
+output "policy_id" {
+  description = "ID da IAM Policy criada."
+  value       = aws_iam_policy.this.id
+}
+
 output "policy_attachment_id" {
-  description = "ID do attachment entre a IAM Policy e a IAM Role."
+  description = "ID do attachment entre a policy e a role."
   value       = aws_iam_role_policy_attachment.this.id
 }

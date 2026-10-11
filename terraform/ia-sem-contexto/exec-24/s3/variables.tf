@@ -1,39 +1,33 @@
 variable "bucket_name" {
+  description = "Nome do bucket S3 a ser criado. Deve ser globalmente unico."
   type        = string
-  description = "Nome do bucket S3. Deve ser globalmente unico e seguir as regras de nomenclatura da AWS (3 a 63 caracteres, letras minusculas, numeros, pontos e hifens)."
 
   validation {
-    condition     = can(regex("^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$", var.bucket_name))
-    error_message = "O bucket_name deve ter entre 3 e 63 caracteres, usar apenas letras minusculas, numeros, pontos e hifens, e comecar/terminar com letra ou numero."
+    condition     = length(var.bucket_name) >= 3 && length(var.bucket_name) <= 63
+    error_message = "O nome do bucket deve ter entre 3 e 63 caracteres."
   }
 }
 
-variable "environment" {
-  type        = string
-  description = "Nome do ambiente (ex.: dev, staging, production), usado apenas para fins de tagueamento."
-  default     = "production"
-}
-
-variable "force_destroy" {
+variable "versioning_enabled" {
+  description = "Define se o versionamento do bucket deve ser habilitado (true) ou suspenso (false)."
   type        = bool
-  description = "Permite que o Terraform destrua o bucket mesmo que contenha objetos. Mantenha false em ambientes produtivos."
-  default     = false
-}
-
-variable "enable_versioning" {
-  type        = bool
-  description = "Habilita o versionamento de objetos no bucket."
   default     = true
 }
 
+variable "force_destroy" {
+  description = "Permite que o bucket seja destruido mesmo contendo objetos. Use com cautela."
+  type        = bool
+  default     = false
+}
+
 variable "kms_key_arn" {
+  description = "ARN de uma chave KMS para criptografia SSE-KMS. Se nulo, usa criptografia SSE-S3 (AES256)."
   type        = string
-  description = "ARN de uma chave KMS para criptografia server-side (SSE-KMS). Se nao informado, o bucket usa criptografia padrao AES256 (SSE-S3)."
   default     = null
 }
 
 variable "tags" {
+  description = "Mapa de tags a serem aplicadas ao bucket."
   type        = map(string)
-  description = "Tags adicionais a serem aplicadas ao bucket."
   default     = {}
 }

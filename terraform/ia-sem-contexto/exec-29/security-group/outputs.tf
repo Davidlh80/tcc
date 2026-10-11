@@ -18,7 +18,12 @@ output "vpc_id" {
   value       = aws_security_group.this.vpc_id
 }
 
-output "owner_id" {
-  description = "ID da conta AWS proprietaria do Security Group."
-  value       = aws_security_group.this.owner_id
+output "ingress_rules_count" {
+  description = "Quantidade de regras de entrada aplicadas."
+  value       = length(var.ingress_rules)
+}
+
+output "egress_rules_count" {
+  description = "Quantidade de regras de saída aplicadas."
+  value       = length(var.egress_rules)
 }

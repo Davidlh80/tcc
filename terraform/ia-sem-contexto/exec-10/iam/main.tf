@@ -1,40 +1,32 @@
+provider "aws" {
+  region = var.aws_region
+}
+
 data "aws_iam_policy_document" "assume_role" {
   statement {
-    sid     = "AllowAssumeRoleByTrustedPrincipal"
+    sid     = "AllowAssumeByTrustedPrincipal"
     effect  = "Allow"
-    actions = var.assume_role_actions
+    actions = ["sts:AssumeRole"]
 
     principals {
-      type        = var.trusted_principal_type
-      identifiers = var.trusted_principal_identifiers
-    }
-
-    dynamic "condition" {
-      for_each = var.external_id != "" ? [var.external_id] : []
-      content {
-        test     = "StringEquals"
-        variable = "sts:ExternalId"
-        values   = [condition.value]
-      }
+      type        = "AWS"
+      identifiers = [var.trusted_principal_arn]
     }
   }
 }
 
 resource "aws_iam_role" "this" {
-  name                  = var.role_name
-  path                  = var.path
-  description           = var.role_description
+  name                 = var.role_name
+  description          = var.role_description
   assume_role_policy    = data.aws_iam_policy_document.assume_role.json
-  max_session_duration  = var.max_session_duration
-  force_detach_policies = var.force_detach_policies
-  permissions_boundary  = var.permissions_boundary_arn != "" ? var.permissions_boundary_arn : null
+  max_session_duration = var.max_session_duration
 
   tags = var.tags
 }
 
-data "aws_iam_policy_document" "permissions" {
+data "aws_iam_policy_document" "scoped" {
   statement {
-    sid       = "AllowConfiguredActionsOnConfiguredResources"
+    sid       = "AllowScopedActions"
     effect    = "Allow"
     actions   = var.policy_actions
     resources = var.policy_resources
@@ -43,9 +35,8 @@ data "aws_iam_policy_document" "permissions" {
 
 resource "aws_iam_policy" "this" {
   name        = var.policy_name
-  path        = var.path
   description = var.policy_description
-  policy      = data.aws_iam_policy_document.permissions.json
+  policy      = data.aws_iam_policy_document.scoped.json
 
   tags = var.tags
 }

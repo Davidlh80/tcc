@@ -1,82 +1,89 @@
-# IAM Role + IAM Policy (Terraform)
+# IAM Role com IAM Policy anexada
 
-Blueprint Terraform para provisionar uma IAM Role e uma IAM Policy customizada anexada a ela via `aws_iam_role_policy_attachment`. A policy nunca fica solta: ela e sempre criada em conjunto com a role e o attachment neste mesmo modulo.
+## Visao geral
+
+Este modulo provisiona:
+
+- Uma IAM Policy com um conjunto configuravel de actions e resources (sem wildcard `*` e sem actions administrativas de IAM).
+- Uma IAM Role cuja trust policy (assume role policy) restringe quais principals (`AWS:`) podem executar `sts:AssumeRole`, nunca permitindo `*`.
+- O attachment entre a IAM Policy e a IAM Role, garantindo que a policy nunca fique solta sem um principal associado.
 
 ## Recursos criados
 
-- `aws_iam_role.this` — role com trust policy (assume role policy) restrita a um principal de servico AWS configuravel, com suporte opcional a condicao `sts:ExternalId`.
-- `aws_iam_policy.this` — policy gerenciada pelo cliente (customer managed policy) com acoes e recursos definidos via variaveis.
-- `aws_iam_role_policy_attachment.this` — vincula a policy criada a role criada.
+- `aws_iam_role.this`
+- `aws_iam_policy.this`
+- `aws_iam_role_policy_attachment.this`
+- `data.aws_iam_policy_document.assume_role`
+- `data.aws_iam_policy_document.permissions`
 
-## Principios de seguranca adotados
+## Pre-requisitos
 
-- **Menor privilegio por padrao**: as variaveis `policy_actions` e `policy_resources` vem com exemplos restritos (sem uso de `Action = "*"` ou `Resource = "*"`). Ajuste esses valores para o minimo necessario ao caso de uso real.
-- **Trust policy explicita**: apenas o principal informado em `trusted_principal_service` pode assumir a role. Nao ha `Principal = "*"`.
-- **Suporte a External ID**: para cenarios de assume role entre contas ou por terceiros, defina `external_id` para adicionar a condicao `sts:ExternalId` no trust policy.
-- **Sem valores sensiveis fixos**: nenhum ARN de conta, chave ou credencial real esta hard-coded. Os ARNs de exemplo em `policy_resources` sao placeholders (`REPLACE_WITH_BUCKET_NAME`) que devem ser substituidos.
-- **Tags padronizadas**: todos os recursos recebem tags base (`ManagedBy`, `Component`) combinadas com as tags customizadas fornecidas em `tags`.
+- Terraform >= 1.5.0
+- Provider `hashicorp/aws` ~> 5.0
+- Credenciais AWS configuradas apenas para `apply` (nao sao necessarias para `terraform validate`)
 
 ## Uso
 
-```hcl
-module "iam_role_policy" {
+```
+module "iam_role_with_policy" {
   source = "./"
 
-  role_name   = "minha-app-role"
-  policy_name = "minha-app-policy"
+  role_name   = "payment-service-role"
+  policy_name = "payment-service-policy"
 
-  trusted_principal_service = "lambda.amazonaws.com"
-
-  policy_actions = [
-    "logs:CreateLogGroup",
-    "logs:CreateLogStream",
-    "logs:PutLogEvents",
+  trusted_principal_arns = [
+    "arn:aws:iam::123456789012:role/ci-cd-deployer"
   ]
 
-  policy_resources = [
-    "arn:aws:logs:us-east-1:123456789012:log-group:/aws/lambda/minha-app:*",
+  external_id = "optional-shared-secret"
+
+  allowed_actions = [
+    "s3:GetObject",
+    "s3:ListBucket"
+  ]
+
+  allowed_resources = [
+    "arn:aws:s3:::meu-bucket",
+    "arn:aws:s3:::meu-bucket/*"
   ]
 
   tags = {
-    Environment = "dev"
-    Owner       = "time-plataforma"
+    Environment = "production"
+    Owner       = "team-payments"
   }
 }
 ```
 
-## Inputs
+## Inputs principais
 
-| Nome | Descricao | Tipo | Default |
-|---|---|---|---|
-| `aws_region` | Regiao AWS usada pelo provider | `string` | `"us-east-1"` |
-| `role_name` | Nome da IAM Role | `string` | `"app-execution-role"` |
-| `role_description` | Descricao da IAM Role | `string` | ver `variables.tf` |
-| `policy_name` | Nome da IAM Policy | `string` | `"app-execution-policy"` |
-| `policy_description` | Descricao da IAM Policy | `string` | ver `variables.tf` |
-| `trusted_principal_service` | Principal de servico AWS autorizado a assumir a role | `string` | `"ec2.amazonaws.com"` |
-| `external_id` | External ID opcional para a condicao `sts:ExternalId` | `string` | `null` |
-| `max_session_duration` | Duracao maxima da sessao assumida (segundos) | `number` | `3600` |
-| `policy_actions` | Acoes IAM permitidas pela policy | `list(string)` | exemplo de acoes de leitura em S3 |
-| `policy_resources` | ARNs alvo das acoes permitidas | `list(string)` | placeholders de bucket S3 |
-| `tags` | Tags adicionais para os recursos | `map(string)` | `{}` |
+| Nome                        | Descricao                                                                 | Default                     |
+|-----------------------------|-----------------------------------------------------------------------------|------------------------------|
+| `aws_region`                | Regiao AWS do provider                                                      | `us-east-1`                 |
+| `role_name`                 | Nome da IAM Role                                                            | `app-restricted-role`       |
+| `trusted_principal_arns`    | ARNs autorizados a assumir a role (obrigatorio, nunca `*`)                  | —                            |
+| `external_id`                | ExternalId opcional para mitigar confused deputy                            | `null`                       |
+| `permissions_boundary_arn`  | ARN opcional de permissions boundary                                        | `null`                       |
+| `policy_name`                | Nome da IAM Policy                                                          | `app-restricted-policy`     |
+| `allowed_actions`            | Actions permitidas pela policy (sem `*` e sem actions administrativas IAM) | `["s3:GetObject", "s3:ListBucket"]` |
+| `allowed_resources`          | Recursos/ARNs alvo das actions (obrigatorio, nunca `*`)                     | —                            |
+| `tags`                        | Tags aplicadas a role e a policy                                            | `{}`                          |
 
 ## Outputs
 
-| Nome | Descricao |
-|---|---|
-| `role_arn` | ARN da IAM Role criada |
-| `role_name` | Nome da IAM Role criada |
-| `role_id` | ID unico da IAM Role criada |
-| `policy_arn` | ARN da IAM Policy criada |
-| `policy_name` | Nome da IAM Policy criada |
-| `policy_attachment_id` | ID do attachment entre policy e role |
+| Nome                     | Descricao                                        |
+|---------------------------|---------------------------------------------------|
+| `role_name`               | Nome da IAM Role criada                           |
+| `role_arn`                 | ARN da IAM Role criada                            |
+| `role_unique_id`          | ID unico da IAM Role                              |
+| `policy_name`              | Nome da IAM Policy criada                         |
+| `policy_arn`               | ARN da IAM Policy criada                          |
+| `policy_attachment_id`    | ID do attachment entre policy e role              |
 
-## Validacao local
+## Consideracoes de seguranca
 
-```bash
-terraform fmt
-terraform init -backend=false
-terraform validate
-```
-
-Nenhuma credencial real e necessaria para `init`/`validate`, pois nao ha backend remoto configurado e nenhum recurso depende de chamadas a API durante essas etapas.
+- A trust policy nunca aceita `"*"` como principal; `trusted_principal_arns` e validado para rejeitar esse valor e exigir ARNs IAM validos.
+- A policy criada nao concede permissoes administrativas amplas: `allowed_actions` rejeita `*`, wildcards no formato `servico:*` e actions administrativas de IAM (`iam:Create*`, `iam:Attach*`, `iam:Put*`, `iam:Delete*`, `iam:Update*`).
+- `allowed_resources` rejeita o wildcard amplo `*`, forcando a especificacao de ARNs ou prefixos concretos.
+- A policy e sempre anexada a uma role via `aws_iam_role_policy_attachment`, nunca ficando sem um principal associado.
+- Use `external_id` quando o principal confiavel for de terceiros, para reduzir o risco de confused deputy.
+- Nenhum valor sensivel ou credencial e definido no codigo; todos os valores configuraveis sao expostos via variaveis.

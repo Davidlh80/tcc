@@ -1,69 +1,56 @@
 # Blueprint Terraform — Bucket Amazon S3
 
-Blueprint autonomo para provisionamento de um bucket S3 na AWS, com configuracoes seguras por padrao: acesso publico bloqueado, criptografia server-side obrigatoria, versionamento habilitado e propriedade de objetos enforced pelo dono do bucket.
+Blueprint para provisionamento de um bucket Amazon S3 com configuracoes seguras por padrao: bloqueio total de acesso publico, criptografia do lado do servidor, versionamento configuravel, ownership controls e tags padronizadas.
 
 ## Recursos criados
 
-- `aws_s3_bucket` — bucket S3.
-- `aws_s3_bucket_ownership_controls` — forca `BucketOwnerEnforced`, desabilitando ACLs.
-- `aws_s3_bucket_public_access_block` — bloqueia qualquer forma de acesso publico.
-- `aws_s3_bucket_versioning` — controla o versionamento de objetos.
-- `aws_s3_bucket_server_side_encryption_configuration` — criptografia SSE-S3 (AES256) por padrao, ou SSE-KMS se uma chave for informada.
-- `aws_s3_bucket_lifecycle_configuration` — regras de ciclo de vida opcionais (expiracao de objetos atuais e versoes antigas).
+- `aws_s3_bucket` — bucket S3 principal.
+- `aws_s3_bucket_public_access_block` — bloqueia qualquer forma de acesso publico ao bucket.
+- `aws_s3_bucket_versioning` — habilita ou suspende o versionamento de objetos conforme variavel.
+- `aws_s3_bucket_server_side_encryption_configuration` — aplica criptografia padrao (`AES256` ou `aws:kms`) a todos os objetos.
+- `aws_s3_bucket_ownership_controls` — forca o modelo `BucketOwnerEnforced`, desabilitando ACLs.
 
 ## Requisitos
 
 - Terraform >= 1.5.0
-- Provider AWS (`hashicorp/aws`) ~> 5.0
-- Credenciais AWS configuradas no ambiente de execucao (nao incluidas neste blueprint)
+- Provider `hashicorp/aws` >= 5.0
+- Credenciais AWS validas apenas para `terraform apply` (nao sao necessarias para `init -backend=false` e `validate`).
 
 ## Uso
 
 ```
-module "s3_bucket" {
-  source      = "./"
-  bucket_name = "meu-bucket-exemplo-123"
-
-  tags = {
-    Environment = "dev"
-    Owner       = "time-plataforma"
-  }
-}
+terraform init -backend=false
+terraform validate
+terraform plan -var="bucket_name=meu-bucket-exemplo"
+terraform apply -var="bucket_name=meu-bucket-exemplo"
 ```
 
 ## Variaveis principais
 
-| Nome | Descricao | Tipo | Padrao |
-|---|---|---|---|
-| `aws_region` | Regiao AWS de criacao dos recursos | `string` | `us-east-1` |
-| `bucket_name` | Nome globalmente unico do bucket | `string` | — (obrigatorio) |
-| `force_destroy` | Permite exclusao do bucket com objetos | `bool` | `false` |
-| `versioning_enabled` | Habilita versionamento | `bool` | `true` |
-| `kms_key_arn` | ARN de chave KMS para SSE-KMS | `string` | `null` |
-| `tags` | Tags aplicadas ao bucket | `map(string)` | `{}` |
-| `lifecycle_rules` | Regras de ciclo de vida | `list(object)` | `[]` |
+| Nome | Descricao | Padrao |
+|---|---|---|
+| `region` | Regiao AWS | `us-east-1` |
+| `bucket_name` | Nome unico do bucket (obrigatorio) | — |
+| `environment` | Ambiente para tagueamento | `dev` |
+| `enable_versioning` | Habilita versionamento | `true` |
+| `force_destroy` | Permite destruir bucket com objetos | `false` |
+| `sse_algorithm` | Algoritmo de criptografia (`AES256` ou `aws:kms`) | `AES256` |
+| `kms_key_arn` | ARN da chave KMS (quando `aws:kms`) | `null` |
+| `bucket_key_enabled` | Habilita S3 Bucket Key para `aws:kms` | `true` |
+| `tags` | Tags adicionais | `{}` |
 
 ## Outputs
 
-| Nome | Descricao |
-|---|---|
-| `bucket_id` | Nome do bucket |
-| `bucket_arn` | ARN do bucket |
-| `bucket_domain_name` | Nome de dominio do bucket |
-| `bucket_regional_domain_name` | Nome de dominio regional do bucket |
-| `versioning_status` | Status do versionamento |
-| `encryption_algorithm` | Algoritmo de criptografia aplicado |
+- `bucket_id`
+- `bucket_arn`
+- `bucket_domain_name`
+- `bucket_regional_domain_name`
+- `versioning_status`
+- `sse_algorithm`
 
-## Seguranca
+## Observacoes de seguranca
 
-- Acesso publico bloqueado por padrao (`aws_s3_bucket_public_access_block` com todas as flags em `true`).
-- ACLs desabilitadas via `BucketOwnerEnforced`.
-- Criptografia server-side obrigatoria em todos os objetos.
-- Nenhuma credencial ou valor sensivel fixo esta presente neste codigo.
-
-## Validacao
-
-```
-terraform init -backend=false
-terraform validate
-```
+- Acesso publico e bloqueado em todas as camadas (ACLs e politicas) por padrao.
+- ACLs sao desabilitadas via `BucketOwnerEnforced`, seguindo a recomendacao atual da AWS.
+- Para dados sensiveis, recomenda-se utilizar `sse_algorithm = "aws:kms"` com uma chave KMS gerenciada pelo cliente (CMK).
+- Nenhum valor sensivel ou credencial esta fixado no codigo; todos os parametros configuraveis sao expostos via variaveis.

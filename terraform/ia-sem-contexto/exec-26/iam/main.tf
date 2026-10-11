@@ -1,58 +1,41 @@
-data "aws_iam_policy_document" "assume_role" {
-  dynamic "statement" {
-    for_each = length(var.trusted_service_principals) > 0 ? [1] : []
-    content {
-      sid     = "TrustedServicePrincipals"
-      effect  = "Allow"
-      actions = ["sts:AssumeRole"]
+provider "aws" {
+  region = var.aws_region
+}
 
-      principals {
-        type        = "Service"
-        identifiers = var.trusted_service_principals
-      }
+data "aws_iam_policy_document" "trust" {
+  statement {
+    sid     = "AllowConfiguredPrincipalToAssumeRole"
+    effect  = "Allow"
+    actions = ["sts:AssumeRole"]
+
+    principals {
+      type        = var.assume_role_principal_type
+      identifiers = var.assume_role_principal_identifiers
     }
-  }
 
-  dynamic "statement" {
-    for_each = length(var.trusted_account_arns) > 0 ? [1] : []
-    content {
-      sid     = "TrustedAccountPrincipals"
-      effect  = "Allow"
-      actions = ["sts:AssumeRole"]
-
-      principals {
-        type        = "AWS"
-        identifiers = var.trusted_account_arns
-      }
-
-      dynamic "condition" {
-        for_each = var.external_id != "" ? [1] : []
-        content {
-          test     = "StringEquals"
-          variable = "sts:ExternalId"
-          values   = [var.external_id]
-        }
+    dynamic "condition" {
+      for_each = var.external_id != null ? [var.external_id] : []
+      content {
+        test     = "StringEquals"
+        variable = "sts:ExternalId"
+        values   = [condition.value]
       }
     }
   }
 }
 
 resource "aws_iam_role" "this" {
-  name                  = "${var.name_prefix}-role"
-  description           = "Role gerenciada via Terraform para ${var.name_prefix}, com confianca restrita aos principais configurados."
-  assume_role_policy    = data.aws_iam_policy_document.assume_role.json
+  name                 = var.role_name
+  description          = var.role_description
+  assume_role_policy    = data.aws_iam_policy_document.trust.json
   max_session_duration  = var.max_session_duration
-  permissions_boundary  = var.permissions_boundary_arn
-  force_detach_policies = true
 
-  tags = merge(var.tags, {
-    Name = "${var.name_prefix}-role"
-  })
+  tags = var.tags
 }
 
 data "aws_iam_policy_document" "permissions" {
   statement {
-    sid       = "AllowConfiguredActions"
+    sid       = "AllowConfiguredActionsOnConfiguredResources"
     effect    = "Allow"
     actions   = var.policy_actions
     resources = var.policy_resources
@@ -60,13 +43,11 @@ data "aws_iam_policy_document" "permissions" {
 }
 
 resource "aws_iam_policy" "this" {
-  name        = "${var.name_prefix}-policy"
-  description = "Politica de minimo privilegio anexada a role ${var.name_prefix}-role. Sem principais soltos; uso exclusivo via role attachment."
+  name        = var.policy_name
+  description = var.policy_description
   policy      = data.aws_iam_policy_document.permissions.json
 
-  tags = merge(var.tags, {
-    Name = "${var.name_prefix}-policy"
-  })
+  tags = var.tags
 }
 
 resource "aws_iam_role_policy_attachment" "this" {

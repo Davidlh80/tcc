@@ -1,17 +1,38 @@
-# Security Group (AWS)
+# Security Group - Blueprint Terraform
 
-Blueprint Terraform para provisionamento de um Security Group dentro de uma VPC ja existente.
+Blueprint Terraform para provisionamento de um Security Group na AWS, com regras de entrada e saida explicitas, tags configuraveis e outputs relevantes.
 
-## Descricao
+## Recursos criados
 
-Este modulo cria um `aws_security_group` associado a uma VPC informada via variavel (`vpc_id`). Por padrao, nenhuma regra de entrada (ingress) e permitida, seguindo o principio de seguranca por padrao (secure by default). A saida (egress) permite todo o trafego por padrao, comportamento comum em ambientes de teste, mas totalmente configuravel.
+- `aws_security_group.this`: Security Group associado a uma VPC configurada via variavel.
 
-## Requisitos
+## Pre-requisitos
 
-| Nome | Versao |
-|---|---|
-| terraform | >= 1.3.0 |
-| aws | ~> 5.0 |
+- Terraform >= 1.5.0
+- Provider AWS (`hashicorp/aws`) `~> 5.0`
+- Uma VPC existente (ID informado via variavel `vpc_id`), criada pelo ambiente onde este blueprint sera aplicado.
+
+## Variaveis principais
+
+| Nome            | Descricao                                                          | Tipo                 | Default                  |
+|-----------------|---------------------------------------------------------------------|----------------------|---------------------------|
+| `vpc_id`        | ID da VPC onde o Security Group sera criado (obrigatorio)          | `string`              | sem default               |
+| `name`          | Nome do Security Group                                             | `string`              | `"sg-blueprint"`          |
+| `description`   | Descricao do Security Group                                        | `string`              | `"Security Group gerenciado via Terraform"` |
+| `ingress_rules` | Lista de regras de entrada explicitas                              | `list(object({...}))`| regra HTTPS interna       |
+| `egress_rules`  | Lista de regras de saida explicitas                                | `list(object({...}))`| HTTPS e DNS de saida       |
+| `tags`          | Tags adicionais aplicadas ao recurso                                | `map(string)`         | `{}`                      |
+
+As regras padrao de `ingress_rules` e `egress_rules` sao apenas exemplos conservadores. Ajuste os valores de acordo com o trafego real exigido pela aplicacao, evitando CIDRs amplos (`0.0.0.0/0`) sempre que possivel.
+
+## Outputs
+
+- `security_group_id`: ID do Security Group criado.
+- `security_group_arn`: ARN do Security Group criado.
+- `security_group_name`: Nome do Security Group criado.
+- `security_group_vpc_id`: ID da VPC associada.
+- `ingress_rules`: Regras de entrada aplicadas.
+- `egress_rules`: Regras de saida aplicadas.
 
 ## Uso
 
@@ -19,52 +40,37 @@ Este modulo cria um `aws_security_group` associado a uma VPC informada via varia
 module "security_group" {
   source = "./"
 
-  vpc_id      = "vpc-0123456789abcdef0"
-  name        = "sg-web-app"
-  description = "Security Group para aplicacao web"
+  vpc_id = "vpc-xxxxxxxx"
+  name   = "sg-app"
 
   ingress_rules = [
     {
-      description = "Permite HTTPS de rede interna"
+      description = "Permite HTTPS de uma rede especifica"
       from_port   = 443
       to_port     = 443
       protocol    = "tcp"
-      cidr_blocks = ["10.0.0.0/16"]
+      cidr_blocks = ["203.0.113.0/24"]
     }
   ]
 
   tags = {
     Environment = "dev"
-    Owner       = "time-infra"
   }
 }
 ```
 
-## Inputs
+## Validacao local
 
-| Nome | Descricao | Tipo | Padrao | Obrigatorio |
-|---|---|---|---|---|
-| vpc_id | ID da VPC onde o Security Group sera criado | string | n/a | sim |
-| name | Nome do Security Group | string | "sg-application" | nao |
-| description | Descricao do Security Group | string | "Security Group gerenciado via Terraform." | nao |
-| ingress_rules | Lista de regras de entrada | list(object) | [] | nao |
-| egress_rules | Lista de regras de saida | list(object) | permite todo trafego de saida | nao |
-| tags | Tags adicionais | map(string) | {} | nao |
-| aws_region | Regiao AWS | string | "us-east-1" | nao |
+Este blueprint nao utiliza backend remoto e pode ser validado localmente sem credenciais reais:
 
-## Outputs
-
-| Nome | Descricao |
-|---|---|
-| security_group_id | ID do Security Group criado |
-| security_group_arn | ARN do Security Group criado |
-| security_group_name | Nome do Security Group criado |
-| vpc_id | ID da VPC associada ao Security Group |
+```
+terraform init -backend=false
+terraform validate
+```
 
 ## Boas praticas aplicadas
 
-- Nenhuma regra de entrada e liberada por padrao, exigindo definicao explicita pelo consumidor do modulo.
-- Uso de `dynamic blocks` para permitir configuracao flexivel de multiplas regras de ingress/egress.
-- Validacao do formato de `vpc_id` para evitar erros de configuracao.
-- `lifecycle { create_before_destroy = true }` para evitar downtime em atualizacoes de regras.
-- Nenhuma credencial ou valor sensivel fixo no codigo.
+- Nenhuma regra de entrada ou saida liberada para todas as portas/protocolos por padrao.
+- Uso de `dynamic` blocks para permitir regras configuraveis sem duplicar codigo.
+- ID da VPC obrigatorio via variavel, sem dependencia da VPC default da conta.
+- Tags aplicadas de forma consistente, combinando nome padrao com tags customizadas.

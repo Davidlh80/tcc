@@ -1,5 +1,5 @@
 terraform {
-  required_version = ">= 1.3.0"
+  # Backend remoto nao configurado propositalmente neste blueprint.
 }
 
 resource "aws_security_group" "this" {
@@ -30,10 +30,10 @@ resource "aws_security_group" "this" {
   }
 
   tags = merge(
-    var.tags,
     {
       Name = var.name
-    }
+    },
+    var.tags
   )
 
   lifecycle {

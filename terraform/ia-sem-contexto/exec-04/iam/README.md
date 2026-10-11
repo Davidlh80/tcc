@@ -1,81 +1,72 @@
-# IAM Role + IAM Policy (Terraform)
+# IAM Policy anexada a IAM Role
 
-Blueprint Terraform para provisionar uma **IAM Role** com uma **IAM Policy** gerenciada dedicada, anexada via `aws_iam_role_policy_attachment`. A policy nunca fica solta: ela e criada e anexada ao mesmo principal (a role) na mesma execucao.
+Blueprint Terraform para provisionar uma IAM Policy anexada a uma IAM Role na AWS, com trust policy restrita a principals configuraveis e permissoes limitadas a acoes e recursos explicitamente definidos.
 
 ## Recursos criados
 
-- `aws_iam_role.this` — role com trust policy (assume role) configuravel.
-- `aws_iam_policy.this` — policy gerenciada com statements definidos por variavel.
-- `aws_iam_role_policy_attachment.this` — anexa a policy a role.
-- `data.aws_iam_policy_document.assume_role` — gera o trust policy.
-- `data.aws_iam_policy_document.this` — gera o documento da policy de permissoes.
-- `data.aws_caller_identity.current` — usado apenas para enriquecer a descricao da policy.
+- `aws_iam_role.this`: IAM Role com trust policy (assume role policy) restrita aos ARNs informados em `trusted_principal_arns`.
+- `aws_iam_policy.this`: IAM Policy com acoes limitadas a `allowed_actions` sobre os recursos definidos em `allowed_resources`.
+- `aws_iam_role_policy_attachment.this`: anexa a policy criada a role criada, garantindo que a policy nunca fique sem um principal associado.
 
-## Seguranca por padrao
+## Caracteristicas de seguranca
 
-- O principal de confianca (`assume_role_principal_identifiers`) nao pode ser `*` (validado por `variable.validation`).
-- Os statements da policy (`policy_statements`) exigem `effect` explicito (`Allow`/`Deny`) e sao definidos individualmente por acao/recurso — nenhum wildcard de recurso e forcado pelo modulo; o padrao entregue restringe as acoes a `logs:CreateLogGroup`, `logs:CreateLogStream` e `logs:PutLogEvents` sobre um prefixo especifico de log group.
-- `permissions_boundary_arn` permite aplicar uma permissions boundary opcional.
-- `assume_role_external_id` permite exigir External ID para cenarios de assume role entre contas.
-- Nenhum valor sensivel ou credencial e usado; toda configuracao e parametrizada via variaveis.
+- A trust policy nao aceita `"*"` como principal; `trusted_principal_arns` exige ao menos um ARN valido de conta, role ou usuario.
+- `allowed_actions` nao aceita o wildcard total `"*"` nem `"iam:*"`, evitando permissoes administrativas amplas.
+- Nao ha credenciais, segredos ou identificadores de conta fixos no codigo; tudo e parametrizado via variaveis.
+- Tags sao aplicadas tanto a role quanto a policy, quando fornecidas.
 
 ## Uso
 
 ```hcl
-module "iam_role" {
+module "iam_role_with_policy" {
   source = "./"
 
-  role_name   = "orders-service-role"
-  policy_name = "orders-service-policy"
+  role_name   = "ci-deploy-role"
+  policy_name = "ci-deploy-policy"
 
-  assume_role_principal_type        = "Service"
-  assume_role_principal_identifiers = ["lambda.amazonaws.com"]
+  trusted_principal_arns = [
+    "arn:aws:iam::123456789012:role/ci-pipeline-role",
+  ]
 
-  policy_statements = [
-    {
-      sid       = "AllowReadOrdersBucket"
-      effect    = "Allow"
-      actions   = ["s3:GetObject", "s3:ListBucket"]
-      resources = [
-        "arn:aws:s3:::orders-bucket",
-        "arn:aws:s3:::orders-bucket/*"
-      ]
-    }
+  allowed_actions = [
+    "s3:GetObject",
+    "s3:PutObject",
+  ]
+
+  allowed_resources = [
+    "arn:aws:s3:::meu-bucket-exemplo/*",
   ]
 
   tags = {
-    Environment = "production"
-    Owner       = "orders-team"
+    Environment = "staging"
+    ManagedBy   = "terraform"
   }
 }
 ```
 
 ## Variaveis principais
 
-| Nome | Descricao | Padrao |
-|---|---|---|
-| `aws_region` | Regiao AWS do provider | `us-east-1` |
-| `role_name` | Nome da IAM Role | `app-execution-role` |
-| `policy_name` | Nome da IAM Policy | `app-execution-policy` |
-| `assume_role_principal_type` | Tipo do principal de confianca | `Service` |
-| `assume_role_principal_identifiers` | Identificadores do principal (sem `*`) | `["lambda.amazonaws.com"]` |
-| `assume_role_external_id` | External ID opcional | `null` |
-| `max_session_duration` | Duracao maxima da sessao (s) | `3600` |
-| `permissions_boundary_arn` | ARN de permissions boundary opcional | `null` |
-| `policy_statements` | Lista de statements da policy | ver `variables.tf` |
-| `tags` | Tags adicionais | `{}` |
+| Nome                      | Descricao                                                        | Obrigatoria |
+|---------------------------|-------------------------------------------------------------------|-------------|
+| `trusted_principal_arns`  | ARNs autorizados a assumir a role (sem `"*"`).                   | Sim         |
+| `allowed_actions`         | Acoes IAM permitidas na policy (sem `"*"` ou `"iam:*"`).          | Sim         |
+| `allowed_resources`       | Recursos sobre os quais as acoes se aplicam.                      | Sim         |
+| `role_name`               | Nome da IAM Role.                                                  | Nao         |
+| `policy_name`             | Nome da IAM Policy.                                                | Nao         |
+| `max_session_duration`    | Duracao maxima de sessao assumida (3600 a 43200 segundos).         | Nao         |
+| `tags`                    | Tags aplicadas aos recursos.                                       | Nao         |
 
 ## Outputs
 
-- `role_arn`, `role_name`, `role_id`, `role_unique_id`
-- `policy_arn`, `policy_name`
-- `policy_attachment_id`
+- `role_name`, `role_arn`, `role_id`: identificadores da role criada.
+- `policy_name`, `policy_arn`, `policy_id`: identificadores da policy criada.
+- `assume_role_policy_json`: documento JSON da trust policy aplicada.
 
-## Validacao local
+## Validacao
 
 ```bash
 terraform init -backend=false
 terraform validate
 ```
 
-Nenhum backend remoto ou credencial real e necessario para essas verificacoes, pois todos os valores possuem defaults seguros e nenhuma chamada de API e feita em `validate`.
+Nenhum backend remoto e nenhuma credencial real sao necessarios para `init` e `validate`. Para `plan`/`apply`, forneca valores concretos para `trusted_principal_arns`, `allowed_actions` e `allowed_resources` conforme o caso de uso real.

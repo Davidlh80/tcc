@@ -1,7 +1,3 @@
-terraform {
-  required_version = ">= 1.5.0"
-}
-
 resource "aws_security_group" "this" {
   name        = var.name
   description = var.description

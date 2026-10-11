@@ -1,56 +1,33 @@
-variable "aws_region" {
-  type        = string
-  description = "Regiao AWS onde o bucket sera provisionado."
-  default     = "us-east-1"
-}
-
 variable "bucket_name" {
-  type        = string
   description = "Nome globalmente unico do bucket S3."
+  type        = string
 
   validation {
     condition     = can(regex("^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$", var.bucket_name))
-    error_message = "O nome do bucket deve ter entre 3 e 63 caracteres, usando apenas letras minusculas, numeros, pontos e hifens, comecando e terminando com letra ou numero."
+    error_message = "O nome do bucket deve ter entre 3 e 63 caracteres, usando apenas letras minusculas, numeros, pontos e hifens, e deve comecar e terminar com letra ou numero."
   }
 }
 
-variable "force_destroy" {
-  type        = bool
-  description = "Permite destruir o bucket mesmo que contenha objetos. Recomendado manter false em producao."
-  default     = false
-}
-
 variable "versioning_enabled" {
+  description = "Define se o versionamento do bucket deve estar habilitado (true) ou suspenso (false)."
   type        = bool
-  description = "Habilita o versionamento de objetos no bucket."
   default     = true
 }
 
 variable "kms_key_arn" {
+  description = "ARN de uma chave KMS para criptografia SSE-KMS. Se nulo, utiliza criptografia padrao AES256 (SSE-S3)."
   type        = string
-  description = "ARN de uma chave KMS para criptografia SSE-KMS. Se nulo, sera usada criptografia AES256 gerenciada pelo S3."
   default     = null
 }
 
-variable "enable_lifecycle_rule" {
+variable "force_destroy" {
+  description = "Permite destruir o bucket mesmo que ele contenha objetos. Use com cautela."
   type        = bool
-  description = "Habilita regra de ciclo de vida para expirar versoes nao atuais dos objetos."
   default     = false
 }
 
-variable "noncurrent_version_expiration_days" {
-  type        = number
-  description = "Numero de dias apos os quais versoes nao atuais dos objetos sao expiradas, quando enable_lifecycle_rule for true."
-  default     = 90
-
-  validation {
-    condition     = var.noncurrent_version_expiration_days > 0
-    error_message = "noncurrent_version_expiration_days deve ser maior que zero."
-  }
-}
-
 variable "tags" {
+  description = "Mapa de tags adicionais a serem aplicadas ao bucket."
   type        = map(string)
-  description = "Tags adicionais a serem aplicadas ao bucket."
   default     = {}
 }

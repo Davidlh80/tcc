@@ -1,67 +1,84 @@
-# Blueprint Terraform: Bucket Amazon S3
+# Blueprint Terraform — Bucket Amazon S3
 
-Este modulo provisiona um bucket Amazon S3 com configuracoes seguras por padrao, adequado para uso geral de armazenamento de objetos.
+## Descricao
 
-## Recursos criados
+Modulo Terraform para provisionar um bucket Amazon S3 com configuracoes seguras por padrao:
 
-- `aws_s3_bucket` — bucket S3 principal.
-- `aws_s3_bucket_ownership_controls` — forca propriedade do bucket sobre objetos (`BucketOwnerEnforced`), desabilitando ACLs.
-- `aws_s3_bucket_public_access_block` — bloqueia todo acesso publico ao bucket.
-- `aws_s3_bucket_versioning` — habilita versionamento de objetos (configuravel).
-- `aws_s3_bucket_server_side_encryption_configuration` — criptografia server-side padrao (SSE-S3 ou SSE-KMS).
-- `aws_s3_bucket_lifecycle_configuration` — expira versoes nao atuais de objetos apos um numero configuravel de dias (opcional).
+- Bloqueio total de acesso publico (ACLs e policies publicas negadas).
+- Criptografia server-side habilitada (AES256 por padrao, com suporte opcional a SSE-KMS).
+- Versionamento configuravel via variavel.
+- Aplicacao de tags customizaveis.
+- Outputs com identificadores e metadados relevantes do bucket.
 
-## Decisoes de seguranca padrao
+## Requisitos
 
-- Acesso publico totalmente bloqueado (`block_public_acls`, `block_public_policy`, `ignore_public_acls`, `restrict_public_buckets` = `true`).
-- ACLs desabilitadas via `BucketOwnerEnforced`, seguindo a recomendacao atual da AWS.
-- Criptografia server-side habilitada por padrao (AES256), com suporte opcional a SSE-KMS via `kms_key_arn`.
-- Versionamento habilitado por padrao para protecao contra exclusao/sobrescrita acidental.
-- `force_destroy` desabilitado por padrao para evitar exclusao acidental de dados.
+| Nome | Versao |
+|------|--------|
+| terraform | >= 1.3.0 |
+| aws | >= 5.0 |
 
 ## Uso
 
-```hcl
-module "bucket" {
+```
+module "s3_bucket" {
   source = "./"
 
-  bucket_name       = "meu-bucket-exemplo-123"
-  enable_versioning = true
+  bucket_name        = "meu-bucket-exemplo-12345"
+  aws_region         = "us-east-1"
+  versioning_enabled = true
+  sse_algorithm      = "AES256"
 
   tags = {
-    Environment = "producao"
-    Owner       = "equipe-plataforma"
+    Environment = "production"
+    Owner       = "team-infra"
   }
 }
 ```
 
-## Variaveis
+### Usando criptografia com KMS
 
-| Nome | Descricao | Tipo | Padrao |
-|---|---|---|---|
-| `bucket_name` | Nome globalmente unico do bucket S3 | `string` | — |
-| `force_destroy` | Permite exclusao do bucket com objetos dentro | `bool` | `false` |
-| `enable_versioning` | Habilita versionamento de objetos | `bool` | `true` |
-| `kms_key_arn` | ARN de chave KMS para SSE-KMS | `string` | `null` |
-| `enable_lifecycle_rule` | Habilita expiracao de versoes antigas | `bool` | `true` |
-| `noncurrent_version_expiration_days` | Dias para expirar versoes nao atuais | `number` | `90` |
-| `tags` | Tags adicionais do bucket | `map(string)` | `{}` |
+```
+module "s3_bucket" {
+  source = "./"
+
+  bucket_name   = "meu-bucket-exemplo-12345"
+  sse_algorithm = "aws:kms"
+  kms_key_id    = "arn:aws:kms:us-east-1:111111111111:key/chave-exemplo"
+}
+```
+
+## Inputs
+
+| Nome | Descricao | Tipo | Padrao | Obrigatorio |
+|------|-----------|------|--------|-------------|
+| aws_region | Regiao AWS onde o bucket sera criado | string | "us-east-1" | nao |
+| bucket_name | Nome globalmente unico do bucket S3 | string | n/a | sim |
+| versioning_enabled | Habilita (true) ou suspende (false) o versionamento | bool | true | nao |
+| sse_algorithm | Algoritmo de criptografia: AES256 ou aws:kms | string | "AES256" | nao |
+| kms_key_id | ARN/ID da chave KMS (usado somente com aws:kms) | string | null | nao |
+| force_destroy | Permite destruir o bucket mesmo com objetos | bool | false | nao |
+| tags | Tags adicionais aplicadas ao bucket | map(string) | {} | nao |
 
 ## Outputs
 
 | Nome | Descricao |
-|---|---|
-| `bucket_id` | Identificador (nome) do bucket |
-| `bucket_arn` | ARN do bucket |
-| `bucket_domain_name` | Dominio padrao do bucket |
-| `bucket_regional_domain_name` | Dominio regional do bucket |
-| `bucket_region` | Regiao onde o bucket foi criado |
+|------|-----------|
+| bucket_id | Nome do bucket criado |
+| bucket_arn | ARN do bucket criado |
+| bucket_regional_domain_name | Dominio regional do bucket |
+| versioning_status | Status atual do versionamento |
+| sse_algorithm | Algoritmo de criptografia aplicado |
+
+## Seguranca
+
+- O bucket nao permite acesso publico (ACLs e policies publicas bloqueadas em todas as camadas).
+- A criptografia server-side e obrigatoria para todos os objetos gravados no bucket.
+- Nenhum valor sensivel ou credencial e definido neste modulo; a autenticacao AWS deve ser configurada externamente (variaveis de ambiente, perfil ou role).
 
 ## Validacao
 
-```bash
+```
 terraform init -backend=false
 terraform validate
+terraform fmt -check
 ```
-
-Nenhuma credencial real e necessaria para validacao sintatica.

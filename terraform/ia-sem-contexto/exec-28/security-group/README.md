@@ -1,15 +1,13 @@
-# Security Group (AWS) - Terraform Blueprint
+# Security Group (AWS)
 
-Blueprint Terraform para provisionamento de um Security Group na AWS, dentro de uma VPC cujo ID e informado por variavel.
+Blueprint Terraform para provisionamento de um Security Group na AWS, associado a uma VPC configuravel por variavel. Nao cria nem depende da VPC default da conta.
 
-## Recursos criados
+## Caracteristicas
 
-- `aws_security_group.this`
-
-## Requisitos
-
-- Terraform >= 1.3.0
-- Provider AWS `~> 5.0`
+- Security Group unico, com `vpc_id` configuravel.
+- Regras de entrada e saida declaradas explicitamente via variaveis, sem liberacao irrestrita por padrao (nenhuma regra de entrada e criada automaticamente; a saida padrao libera apenas HTTPS/443).
+- Tags customizaveis combinadas com uma tag `Name` padrao.
+- Outputs com identificadores relevantes do recurso criado.
 
 ## Uso
 
@@ -17,58 +15,59 @@ Blueprint Terraform para provisionamento de um Security Group na AWS, dentro de 
 module "security_group" {
   source = "./"
 
-  vpc_id      = "vpc-xxxxxxxx"
-  name        = "app-sg"
-  description = "Security Group da aplicacao"
+  name   = "app-sg"
+  vpc_id = "vpc-0123456789abcdef0"
 
   ingress_rules = [
     {
-      description = "HTTPS de qualquer origem"
-      from_port   = 443
-      to_port     = 443
-      protocol    = "tcp"
-      cidr_blocks = ["0.0.0.0/0"]
-    },
-    {
-      description = "SSH restrito a uma faixa interna"
-      from_port   = 22
-      to_port     = 22
-      protocol    = "tcp"
-      cidr_blocks = ["10.0.0.0/16"]
+      description      = "Permite HTTPS de entrada a partir da rede interna."
+      from_port        = 443
+      to_port          = 443
+      protocol         = "tcp"
+      cidr_blocks      = ["10.0.0.0/16"]
+      ipv6_cidr_blocks = []
     }
   ]
 
   tags = {
-    Environment = "dev"
-    Owner        = "infra"
+    Environment = "test"
+    Project      = "tcc"
   }
 }
 ```
 
-## Variaveis
+## Requisitos
 
-| Nome           | Descricao                                              | Tipo                 | Default                                  |
-|----------------|----------------------------------------------------------|----------------------|-------------------------------------------|
-| `aws_region`   | Regiao AWS                                               | `string`             | `"us-east-1"`                             |
-| `vpc_id`       | ID da VPC onde o Security Group sera criado (obrigatorio)| `string`             | -                                          |
-| `name`         | Nome do Security Group                                   | `string`             | `"example-sg"`                            |
-| `description`  | Descricao do Security Group                              | `string`             | `"Security Group gerenciado via Terraform"` |
-| `ingress_rules`| Lista de regras de entrada                               | `list(object(...))`  | `[]`                                       |
-| `egress_rules` | Lista de regras de saida                                  | `list(object(...))`  | permite todo trafego de saida              |
-| `tags`         | Tags adicionais                                           | `map(string)`        | `{}`                                       |
+| Nome | Versao |
+|---|---|
+| terraform | >= 1.5.0 |
+| aws | >= 5.0 |
+
+## Inputs
+
+| Nome | Descricao | Tipo | Padrao | Obrigatorio |
+|---|---|---|---|---|
+| aws_region | Regiao AWS onde os recursos serao provisionados | `string` | `"us-east-1"` | nao |
+| name | Nome do Security Group | `string` | - | sim |
+| description | Descricao do Security Group | `string` | `"Security Group gerenciado via Terraform."` | nao |
+| vpc_id | ID da VPC onde o Security Group sera criado | `string` | - | sim |
+| ingress_rules | Lista de regras explicitas de entrada | `list(object)` | `[]` | nao |
+| egress_rules | Lista de regras explicitas de saida | `list(object)` | regra HTTPS/443 | nao |
+| tags | Tags adicionais aplicadas ao recurso | `map(string)` | `{}` | nao |
 
 ## Outputs
 
-| Nome     | Descricao                              |
-|----------|-------------------------------------------|
-| `id`     | ID do Security Group criado               |
-| `arn`    | ARN do Security Group criado               |
-| `name`   | Nome do Security Group criado              |
-| `vpc_id` | ID da VPC associada ao Security Group      |
+| Nome | Descricao |
+|---|---|
+| security_group_id | ID do Security Group criado |
+| security_group_arn | ARN do Security Group criado |
+| security_group_name | Nome do Security Group criado |
+| security_group_vpc_id | ID da VPC associada ao Security Group |
 
-## Consideracoes de seguranca
+## Validacao
 
-- Nenhuma regra de entrada e liberada por padrao (`ingress_rules = []`); o consumidor do modulo deve declarar explicitamente as portas e origens necessarias, evitando exposicao acidental.
-- Recomenda-se restringir `cidr_blocks` a faixas conhecidas sempre que possivel, evitando `0.0.0.0/0` em regras de entrada, especialmente para portas administrativas (ex.: 22, 3389).
-- O trafego de saida e permitido integralmente por padrao (`egress_rules` default), pratica comum em Security Groups; ajuste conforme a politica de seguranca do ambiente, se necessario.
-- Nao fixe credenciais ou valores sensiveis neste codigo; utilize variaveis, arquivos `.tfvars` nao versionados ou um gerenciador de segredos.
+```bash
+terraform fmt
+terraform init -backend=false
+terraform validate
+```

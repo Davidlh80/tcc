@@ -1,51 +1,50 @@
 variable "bucket_name" {
-  description = "Nome do bucket S3. Deve ser globalmente unico e seguir as convencoes de nomenclatura da AWS (3 a 63 caracteres, letras minusculas, numeros, pontos e hifens)."
+  description = "Nome globalmente unico do bucket S3."
   type        = string
 
   validation {
-    condition     = can(regex("^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$", var.bucket_name))
-    error_message = "O nome do bucket deve ter entre 3 e 63 caracteres, conter apenas letras minusculas, numeros, pontos e hifens, e comecar/terminar com letra ou numero."
+    condition     = can(regex("^[a-z0-9.-]{3,63}$", var.bucket_name))
+    error_message = "O nome do bucket deve ter entre 3 e 63 caracteres e conter apenas letras minusculas, numeros, pontos e hifens."
   }
 }
 
-variable "aws_region" {
-  description = "Regiao AWS onde os recursos serao provisionados."
+variable "environment" {
+  description = "Ambiente ao qual o bucket pertence (ex.: dev, staging, prod)."
   type        = string
-  default     = "us-east-1"
+  default     = "dev"
 }
 
 variable "force_destroy" {
-  description = "Permite que o bucket seja destruido mesmo contendo objetos. Use com cautela em ambientes produtivos."
+  description = "Permite excluir o bucket mesmo que contenha objetos. Use com cautela."
   type        = bool
   default     = false
 }
 
 variable "versioning_enabled" {
-  description = "Habilita versionamento de objetos no bucket."
+  description = "Habilita o versionamento de objetos no bucket."
   type        = bool
   default     = true
 }
 
-variable "enable_kms_encryption" {
-  description = "Se verdadeiro, usa criptografia SSE-KMS; caso contrario, usa SSE-S3 (AES256)."
-  type        = bool
-  default     = false
+variable "sse_algorithm" {
+  description = "Algoritmo de criptografia server-side padrao do bucket. Valores aceitos: AES256 ou aws:kms."
+  type        = string
+  default     = "AES256"
+
+  validation {
+    condition     = contains(["AES256", "aws:kms"], var.sse_algorithm)
+    error_message = "O valor de sse_algorithm deve ser 'AES256' ou 'aws:kms'."
+  }
 }
 
 variable "kms_key_arn" {
-  description = "ARN da chave KMS usada para criptografia do bucket quando enable_kms_encryption for verdadeiro. Se vazio, sera usada a chave gerenciada pela AWS (aws/s3)."
+  description = "ARN da chave KMS usada para criptografia quando sse_algorithm for 'aws:kms'. Ignorado para AES256."
   type        = string
-  default     = ""
-}
-
-variable "block_public_access" {
-  description = "Bloqueia todo acesso publico ao bucket (ACLs e policies). Recomendado manter como verdadeiro."
-  type        = bool
-  default     = true
+  default     = null
 }
 
 variable "tags" {
-  description = "Mapa de tags a serem aplicadas ao bucket."
+  description = "Tags adicionais aplicadas ao bucket, mescladas com as tags padrao."
   type        = map(string)
   default     = {}
 }

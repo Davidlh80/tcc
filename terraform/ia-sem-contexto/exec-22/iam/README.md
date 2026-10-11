@@ -1,22 +1,14 @@
-# IAM Role com Policy Anexada (Terraform)
+# IAM Policy anexada a IAM Role
 
-Blueprint Terraform para provisionar uma IAM Role na AWS com uma IAM Policy gerenciada anexada diretamente a ela. A policy nunca fica solta: ela e criada e anexada na mesma execucao via `aws_iam_role_policy_attachment`.
+Blueprint Terraform para provisionar uma IAM Role com uma trust policy restrita a um principal configuravel, e uma IAM Policy com permissoes explicitamente delimitadas, anexada a essa role via `aws_iam_role_policy_attachment`.
 
-## Recursos criados
+## Visao geral
 
-- `aws_iam_role.this` — role com trust policy (assume role) configuravel.
-- `data.aws_iam_policy_document.assume_role` — documento de confianca (trust policy) baseado em `var.trusted_principal_type` e `var.trusted_principal_identifiers`, com suporte opcional a `sts:ExternalId`.
-- `data.aws_iam_policy_document.role_policy` — documento de permissoes com as acoes e recursos configurados.
-- `aws_iam_policy.this` — policy gerenciada, sem wildcard `*` em acoes por padrao.
-- `aws_iam_role_policy_attachment.this` — anexa a policy a role.
-
-## Postura de seguranca por padrao
-
-- O principal de confianca padrao e um Service principal (`ec2.amazonaws.com`), evitando trust policies abertas para qualquer conta ou usuario.
-- Uma validacao bloqueia o uso do wildcard `"*"` isolado em `allowed_actions`, forcando a especificacao de acoes concretas.
-- `external_id` (sensivel) pode ser definido para exigir `sts:ExternalId` no assume role, recomendado em cenarios cross-account (`trusted_principal_type = "AWS"`).
-- `permissions_boundary_arn` permite aplicar uma permissions boundary opcional a role.
-- Nenhum valor sensivel ou credencial real e fixado no codigo; tudo e parametrizado via variaveis.
+- A IAM Policy nunca fica solta: ela e criada e imediatamente anexada a role por meio de `aws_iam_role_policy_attachment`.
+- A trust policy (assume role policy) e restrita a um unico principal configuravel (`var.trusted_principal_arn`), com validacao que impede o uso de `"*"` ou de um principal vazio.
+- Suporte opcional a `sts:ExternalId` na trust policy, para cenarios de acesso cross-account (mitigacao de confused deputy).
+- As acoes da policy sao definidas por statements explicitos (`var.policy_statements`); o uso da acao administrativa `"*"` e bloqueado por validacao.
+- Tags sao aplicadas tanto na role quanto na policy.
 
 ## Uso
 
@@ -24,55 +16,55 @@ Blueprint Terraform para provisionar uma IAM Role na AWS com uma IAM Policy gere
 module "iam_role_with_policy" {
   source = "./"
 
-  role_name                     = "app-service-role"
-  policy_name                   = "app-service-policy"
-  trusted_principal_type        = "Service"
-  trusted_principal_identifiers = ["lambda.amazonaws.com"]
+  role_name              = "app-readonly-role"
+  policy_name            = "app-readonly-policy"
+  trusted_principal_arn  = "arn:aws:iam::123456789012:role/ci-deploy-role"
 
-  allowed_actions = [
-    "logs:CreateLogGroup",
-    "logs:CreateLogStream",
-    "logs:PutLogEvents",
-  ]
-
-  resource_arns = [
-    "arn:aws:logs:us-east-1:123456789012:log-group:/aws/lambda/app-service:*",
+  policy_statements = [
+    {
+      sid       = "AllowReadOnlyS3Access"
+      effect    = "Allow"
+      actions   = ["s3:GetObject", "s3:ListBucket"]
+      resources = ["arn:aws:s3:::minha-app-bucket", "arn:aws:s3:::minha-app-bucket/*"]
+    }
   ]
 
   tags = {
-    Environment = "dev"
-    Owner       = "platform-team"
+    ambiente = "producao"
+    projeto  = "minha-app"
   }
 }
 ```
 
-## Validacao local
+## Principais variaveis
 
-```
-terraform init -backend=false
-terraform validate
-terraform fmt -check
-```
-
-Nenhum backend remoto e nenhuma credencial real e necessaria para os comandos acima, pois o provider AWS so precisa de configuracao valida de sintaxe (regiao) para `validate`.
-
-## Variaveis principais
-
-| Nome | Descricao | Default |
-|---|---|---|
-| `role_name` | Nome da IAM Role | `example-app-role` |
-| `policy_name` | Nome da IAM Policy | `example-app-policy` |
-| `trusted_principal_type` | Tipo do principal (`AWS`, `Service`, `Federated`) | `Service` |
-| `trusted_principal_identifiers` | Identificadores do principal confiavel | `["ec2.amazonaws.com"]` |
-| `external_id` | External ID opcional para assume role cross-account | `""` |
-| `allowed_actions` | Acoes IAM permitidas na policy | `["s3:GetObject", "s3:ListBucket"]` |
-| `resource_arns` | ARNs dos recursos alvo da policy | exemplo de bucket S3 |
-| `max_session_duration` | Duracao maxima da sessao (segundos) | `3600` |
-| `permissions_boundary_arn` | ARN de permissions boundary opcional | `null` |
-| `tags` | Tags aplicadas aos recursos | `{ ManagedBy = "terraform" }` |
+| Nome | Descricao | Obrigatoria |
+| --- | --- | --- |
+| `role_name` | Nome da IAM Role | Sim |
+| `policy_name` | Nome da IAM Policy | Sim |
+| `trusted_principal_arn` | ARN do principal autorizado a assumir a role (nao pode ser `"*"`) | Sim |
+| `external_id` | External ID exigido na trust policy (cross-account) | Nao |
+| `policy_statements` | Lista de statements (sid, effect, actions, resources) da policy | Nao (ha default seguro de exemplo) |
+| `max_session_duration` | Duracao maxima da sessao assumida (3600 a 43200s) | Nao |
+| `permissions_boundary_arn` | ARN de permissions boundary opcional | Nao |
+| `tags` | Tags aplicadas a role e a policy | Nao |
 
 ## Outputs
 
-- `role_arn`, `role_name`, `role_unique_id`
-- `policy_arn`, `policy_name`
-- `assume_role_policy_json`
+| Nome | Descricao |
+| --- | --- |
+| `role_arn` | ARN da IAM Role criada |
+| `role_name` | Nome da IAM Role criada |
+| `role_id` | ID da IAM Role criada |
+| `policy_arn` | ARN da IAM Policy criada |
+| `policy_name` | Nome da IAM Policy criada |
+| `policy_id` | ID da IAM Policy criada |
+| `assume_role_policy_json` | JSON da trust policy aplicada |
+
+## Consideracoes de seguranca
+
+- Nunca defina `trusted_principal_arn` como `"*"`; a validacao da variavel bloqueia esse valor, mas o operador deve sempre informar um ARN de conta, role ou usuario especifico.
+- Evite declarar statements com a acao `"*"` (bloqueado por validacao) ou com recursos `"*"` quando o servico permitir delimitar ARNs especificos.
+- Prefira usar `external_id` em cenarios de acesso cross-account para reduzir o risco de confused deputy.
+- Utilize `permissions_boundary_arn` em ambientes que exigem um limite adicional de permissoes para a role.
+- Revise periodicamente os `policy_statements` para garantir o principio de menor privilegio.
