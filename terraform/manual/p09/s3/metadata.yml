@@ -1,0 +1,9 @@
+scenario: manual
+participant_id: p09
+resource: s3
+started_at: "2026-10-20T12:57:30-03:00"
+finished_at: "2026-10-20T13:33:38-03:00"
+pauses:
+  - started_at: "2026-10-20T13:00:00-03:00"
+    finished_at: "2026-10-20T13:17:00-03:00"
+    reason: "almoco"
