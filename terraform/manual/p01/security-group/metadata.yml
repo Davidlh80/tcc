@@ -1,0 +1,9 @@
+scenario: manual
+participant: p01
+resource: security-group
+started_at: "2026-10-20T19:10:00-03:00"
+finished_at: "2026-10-20T20:10:00-03:00"
+pauses: 1
+experience_terraform: "nenhuma"
+difficulty: "baixa"
+notes: "Security Group com regras de entrada e saida explicitas, tags e validacao de portas e CIDRs."
