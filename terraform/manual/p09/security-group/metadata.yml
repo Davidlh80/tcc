@@ -1,0 +1,6 @@
+scenario: manual
+participant_id: p09
+resource: security-group
+started_at: "2026-10-20T12:02:10-03:00"
+finished_at: "2026-10-20T12:30:34-03:00"
+pauses: []
