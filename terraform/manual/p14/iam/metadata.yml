@@ -1,0 +1,9 @@
+scenario: manual
+participant_id: p14
+resource: iam
+started_at: "2026-10-23T11:01:22-03:00"
+finished_at: "2026-10-23T12:45:12-03:00"
+pauses:
+  - started_at: "2026-10-23T12:00:00-03:00"
+    finished_at: "2026-10-23T12:30:00-03:00"
+    reason: "almoco"
