@@ -152,6 +152,47 @@ func matchingBrace(src string, start int) (int, bool) {
 
 // extractAttr extrai o texto bruto do valor de "key = <valor>" dentro de body,
 // assumindo que body comeca imediatamente apos o "{" do bloco "variable ... {".
+var blockHeaderRe = func(name string) *regexp.Regexp {
+	return regexp.MustCompile(regexp.QuoteMeta(name) + `\s*{`)
+}
+
+// extractAllBlocks concatena o conteudo de todos os blocos "<blockName> { ... }"
+// encontrados diretamente dentro de body (ex.: os (possiveis varios) blocos
+// "validation" de uma variavel), para busca de padroes via regex.
+func extractAllBlocks(body, blockName string) string {
+	re := blockHeaderRe(blockName)
+
+	var out strings.Builder
+
+	matches := re.FindAllStringIndex(body, -1)
+	for _, m := range matches {
+		end, ok := matchingBrace(body, m[1])
+		if !ok {
+			continue
+		}
+
+		out.WriteString(body[m[1]:end])
+		out.WriteString("\n")
+	}
+
+	return out.String()
+}
+
+// wrapForType envolve value em uma lista de um elemento quando o tipo
+// declarado da variavel e list(...)/set(...) e value ainda nao e uma lista.
+func wrapForType(value interface{}, typeExpr string) interface{} {
+	t := strings.TrimSpace(typeExpr)
+	if !strings.HasPrefix(t, "list(") && !strings.HasPrefix(t, "set(") {
+		return value
+	}
+
+	if _, isList := value.([]interface{}); isList {
+		return value
+	}
+
+	return []interface{}{value}
+}
+
 func extractAttr(body, key string) (string, bool) {
 	re := regexp.MustCompile(`(?m)^[ \t]*` + regexp.QuoteMeta(key) + `[ \t]*=[ \t]*`)
 
@@ -221,6 +262,9 @@ func guessScalar(name string) interface{} {
 	lower := strings.ToLower(name)
 
 	switch {
+	case strings.Contains(lower, "ssh") && strings.Contains(lower, "cidr"):
+		// Variaveis de CIDR de SSH costumam validar /32 e proibir 0.0.0.0/0.
+		return "10.0.0.5/32"
 	case strings.Contains(lower, "cidr"):
 		return "10.0.0.0/16"
 	case strings.Contains(lower, "arn") && (strings.Contains(lower, "principal") || strings.Contains(lower, "trusted")):
@@ -244,6 +288,47 @@ func guessScalar(name string) interface{} {
 	}
 }
 
+// valueFromValidation tenta extrair, do texto de um bloco "validation", um
+// valor que satisfaca condicoes simples e comuns nos templates do experimento:
+//   - igualdade exata:      var.<name> == "literal"
+//   - sufixo obrigatorio:   endswith(var.<name>, ".sufixo")
+//   - igualdade por campo (para variaveis do tipo object): var.<name>.campo == "literal"
+//
+// Retorna (valor, true) quando alguma dessas formas e encontrada; (nil, false)
+// caso contrario, para que o chamador caia no heuristico generico por nome/tipo.
+func valueFromValidation(name, validationText string) (interface{}, bool) {
+	if validationText == "" {
+		return nil, false
+	}
+
+	escapedName := regexp.QuoteMeta(name)
+
+	if m := regexp.MustCompile(`var\.` + escapedName + `\s*==\s*"([^"]*)"`).FindStringSubmatch(validationText); m != nil {
+		return m[1], true
+	}
+
+	if m := regexp.MustCompile(`endswith\(\s*var\.` + escapedName + `\s*,\s*"([^"]*)"\s*\)`).FindStringSubmatch(validationText); m != nil {
+		suffix := strings.TrimPrefix(m[1], ".")
+		if suffix == "amazonaws.com" {
+			return "ec2.amazonaws.com", true
+		}
+
+		return "valor-" + suffix, true
+	}
+
+	fieldMatches := regexp.MustCompile(`var\.` + escapedName + `\.(\w+)\s*==\s*"([^"]*)"`).FindAllStringSubmatch(validationText, -1)
+	if len(fieldMatches) > 0 {
+		obj := map[string]interface{}{}
+		for _, fm := range fieldMatches {
+			obj[fm[1]] = fm[2]
+		}
+
+		return obj, true
+	}
+
+	return nil, false
+}
+
 func guessValue(name, typeExpr string) interface{} {
 	scalar := guessScalar(name)
 
@@ -258,6 +343,8 @@ func guessValue(name, typeExpr string) interface{} {
 
 		return 1
 	case strings.HasPrefix(t, "map("):
+		return map[string]interface{}{}
+	case strings.HasPrefix(t, "object("):
 		return map[string]interface{}{}
 	case strings.HasPrefix(t, "list(object") || strings.HasPrefix(t, "set(object"):
 		// Estrutura complexa demais para sintetizar com seguranca - lista vazia e
@@ -498,27 +585,67 @@ func sanitizeLiteral(v interface{}) interface{} {
 
 // --- geracao por diretorio ---
 
+// variableFilenames sao os nomes de arquivo onde templates do experimento
+// declaram variaveis - "variable.tf" (singular) aparece por typo em pelo menos
+// um template manual (p27/iam), e o parser precisa encontra-lo do mesmo jeito.
+var variableFilenames = []string{"variables.tf", "variable.tf"}
+
+// harnessOverridable sao nomes gerenciados pelo harness (ver harnessManaged)
+// que, apesar disso, podem precisar de um valor diferente quando o proprio
+// template valida um formato que o valor global fixo do harness nao satisfaz
+// (ex.: trusted_principal_arn global e um ARN de conta-raiz, mas um template
+// pode exigir um principal de servico "*.amazonaws.com").
+var harnessOverridable = map[string]bool{
+	"trusted_principal_arn": true, "trusted_principal_arns": true,
+}
+
 func processDirectory(scenario, resource, dir string) (map[string]interface{}, []string) {
-	data, err := os.ReadFile(filepath.Join(dir, "variables.tf"))
-	if err != nil {
+	var src string
+
+	for _, filename := range variableFilenames {
+		data, err := os.ReadFile(filepath.Join(dir, filename))
+		if err == nil {
+			src = string(data)
+			break
+		}
+	}
+
+	if src == "" {
 		return nil, nil
 	}
 
-	src := string(data)
 	overrides := map[string]interface{}{}
 	var notes []string
 
 	for _, v := range splitVariableBlocks(src) {
+		validationText := extractAllBlocks(v.body, "validation")
+		typeRaw, _ := extractAttr(v.body, "type")
+		defaultRaw, hasDefault := extractAttr(v.body, "default")
+
+		// Alguns nomes sao gerenciados pelo harness globalmente (ver harnessManaged),
+		// mas o valor fixo que ele exporta pode nao satisfazer a validacao propria
+		// do template (ex.: trusted_principal_arn global e um ARN de conta-raiz, mas
+		// o template pode exigir um principal de servico "*.amazonaws.com"). Nesses
+		// casos, tenta reescrever a partir da propria validacao antes de decidir se
+		// o nome deve ser pulado.
+		if harnessOverridable[v.name] && validationText != "" {
+			if value, ok := valueFromValidation(v.name, validationText); ok {
+				overrides[v.name] = wrapForType(value, typeRaw)
+				continue
+			}
+		}
+
 		if harnessManaged[v.name] {
 			continue
 		}
 
-		defaultRaw, hasDefault := extractAttr(v.body, "default")
-
 		if !hasDefault {
-			typeRaw, _ := extractAttr(v.body, "type")
-			overrides[v.name] = guessValue(v.name, typeRaw)
+			if value, ok := valueFromValidation(v.name, validationText); ok {
+				overrides[v.name] = wrapForType(value, typeRaw)
+				continue
+			}
 
+			overrides[v.name] = guessValue(v.name, typeRaw)
 			continue
 		}
 
@@ -572,7 +699,15 @@ func main() {
 			for _, subject := range subjects {
 				dir := filepath.Join(base, subject, resource)
 
-				if _, err := os.Stat(filepath.Join(dir, "variables.tf")); err != nil {
+				hasVariablesFile := false
+				for _, filename := range variableFilenames {
+					if _, err := os.Stat(filepath.Join(dir, filename)); err == nil {
+						hasVariablesFile = true
+						break
+					}
+				}
+
+				if !hasVariablesFile {
 					continue
 				}
 
