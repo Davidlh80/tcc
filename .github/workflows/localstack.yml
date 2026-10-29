@@ -3,6 +3,22 @@ name: LocalStack Experiment
 on:
   workflow_dispatch:
 
+  push:
+    branches:
+      - main
+    paths:
+      - "test-data/generated-inputs/**"
+      - "scripts/generate-test-inputs/**"
+      - "scripts/run-localstack-tests.sh"
+
+  pull_request:
+    branches:
+      - main
+    paths:
+      - "test-data/generated-inputs/**"
+      - "scripts/generate-test-inputs/**"
+      - "scripts/run-localstack-tests.sh"
+
 permissions:
   contents: read
 

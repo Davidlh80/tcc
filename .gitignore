@@ -4,6 +4,9 @@
 *.tfstate.*
 *.tfvars
 *.tfvars.json
+# Exceto os tfvars gerados para o pipeline de testes (nao sao segredos, sao
+# inputs sinteticos versionados - ver scripts/generate-test-inputs).
+!test-data/generated-inputs/**/*.tfvars.json
 crash.log
 crash.*.log
 override.tf

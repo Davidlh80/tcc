@@ -8,6 +8,8 @@ limit=0
 report="resultados/localstack/results.csv"
 provider_version="5.100.0"
 provider_lock_dir="test-data/provider-lock"
+generated_inputs_dir="test-data/generated-inputs"
+repo_root="$(pwd)"
 
 while [ "$#" -gt 0 ]; do
   case "$1" in
@@ -265,6 +267,17 @@ while IFS= read -r directory; do
   export TF_VAR_security_group_name="$unique_name"
   export TF_VAR_name="$unique_name"
 
+  # Preenche, via -var-file, variaveis customizadas que o template declara sem
+  # default e que o bloco de export acima nao cobre (ver scripts/generate-test-inputs).
+  # Nao altera nenhum arquivo entregue em terraform/ - so complementa os valores
+  # de teste para essa execucao especifica.
+  generated_inputs_file="$repo_root/$generated_inputs_dir/$scenario/$resource/$subject_id.auto.tfvars.json"
+  var_file_args=()
+
+  if [ -f "$generated_inputs_file" ]; then
+    var_file_args=(-var-file="$generated_inputs_file")
+  fi
+
   safe_name=$(echo "$directory" | tr '/\\' '__')
 
   init_log="$logs_dir/${safe_name}-init.log"
@@ -294,6 +307,7 @@ while IFS= read -r directory; do
     if tflocal -chdir="$directory" plan \
       -input=false \
       -no-color \
+      "${var_file_args[@]+"${var_file_args[@]}"}" \
       -out=tfplan >"$plan_log" 2>&1; then
       plan_result=passed
 
@@ -429,6 +443,7 @@ while IFS= read -r directory; do
     if tflocal -chdir="$directory" destroy \
       -input=false \
       -no-color \
+      "${var_file_args[@]+"${var_file_args[@]}"}" \
       -auto-approve >"$destroy_log" 2>&1; then
       destroy_result=passed
     else
