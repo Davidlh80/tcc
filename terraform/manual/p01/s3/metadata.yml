@@ -1,0 +1,9 @@
+scenario: manual
+participant: p01
+resource: s3
+started_at: "2026-10-10T16:00:00-03:00"
+finished_at: "2026-10-10T17:30:00-03:00"
+pauses: 3
+experience_terraform: "nenhuma"
+difficulty: "baixa"
+notes: "Primeiro template Terraform, aprendizado guiado dos conceitos basicos de versions, variables, main e outputs."

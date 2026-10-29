@@ -1,0 +1,9 @@
+scenario: manual
+participant: p01
+resource: iam
+started_at: "2026-10-10T17:45:00-03:00"
+finished_at: "2026-10-10T19:00:00-03:00"
+pauses: 2
+experience_terraform: "nenhuma"
+difficulty: "baixa"
+notes: "Template IAM com policy, role e trust policy; aprendizado de policy documents e anexacao de policies."
